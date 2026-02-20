@@ -47,20 +47,40 @@ import type {
   ListAdminPagosData,
 } from '@/types';
 
-// By default the client calls the server-side proxy at `/api/proxy` so the
-// admin API key is never exposed to the browser. For deployments where you
-// want the frontend to call the backend directly, set the env var
-// `NEXT_PUBLIC_DEONE_API_BASE_URL` (example: https://api.example.com/api)
+// ══════════════════════════════════════════════════════════════════════════════
+// 🔧 Configuración de conexión al backend
+// ══════════════════════════════════════════════════════════════════════════════
+// Opción A (producción — Netlify, Vercel, etc.):
+//   NEXT_PUBLIC_DEONE_API_BASE_URL = https://prueba-supabase.onrender.com/api
+//   NEXT_PUBLIC_DEONE_API_KEY      = TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+//   → El frontend llama al backend directamente.
+//
+// Opción B (desarrollo local):
+//   No defines NEXT_PUBLIC_*, y el frontend usa el proxy /api/proxy
+//   que lee DEONE_API_KEY / ADMIN_API_KEY del servidor.
+// ══════════════════════════════════════════════════════════════════════════════
 const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_DEONE_API_BASE_URL || '';
-const PROXY_PREFIX = PUBLIC_API_BASE ? PUBLIC_API_BASE.replace(/\/$/, '') : '/api/proxy';
+const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_DEONE_API_KEY || '';
+const API_PREFIX = PUBLIC_API_BASE ? PUBLIC_API_BASE.replace(/\/$/, '') : '/api/proxy';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-  // Ensure path starts with a single '/'
   const safePath = path.startsWith('/') ? path : `/${path}`;
-  const url = PROXY_PREFIX.endsWith('/') ? `${PROXY_PREFIX.slice(0, -1)}${safePath}` : `${PROXY_PREFIX}${safePath}`;
+  const url = `${API_PREFIX}${safePath}`;
+
+  // Si llamamos directo al backend (no al proxy), incluir headers de autenticación
+  const authHeaders: Record<string, string> = {};
+  if (PUBLIC_API_BASE && PUBLIC_API_KEY) {
+    authHeaders['X-admin-api-key'] = PUBLIC_API_KEY;
+    authHeaders['X-bot-api-key'] = PUBLIC_API_KEY;
+  }
+
   const res = await fetch(url, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders,
+      ...(options.headers || {}),
+    },
   });
   const json = await res.json();
   return json as ApiResponse<T>;
