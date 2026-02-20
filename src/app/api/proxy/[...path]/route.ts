@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { EXTERNAL_API_BASE_URL } from '@/lib/config';
 
 const EXTERNAL_BASE = EXTERNAL_API_BASE_URL;
-const API_KEY = process.env.DEONE_API_KEY; // debe estar en .env.local y NO en el cliente
+// Prefer `DEONE_API_KEY`, but accept `ADMIN_API_KEY` or `BOT_API_KEY` if present
+const API_KEY = process.env.DEONE_API_KEY || process.env.ADMIN_API_KEY || process.env.BOT_API_KEY;
 
 // params may be either a plain object or a Promise that resolves to the object
 async function proxyRequest(req: Request | any, params: any) {
