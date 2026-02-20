@@ -1,57 +1,77 @@
 import { NextResponse } from 'next/server';
+import { EXTERNAL_API_BASE_URL } from '@/lib/config';
 
-const EXTERNAL_BASE = process.env.DEONE_API_BASE_URL || 'https://prueba-supabase.onrender.com/api';
+const EXTERNAL_BASE = EXTERNAL_API_BASE_URL;
 const API_KEY = process.env.DEONE_API_KEY; // debe estar en .env.local y NO en el cliente
 
-async function proxyRequest(req: Request, params: { path: string[] }) {
+// params may be either a plain object or a Promise that resolves to the object
+async function proxyRequest(req: Request | any, params: any) {
   if (!API_KEY) {
-    return NextResponse.json({ ok: false, data: null, error: { code: 'SERVER_CONFIG', message: 'DEONE_API_KEY no configurada en el servidor', details: null } }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, data: null, error: { code: 'SERVER_CONFIG', message: 'DEONE_API_KEY no configurada en el servidor', details: null } },
+      { status: 500 }
+    );
   }
 
-  const pathSuffix = params.path ? params.path.join('/') : '';
-  const url = `${EXTERNAL_BASE}/${pathSuffix}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
+  // Normalize params: await if it's a Promise (some Next versions provide params as Promise)
+  let resolvedParams = params;
+  try {
+    if (params && typeof params.then === 'function') {
+      resolvedParams = await params;
+    }
+  } catch (e) {
+    resolvedParams = params;
+  }
+
+  const pathSuffix = resolvedParams && resolvedParams.path ? resolvedParams.path.join('/') : '';
+  
+  // Construir URL con query string
+  const urlObj = new URL(req.url, `http://localhost:3000`);
+  const queryString = urlObj.search ? `?${urlObj.searchParams.toString()}` : '';
+  const url = `${EXTERNAL_BASE}/${pathSuffix}${queryString}`;
 
   const init: RequestInit = {
     method: req.method,
     headers: {
-      // copiar content-type si viene del cliente
-      ...Object.fromEntries(req.headers),
+      'Content-Type': 'application/json',
       'X-admin-api-key': API_KEY,
+      'X-bot-api-key': API_KEY,
     },
-    // forward body if present
     body: ['GET', 'HEAD'].includes(req.method || '') ? undefined : await req.text(),
-    // keep credentials mode default
   };
 
-  // Perform fetch to external API
-  const res = await fetch(url, init);
-  const text = await res.text();
-
-  // Try to parse JSON, but return raw text if not JSON
-  let body: any = text;
   try {
-    body = JSON.parse(text);
-  } catch (e) {
-    body = text;
+    const res = await fetch(url, init);
+    const text = await res.text();
+
+    let body: any = text;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+
+    return NextResponse.json(body, { status: res.status });
+  } catch (error) {
+    console.error('[Proxy Error]', error);
+    return NextResponse.json(
+      { ok: false, data: null, error: { code: 'PROXY_ERROR', message: 'Error al conectar con el API externo', details: String(error) } },
+      { status: 502 }
+    );
   }
-
-  // Forward status and selected headers
-  const response = NextResponse.json(body, { status: res.status });
-  return response;
 }
-
-export async function GET(req: Request, { params }: { params: { path: string[] } }) {
-  return proxyRequest(req, params);
-}
-export async function POST(req: Request, { params }: { params: { path: string[] } }) {
-  return proxyRequest(req, params);
-}
-export async function PUT(req: Request, { params }: { params: { path: string[] } }) {
-  return proxyRequest(req, params);
-}
-export async function PATCH(req: Request, { params }: { params: { path: string[] } }) {
-  return proxyRequest(req, params);
-}
-export async function DELETE(req: Request, { params }: { params: { path: string[] } }) {
-  return proxyRequest(req, params);
-}
+export const GET = async (req: any, context: any) => {
+  return proxyRequest(req, context?.params);
+};
+export const POST = async (req: any, context: any) => {
+  return proxyRequest(req, context?.params);
+};
+export const PUT = async (req: any, context: any) => {
+  return proxyRequest(req, context?.params);
+};
+export const PATCH = async (req: any, context: any) => {
+  return proxyRequest(req, context?.params);
+};
+export const DELETE = async (req: any, context: any) => {
+  return proxyRequest(req, context?.params);
+};

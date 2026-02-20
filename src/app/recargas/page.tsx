@@ -9,8 +9,13 @@ import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
 import { reportarRecarga, aprobarRecarga } from '@/lib/api';
 import type { RecargaData } from '@/types';
-import { formatCurrency } from '@/lib/utils';
-import { PlusIcon, CheckBadgeIcon } from '@heroicons/react/24/outline';
+import { formatCurrency, getErrorMsg } from '@/lib/utils';
+import { useNotifications, notifFromAction } from '@/contexts/NotificationContext';
+import {
+  PlusIcon,
+  CheckBadgeIcon,
+  ArrowRightIcon,
+} from '@heroicons/react/24/outline';
 
 const initialForm = {
   telefono: '',
@@ -20,9 +25,17 @@ const initialForm = {
   referencia_tx: '',
 };
 
+const flowSteps = [
+  { n: 1, label: 'Reportar', desc: 'Usuario envía comprobante y monto', color: 'from-blue-500 to-cyan-500', emoji: '📤' },
+  { n: 2, label: 'En validación', desc: 'Recarga queda pendiente de revisión', color: 'from-amber-500 to-orange-500', emoji: '🔍' },
+  { n: 3, label: 'Aprobar', desc: 'Admin verifica y aprueba', color: 'from-emerald-500 to-green-500', emoji: '✅' },
+  { n: 4, label: 'Disponible', desc: 'Saldo listo para pagar facturas', color: 'from-violet-500 to-purple-500', emoji: '💰' },
+];
+
 export default function RecargasPage() {
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [loading, setLoading] = useState(false);
+  const { addNotification } = useNotifications();
 
   const [openReportar, setOpenReportar] = useState(false);
   const [form, setForm] = useState(initialForm);
@@ -43,10 +56,15 @@ export default function RecargasPage() {
     if (res.ok && res.data) {
       setLastRecarga(res.data);
       showToast('Recarga reportada correctamente', 'success');
+      addNotification(notifFromAction('recarga_pendiente', {
+        monto: formatCurrency(Number(form.monto)),
+        telefono: form.telefono,
+        recarga_id: res.data.recarga_id,
+      }));
       setOpenReportar(false);
       setForm(initialForm);
     } else {
-      showToast(res.error?.message ?? 'Error al reportar recarga', 'error');
+      showToast(getErrorMsg(res, 'Error al reportar recarga'), 'error');
     }
   };
 
@@ -57,18 +75,19 @@ export default function RecargasPage() {
     setLoading(false);
     if (res.ok) {
       showToast('Recarga aprobada correctamente', 'success');
+      addNotification(notifFromAction('recarga_aprobada', {}));
       setOpenAprobar(false);
       setRecargaId('');
       if (lastRecarga?.recarga_id === recargaId) {
         setLastRecarga((r) => r ? { ...r, estado: 'aprobada' } : r);
       }
     } else {
-      showToast(res.error?.message ?? 'Error al aprobar recarga', 'error');
+      showToast(getErrorMsg(res, 'Error al aprobar recarga'), 'error');
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="flex gap-3 flex-wrap">
@@ -80,49 +99,63 @@ export default function RecargasPage() {
         </Button>
       </div>
 
+      {/* Flow */}
+      <Card>
+        <CardHeader title="🔄 Flujo de recargas" subtitle="Del reporte a la disponibilidad de saldo" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {flowSteps.map(({ n, label, desc, color, emoji }, i) => (
+            <div key={n} className="relative">
+              <div className="rounded-2xl bg-white border border-gray-100 p-4 h-full hover:shadow-md transition-shadow">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br ${color} text-white text-sm font-bold mb-3 shadow-lg`}>
+                  {emoji}
+                </div>
+                <p className="text-sm font-bold text-gray-900">{label}</p>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{desc}</p>
+              </div>
+              {i < flowSteps.length - 1 && (
+                <ArrowRightIcon className="hidden sm:block absolute top-1/2 -right-2.5 h-4 w-4 text-gray-300 z-10 -translate-y-1/2" />
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {lastRecarga && (
-        <Card>
+        <Card className="animate-fade-in-up relative overflow-hidden">
+          <div className={`absolute top-0 left-0 h-1 w-full ${lastRecarga.estado === 'aprobada' ? 'bg-gradient-to-r from-emerald-500 to-green-500' : 'bg-gradient-to-r from-amber-500 to-orange-500'}`} />
           <CardHeader
-            title="Última recarga registrada"
+            title="Última recarga"
             action={<Badge label={lastRecarga.estado} variant={variantFromEstado(lastRecarga.estado)} />}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500">ID Recarga</p>
-              <p className="text-sm font-mono break-all text-gray-900">{lastRecarga.recarga_id}</p>
+              <p className="text-sm font-mono break-all text-gray-900 mt-0.5">{lastRecarga.recarga_id}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Estado</p>
-              <Badge label={lastRecarga.estado} variant={variantFromEstado(lastRecarga.estado)} />
+              <div className="mt-0.5">
+                <Badge label={lastRecarga.estado} variant={variantFromEstado(lastRecarga.estado)} />
+              </div>
             </div>
           </div>
           {lastRecarga.estado === 'en_validacion' && (
-            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-700">
-              Esta recarga está en validación. Puedes aprobarla usando el botón <strong>Aprobar Recarga</strong> con su ID.
+            <div className="mt-4 rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 flex items-center justify-between">
+              <p className="text-sm text-amber-700">
+                🔍 Esta recarga está pendiente de aprobación.
+              </p>
+              <Button size="sm" onClick={() => { setRecargaId(lastRecarga.recarga_id); setOpenAprobar(true); }}>
+                Aprobar ahora
+              </Button>
+            </div>
+          )}
+          {lastRecarga.estado === 'aprobada' && (
+            <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm text-emerald-700">
+              ✅ Recarga aprobada. El saldo está disponible para el usuario.
             </div>
           )}
         </Card>
       )}
-
-      <Card>
-        <CardHeader title="Flujo de recargas" />
-        <div className="flex flex-col sm:flex-row gap-4">
-          {[
-            { step: '1', label: 'Reportar', desc: 'El usuario envía comprobante y monto.' },
-            { step: '2', label: 'En validación', desc: 'La recarga queda pendiente de revisión.' },
-            { step: '3', label: 'Aprobar', desc: 'Admin aprueba con el ID de recarga.' },
-            { step: '4', label: 'Disponible', desc: 'El saldo queda disponible para facturas.' },
-          ].map(({ step, label, desc }) => (
-            <div key={step} className="flex-1 rounded-xl bg-gray-50 p-4">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-bold mb-2">
-                {step}
-              </div>
-              <p className="text-sm font-semibold text-gray-900">{label}</p>
-              <p className="text-xs text-gray-500 mt-1">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
 
       {/* Modal: Reportar */}
       <Modal open={openReportar} onClose={() => setOpenReportar(false)} title="Reportar Recarga">
@@ -147,12 +180,12 @@ export default function RecargasPage() {
           <Input
             label="ID de Recarga"
             required
-            placeholder="uuid de la recarga"
+            placeholder="UUID de la recarga"
             value={recargaId}
             onChange={(e) => setRecargaId(e.target.value)}
             hint="Puedes encontrar el ID en el resultado de 'Reportar Recarga'."
           />
-          {lastRecarga && (
+          {lastRecarga && lastRecarga.estado === 'en_validacion' && (
             <button
               type="button"
               className="text-xs text-indigo-600 hover:underline"
@@ -172,8 +205,3 @@ export default function RecargasPage() {
     </div>
   );
 }
-
-function formatCurrencyLocal(n: number) {
-  return formatCurrency(n);
-}
-void formatCurrencyLocal;

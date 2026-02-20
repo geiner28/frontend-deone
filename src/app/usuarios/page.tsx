@@ -8,23 +8,32 @@ import Badge, { variantFromEstado } from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
 import { FullPageSpinner } from '@/components/ui/Spinner';
+import EmptyState from '@/components/ui/EmptyState';
 import { upsertUsuario, getUsuarioByTelefono, updatePlan } from '@/lib/api';
 import type { Usuario, Plan } from '@/types';
-import { formatDateTime, formatDate } from '@/lib/utils';
+import { formatDateTime, formatDate, getErrorMsg } from '@/lib/utils';
+import { useNotifications, notifFromAction } from '@/contexts/NotificationContext';
 import {
   MagnifyingGlassIcon,
   UserPlusIcon,
   PencilSquareIcon,
+  PhoneIcon,
+  EnvelopeIcon,
+  CalendarDaysIcon,
+  ShieldCheckIcon,
+  UsersIcon,
 } from '@heroicons/react/24/outline';
 
 export default function UsuariosPage() {
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [loading, setLoading] = useState(false);
+  const { addNotification } = useNotifications();
 
   // Buscar usuario
   const [searchTel, setSearchTel] = useState('');
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
 
   // Modal crear/actualizar usuario
   const [openUpsert, setOpenUpsert] = useState(false);
@@ -39,13 +48,15 @@ export default function UsuariosPage() {
   const handleSearch = async () => {
     if (!searchTel.trim()) return;
     setSearchLoading(true);
+    setSearched(false);
     const res = await getUsuarioByTelefono(searchTel.trim());
     setSearchLoading(false);
+    setSearched(true);
     if (res.ok && res.data) {
       setUsuario(res.data);
     } else {
       setUsuario(null);
-      showToast(res.error?.message ?? 'Usuario no encontrado', 'error');
+      showToast(getErrorMsg(res, 'Usuario no encontrado'), 'error');
     }
   };
 
@@ -53,12 +64,19 @@ export default function UsuariosPage() {
     setLoading(true);
     const res = await upsertUsuario(upsertForm);
     setLoading(false);
-    if (res.ok) {
-      showToast(`Usuario ${res.data?.creado ? 'creado' : 'actualizado'} correctamente`, 'success');
+    if (res.ok && res.data) {
+      const wasCreated = res.data.es_nuevo;
+      showToast(`Usuario ${wasCreated ? 'creado' : 'actualizado'} correctamente`, 'success');
       setOpenUpsert(false);
+      if (wasCreated) {
+        addNotification(notifFromAction('usuario_nuevo', {
+          nombre: `${upsertForm.nombre} ${upsertForm.apellido}`,
+          telefono: upsertForm.telefono,
+        }));
+      }
       setUpsertForm({ telefono: '', nombre: '', apellido: '', correo: '' });
     } else {
-      showToast(res.error?.message ?? 'Error al guardar usuario', 'error');
+      showToast(getErrorMsg(res, 'Error al guardar usuario'), 'error');
     }
   };
 
@@ -66,19 +84,23 @@ export default function UsuariosPage() {
     setLoading(true);
     const res = await updatePlan(planForm);
     setLoading(false);
-    if (res.ok) {
-      showToast(`Plan actualizado: ${res.data?.plan_anterior} → ${res.data?.plan_nuevo}`, 'success');
+    if (res.ok && res.data) {
+      showToast(`Plan actualizado: ${res.data.plan_anterior} → ${res.data.plan_nuevo}`, 'success');
       setOpenPlan(false);
+      addNotification(notifFromAction('plan_actualizado', {
+        plan_anterior: res.data.plan_anterior,
+        plan_nuevo: res.data.plan_nuevo,
+      }));
       if (usuario?.telefono === planForm.telefono) {
         setUsuario((u) => u ? { ...u, plan: planForm.plan } : u);
       }
     } else {
-      showToast(res.error?.message ?? 'Error al actualizar plan', 'error');
+      showToast(getErrorMsg(res, 'Error al actualizar plan'), 'error');
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Actions */}
@@ -93,7 +115,7 @@ export default function UsuariosPage() {
 
       {/* Search */}
       <Card>
-        <CardHeader title="Buscar usuario por teléfono" />
+        <CardHeader title="Buscar usuario por teléfono" subtitle="Ingresa el número para ver el perfil completo" />
         <div className="flex gap-3">
           <Input
             placeholder="Ej: 3001234567"
@@ -106,43 +128,90 @@ export default function UsuariosPage() {
             <MagnifyingGlassIcon className="h-4 w-4" /> Buscar
           </Button>
         </div>
-
-        {searchLoading && <div className="mt-6"><FullPageSpinner /></div>}
-
-        {usuario && !searchLoading && (
-          <div className="mt-6 divide-y divide-gray-100">
-            <div className="pb-4 flex items-start justify-between">
-              <div>
-                <p className="text-base font-semibold text-gray-900">
-                  {usuario.nombre} {usuario.apellido}
-                </p>
-                <p className="text-sm text-gray-500">{usuario.correo}</p>
-              </div>
-              <Badge label={usuario.activo ? 'Activo' : 'Inactivo'} variant={variantFromEstado(usuario.activo ? 'activa' : 'inactiva')} />
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 py-4">
-              <InfoItem label="Teléfono" value={usuario.telefono} />
-              <InfoItem label="Plan" value={<Badge label={usuario.plan} variant={usuario.plan === 'tranquilidad' ? 'success' : 'info'} dot={false} />} />
-              <InfoItem label="Miembro desde" value={formatDate(usuario.creado_en)} />
-              <InfoItem label="Dirección" value={usuario.direccion ?? '—'} />
-              <InfoItem label="ID" value={<span className="font-mono text-xs">{usuario.id}</span>} />
-            </div>
-
-            <div className="pt-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Ajustes</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <InfoItem label="Notificaciones" value={usuario.ajustes_usuario.tipo_notificacion} />
-                <InfoItem label="Umbral monto alto" value={`$${usuario.ajustes_usuario.umbral_monto_alto.toLocaleString('es-CO')}`} />
-                <InfoItem label="Días anticipación" value={`${usuario.ajustes_usuario.dias_anticipacion_recordatorio} días`} />
-                <InfoItem label="Recordatorios" value={usuario.ajustes_usuario.recordatorios_activos ? 'Activos' : 'Inactivos'} />
-                <InfoItem label="Req. autorización" value={usuario.ajustes_usuario.requiere_autorizacion_monto_alto ? 'Sí' : 'No'} />
-                <InfoItem label="Ajustes desde" value={formatDateTime(usuario.ajustes_usuario.creado_en)} />
-              </div>
-            </div>
-          </div>
-        )}
       </Card>
+
+      {searchLoading && <FullPageSpinner />}
+
+      {searched && !searchLoading && !usuario && (
+        <EmptyState
+          icon={<UsersIcon className="h-6 w-6" />}
+          title="Usuario no encontrado"
+          description="No se encontró un usuario con ese teléfono. Puedes crear uno nuevo."
+          action={<Button size="sm" onClick={() => { setUpsertForm((f) => ({ ...f, telefono: searchTel })); setOpenUpsert(true); }}>Crear usuario</Button>}
+        />
+      )}
+
+      {/* User Profile Card */}
+      {usuario && !searchLoading && (
+        <div className="animate-fade-in-up space-y-4">
+          {/* Profile header */}
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 h-1.5 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+            <div className="flex items-start justify-between pt-2">
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xl font-bold shadow-lg shadow-indigo-500/25">
+                  {usuario.nombre.charAt(0)}{usuario.apellido.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {usuario.nombre} {usuario.apellido}
+                  </h3>
+                  <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                    <span className="flex items-center gap-1"><PhoneIcon className="h-3.5 w-3.5" />{usuario.telefono}</span>
+                    <span className="flex items-center gap-1"><EnvelopeIcon className="h-3.5 w-3.5" />{usuario.correo}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge label={usuario.plan} variant={usuario.plan === 'tranquilidad' ? 'success' : 'info'} />
+                <Badge label={usuario.activo ? 'Activo' : 'Inactivo'} variant={variantFromEstado(usuario.activo ? 'activa' : 'inactiva')} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+              <ProfileStat label="Plan" value={usuario.plan} icon={<ShieldCheckIcon className="h-4 w-4" />} />
+              <ProfileStat label="Miembro desde" value={formatDate(usuario.creado_en)} icon={<CalendarDaysIcon className="h-4 w-4" />} />
+              <ProfileStat label="Dirección" value={usuario.direccion ?? '—'} />
+              <ProfileStat label="ID" value={usuario.id.slice(0, 8) + '…'} mono />
+            </div>
+
+            {/* Quick actions */}
+            <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
+              <Button size="sm" variant="secondary" onClick={() => {
+                setPlanForm({ telefono: usuario.telefono, plan: usuario.plan === 'control' ? 'tranquilidad' : 'control' });
+                setOpenPlan(true);
+              }}>
+                <PencilSquareIcon className="h-3.5 w-3.5" /> Cambiar plan
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => {
+                setUpsertForm({ telefono: usuario.telefono, nombre: usuario.nombre, apellido: usuario.apellido, correo: usuario.correo });
+                setOpenUpsert(true);
+              }}>
+                Editar datos
+              </Button>
+            </div>
+          </Card>
+
+          {/* Settings */}
+          <Card>
+            <CardHeader title="⚙️ Ajustes del usuario" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <InfoItem label="Tipo de notificación" value={usuario.ajustes_usuario.tipo_notificacion} />
+              <InfoItem label="Umbral monto alto" value={`$${usuario.ajustes_usuario.umbral_monto_alto.toLocaleString('es-CO')}`} />
+              <InfoItem label="Días de anticipación" value={`${usuario.ajustes_usuario.dias_anticipacion_recordatorio} días`} />
+              <InfoItem label="Recordatorios" value={
+                <Badge label={usuario.ajustes_usuario.recordatorios_activos ? 'Activos' : 'Inactivos'}
+                  variant={usuario.ajustes_usuario.recordatorios_activos ? 'success' : 'neutral'} dot={false} />
+              } />
+              <InfoItem label="Req. autorización monto alto" value={
+                <Badge label={usuario.ajustes_usuario.requiere_autorizacion_monto_alto ? 'Sí' : 'No'}
+                  variant={usuario.ajustes_usuario.requiere_autorizacion_monto_alto ? 'warning' : 'neutral'} dot={false} />
+              } />
+              <InfoItem label="Ajustes desde" value={usuario.ajustes_usuario.creado_en ? formatDateTime(usuario.ajustes_usuario.creado_en) : '—'} />
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Modal: Upsert */}
       <Modal open={openUpsert} onClose={() => setOpenUpsert(false)} title="Crear / Actualizar Usuario">
@@ -173,6 +242,7 @@ export default function UsuariosPage() {
             >
               <option value="control">Control</option>
               <option value="tranquilidad">Tranquilidad</option>
+              <option value="respaldo">Respaldo</option>
             </select>
           </div>
           <div className="flex justify-end gap-3 pt-2">
@@ -181,6 +251,18 @@ export default function UsuariosPage() {
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+function ProfileStat({ label, value, icon, mono }: { label: string; value: string; icon?: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+      <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">{label}</p>
+      <div className="flex items-center gap-1.5 mt-1">
+        {icon && <span className="text-gray-400">{icon}</span>}
+        <p className={`text-sm font-semibold text-gray-900 ${mono ? 'font-mono text-xs' : ''}`}>{value}</p>
+      </div>
     </div>
   );
 }
