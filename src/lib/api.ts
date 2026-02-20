@@ -47,10 +47,18 @@ import type {
   ListAdminPagosData,
 } from '@/types';
 
-const PROXY_PREFIX = '/api/proxy';
+// By default the client calls the server-side proxy at `/api/proxy` so the
+// admin API key is never exposed to the browser. For deployments where you
+// want the frontend to call the backend directly, set the env var
+// `NEXT_PUBLIC_DEONE_API_BASE_URL` (example: https://api.example.com/api)
+const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_DEONE_API_BASE_URL || '';
+const PROXY_PREFIX = PUBLIC_API_BASE ? PUBLIC_API_BASE.replace(/\/$/, '') : '/api/proxy';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-  const res = await fetch(`${PROXY_PREFIX}${path}`, {
+  // Ensure path starts with a single '/'
+  const safePath = path.startsWith('/') ? path : `/${path}`;
+  const url = PROXY_PREFIX.endsWith('/') ? `${PROXY_PREFIX.slice(0, -1)}${safePath}` : `${PROXY_PREFIX}${safePath}`;
+  const res = await fetch(url, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
   });
