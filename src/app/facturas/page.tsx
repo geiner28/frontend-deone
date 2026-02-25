@@ -61,6 +61,8 @@ export default function FacturasPage() {
     monto: '',
     fecha_vencimiento: '',
     fecha_emision: '',
+    referencia_pago: '',
+    etiqueta: '',
     observaciones_admin: '',
   });
 
@@ -114,9 +116,11 @@ export default function FacturasPage() {
     setLoading(true);
     const res = await validarFactura(facturaSeleccionada.factura_id, {
       monto: Number(validarForm.monto),
-      fecha_vencimiento: validarForm.fecha_vencimiento,
-      fecha_emision: validarForm.fecha_emision,
-      observaciones_admin: validarForm.observaciones_admin,
+      fecha_vencimiento: validarForm.fecha_vencimiento || undefined,
+      fecha_emision: validarForm.fecha_emision || undefined,
+      referencia_pago: validarForm.referencia_pago || undefined,
+      etiqueta: validarForm.etiqueta || undefined,
+      observaciones_admin: validarForm.observaciones_admin || undefined,
     });
     setLoading(false);
     if (res.ok && res.data) {
@@ -124,7 +128,7 @@ export default function FacturasPage() {
       setCurrentStep(2);
       showToast('Factura validada correctamente', 'success');
       setOpenValidar(false);
-      setValidarForm({ monto: '', fecha_vencimiento: '', fecha_emision: '', observaciones_admin: '' });
+      setValidarForm({ monto: '', fecha_vencimiento: '', fecha_emision: '', referencia_pago: '', etiqueta: '', observaciones_admin: '' });
     } else {
       showToast(getErrorMsg(res, 'Error al validar factura'), 'error');
     }
@@ -218,7 +222,7 @@ export default function FacturasPage() {
             {result.estado === 'extraida' && (
               <Button size="sm" onClick={() => {
                 setFacturaSeleccionada(result);
-                setValidarForm({ monto: result.monto.toString(), fecha_vencimiento: '', fecha_emision: '', observaciones_admin: '' });
+                setValidarForm({ monto: result.monto.toString(), fecha_vencimiento: '', fecha_emision: '', referencia_pago: '', etiqueta: '', observaciones_admin: '' });
                 setOpenValidar(true);
               }}>
                 <CheckCircleIcon className="h-4 w-4" /> Validar Factura
@@ -305,8 +309,12 @@ export default function FacturasPage() {
         <div className="space-y-4">
           <Input label="Monto (COP)" required type="number" value={validarForm.monto} onChange={(e) => setValidarForm((f) => ({ ...f, monto: e.target.value }))} placeholder="150000" />
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Fecha emisión" required type="date" value={validarForm.fecha_emision} onChange={(e) => setValidarForm((f) => ({ ...f, fecha_emision: e.target.value }))} />
-            <Input label="Fecha vencimiento" required type="date" value={validarForm.fecha_vencimiento} onChange={(e) => setValidarForm((f) => ({ ...f, fecha_vencimiento: e.target.value }))} />
+            <Input label="Fecha emisión" type="date" value={validarForm.fecha_emision} onChange={(e) => setValidarForm((f) => ({ ...f, fecha_emision: e.target.value }))} />
+            <Input label="Fecha vencimiento" type="date" value={validarForm.fecha_vencimiento} onChange={(e) => setValidarForm((f) => ({ ...f, fecha_vencimiento: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Referencia de pago (opcional)" value={validarForm.referencia_pago} onChange={(e) => setValidarForm((f) => ({ ...f, referencia_pago: e.target.value }))} placeholder="TX-PSE-123456" />
+            <Input label="Etiqueta (opcional)" value={validarForm.etiqueta} onChange={(e) => setValidarForm((f) => ({ ...f, etiqueta: e.target.value }))} placeholder="Ej: Factura Marzo" />
           </div>
           <Input label="Observaciones (opcional)" value={validarForm.observaciones_admin} onChange={(e) => setValidarForm((f) => ({ ...f, observaciones_admin: e.target.value }))} placeholder="Notas sobre la validación..." />
           <div className="flex justify-end gap-3 pt-2">

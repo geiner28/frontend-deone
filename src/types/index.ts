@@ -164,6 +164,8 @@ export interface ValidarFacturaPayload {
   monto: number;
   fecha_vencimiento?: string;
   fecha_emision?: string;
+  referencia_pago?: string;
+  etiqueta?: string;
   observaciones_admin?: string;
 }
 
