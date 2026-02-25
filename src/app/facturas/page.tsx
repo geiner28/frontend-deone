@@ -25,10 +25,11 @@ const initialForm = {
   fecha_vencimiento: '',
   fecha_emision: '',
   periodo: '',
+  referencia_pago: '',
+  etiqueta: '',
   origen: 'manual',
   archivo_url: '',
   extraccion_estado: 'ok',
-  extraccion_confianza: '0.95',
 };
 
 // ─── Workflow steps ───────────────────────────────────────────────────────────
@@ -94,7 +95,6 @@ export default function FacturasPage() {
     const res = await capturaFactura({
       ...form,
       monto: Number(form.monto),
-      extraccion_confianza: Number(form.extraccion_confianza),
     });
     setLoading(false);
     if (res.ok && res.data) {
@@ -272,6 +272,10 @@ export default function FacturasPage() {
             <Input label="Periodo" required value={form.periodo} onChange={set('periodo')} placeholder="2026-02" />
           </div>
           <div className="grid grid-cols-2 gap-3">
+            <Input label="Referencia de pago (opcional)" value={form.referencia_pago} onChange={set('referencia_pago')} placeholder="TX-PSE-123456" />
+            <Input label="Etiqueta (opcional)" value={form.etiqueta} onChange={set('etiqueta')} placeholder="Ej: Factura Marzo" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <Input label="Fecha emisión" required type="date" value={form.fecha_emision} onChange={set('fecha_emision')} />
             <Input label="Fecha vencimiento" required type="date" value={form.fecha_vencimiento} onChange={set('fecha_vencimiento')} />
           </div>
@@ -284,7 +288,7 @@ export default function FacturasPage() {
                 <option value="api">API</option>
               </select>
             </div>
-            <Input label="Confianza extracción" type="number" step="0.01" min="0" max="1" value={form.extraccion_confianza} onChange={set('extraccion_confianza')} />
+            <Input label="Estado extracción" value={form.extraccion_estado} onChange={set('extraccion_estado')} placeholder="ok / dudosa" />
           </div>
           <Input label="URL Archivo (opcional)" type="url" value={form.archivo_url} onChange={set('archivo_url')} placeholder="https://example.com/factura.pdf" />
           <div className="flex justify-end gap-3 pt-2">

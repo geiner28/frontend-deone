@@ -140,6 +140,8 @@ export interface CapturaFacturaPayload {
   servicio: string;
   monto: number;
   periodo?: string;
+  referencia_pago?: string;
+  etiqueta?: string;
   fecha_vencimiento?: string;
   fecha_emision?: string;
   origen?: string;
