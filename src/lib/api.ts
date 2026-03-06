@@ -13,6 +13,7 @@ import type {
   CreateObligacionPayload,
   UpdateObligacionPayload,
   Factura,
+  FacturaValidada,
   CapturaFacturaPayload,
   CapturaFacturaData,
   ValidarFacturaPayload,
@@ -169,6 +170,13 @@ export const rechazarFactura = (facturaId: string, payload: RechazarFacturaPaylo
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+
+// GET /api/facturas/validadas?obligacion_id=
+export const getFacturasValidadas = (obligacionId?: string) => {
+  const sp = new URLSearchParams();
+  if (obligacionId) sp.set('obligacion_id', obligacionId);
+  return request<FacturaValidada[]>(`/facturas/validadas?${sp.toString()}`);
+};
 
 // ─── 5. Recargas (3 endpoints) ───────────────────────────────────────────────
 // POST /api/recargas/reportar
@@ -336,3 +344,18 @@ export const getAdminPagos = (params?: {
   if (params?.periodo) sp.set('periodo', params.periodo);
   return request<ListAdminPagosData>(`/admin/pagos?${sp.toString()}`);
 };
+
+// ─── 11. Programación Recargas (1 endpoint) ────────────────────────────────
+// PUT /api/programacion/:usuario_id
+export const updateProgramacionRecargas = (usuarioId: string, payload: {
+  cantidad_recargas: number;
+  dia_1: number;
+  dia_2: number | null;
+}) =>
+  request<{ id: string; cantidad_recargas: number; dia_1: number; dia_2: number | null }>(
+    `/programacion/${usuarioId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }
+  );
