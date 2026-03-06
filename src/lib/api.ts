@@ -344,3 +344,18 @@ export const getAdminPagos = (params?: {
   if (params?.periodo) sp.set('periodo', params.periodo);
   return request<ListAdminPagosData>(`/admin/pagos?${sp.toString()}`);
 };
+
+// ─── 11. Programación Recargas (1 endpoint) ────────────────────────────────
+// PUT /api/programacion/:usuario_id
+export const updateProgramacionRecargas = (usuarioId: string, payload: {
+  cantidad_recargas: number;
+  dia_1: number;
+  dia_2: number | null;
+}) =>
+  request<{ id: string; cantidad_recargas: number; dia_1: number; dia_2: number | null }>(
+    `/programacion/${usuarioId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }
+  );

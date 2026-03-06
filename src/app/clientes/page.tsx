@@ -51,6 +51,7 @@ import {
   PlusIcon,
   ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline';
+import ProgramacionRecargasCard from '@/components/programacion/ProgramacionRecargasCard';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 type Tab = 'obligaciones' | 'recargas' | 'pagos' | 'notificaciones' | 'facturas';
@@ -365,6 +366,14 @@ function ClientDetailView({
         <KpiCard label="Saldo" value={formatCurrency(r.saldo_disponible)} color="text-amber-600" highlight={r.saldo_disponible > 0} />
         <KpiCard label="Notificaciones" value={perfil.notificaciones_recientes.length} color="text-pink-600" />
       </div>
+
+      {/* Programación de Recargas */}
+      <ProgramacionRecargasCard
+        programacion={perfil.programacion_recargas}
+        usuarioId={u.id}
+        onReload={onReload}
+        showToast={showToast}
+      />
 
       {/* Tabs */}
       <div className="flex bg-white rounded-xl border border-gray-100 p-1 shadow-sm overflow-x-auto">

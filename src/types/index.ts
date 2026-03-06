@@ -392,6 +392,16 @@ export interface ListAdminClientesData {
   total_pages: number;
 }
 
+export interface ProgramacionRecargas {
+  id: string;
+  usuario_id: string;
+  cantidad_recargas: number;
+  dia_1: number;
+  dia_2: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AdminClientePerfilData {
   usuario: Usuario;
   resumen: {
@@ -427,6 +437,7 @@ export interface AdminClientePerfilData {
     };
   }[];
   notificaciones_recientes: NotificacionAPI[];
+  programacion_recargas: ProgramacionRecargas | null;
 }
 
 // ─── Admin Pagos ──────────────────────────────────────────────────────────────
