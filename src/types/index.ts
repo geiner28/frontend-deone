@@ -159,6 +159,15 @@ export interface CapturaFacturaData {
   requiere_revision: boolean;
 }
 
+// ─── Factura Validada (nuevo tipo para endpoint de facturas validadas) ───────
+export interface FacturaValidada {
+  id: string;
+  etiqueta: string | null;
+  referencia_pago: string | null;
+  fecha_vencimiento: string | null;
+  obligacion_id: string;
+}
+
 // ─── Factura Validación ───────────────────────────────────────────────────────
 export interface ValidarFacturaPayload {
   monto: number;

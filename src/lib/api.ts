@@ -13,6 +13,7 @@ import type {
   CreateObligacionPayload,
   UpdateObligacionPayload,
   Factura,
+  FacturaValidada,
   CapturaFacturaPayload,
   CapturaFacturaData,
   ValidarFacturaPayload,
@@ -169,6 +170,13 @@ export const rechazarFactura = (facturaId: string, payload: RechazarFacturaPaylo
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+
+// GET /api/facturas/validadas?obligacion_id=
+export const getFacturasValidadas = (obligacionId?: string) => {
+  const sp = new URLSearchParams();
+  if (obligacionId) sp.set('obligacion_id', obligacionId);
+  return request<FacturaValidada[]>(`/facturas/validadas?${sp.toString()}`);
+};
 
 // ─── 5. Recargas (3 endpoints) ───────────────────────────────────────────────
 // POST /api/recargas/reportar

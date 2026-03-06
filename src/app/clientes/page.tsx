@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -15,6 +15,7 @@ import {
   updatePlan,
   getObligaciones,
   getFacturasByObligacion,
+  getFacturasValidadas,
   validarFactura,
   rechazarFactura,
   aprobarRecarga,
@@ -28,6 +29,7 @@ import type {
   Plan,
   Obligacion,
   Factura,
+  FacturaValidada,
 } from '@/types';
 import { formatCurrency, formatDate, formatDateTime, getErrorMsg } from '@/lib/utils';
 import {
@@ -51,7 +53,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-type Tab = 'obligaciones' | 'recargas' | 'pagos' | 'notificaciones';
+type Tab = 'obligaciones' | 'recargas' | 'pagos' | 'notificaciones' | 'facturas';
 
 const planColors: Record<string, string> = {
   control: 'bg-blue-100 text-blue-700',
@@ -315,6 +317,7 @@ function ClientDetailView({
     { key: 'obligaciones', label: 'Obligaciones', icon: <DocumentTextIcon className="h-4 w-4" />, count: perfil.obligaciones.length },
     { key: 'recargas', label: 'Recargas', icon: <ArrowPathIcon className="h-4 w-4" />, count: perfil.recargas.length },
     { key: 'pagos', label: 'Pagos', icon: <BanknotesIcon className="h-4 w-4" />, count: perfil.pagos.length },
+    { key: 'facturas', label: 'Facturas', icon: <CreditCardIcon className="h-4 w-4" /> },
     { key: 'notificaciones', label: 'Notificaciones', icon: <BellAlertIcon className="h-4 w-4" />, count: perfil.notificaciones_recientes.length },
   ];
 
@@ -397,6 +400,9 @@ function ClientDetailView({
       )}
       {activeTab === 'pagos' && (
         <PagosTab perfil={perfil} showToast={showToast} onReload={onReload} />
+      )}
+      {activeTab === 'facturas' && (
+        <FacturasTab perfil={perfil} showToast={showToast} />
       )}
       {activeTab === 'notificaciones' && (
         <NotificacionesTab perfil={perfil} />
@@ -1169,6 +1175,107 @@ function MiniStat({ label, value }: { label: string; value: string | number }) {
     <div>
       <p className="text-[11px] text-gray-500">{label}</p>
       <p className="text-sm font-bold text-gray-900">{value}</p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: Facturas Validadas
+// ═══════════════════════════════════════════════════════════════════════════════
+function FacturasTab({ perfil, showToast }: { perfil: AdminClientePerfilData; showToast: (msg: string, t: ToastType) => void }) {
+  const [facturas, setFacturas] = useState<FacturaValidada[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [obligacionFilter, setObligacionFilter] = useState('');
+
+  const fetchFacturas = useCallback(async () => {
+    setLoading(true);
+    const res = await getFacturasValidadas(obligacionFilter || undefined);
+    setLoading(false);
+    if (res.ok && res.data) {
+      // Filtrar solo facturas del usuario actual
+      const filtered = res.data.filter(f => 
+        perfil.obligaciones.some(ob => ob.id === f.obligacion_id)
+      );
+      setFacturas(filtered);
+    }
+  }, [obligacionFilter, perfil.obligaciones]);
+
+  useEffect(() => { fetchFacturas(); }, [fetchFacturas]);
+
+  // Agrupar por obligación
+  const facturasAgrupadas = useMemo(() => {
+    const grupos: Record<string, FacturaValidada[]> = {};
+    facturas.forEach(f => {
+      const key = f.obligacion_id || 'sin_obligacion';
+      if (!grupos[key]) grupos[key] = [];
+      grupos[key].push(f);
+    });
+    return grupos;
+  }, [facturas]);
+
+  if (loading) return <div className="p-4 text-center text-gray-500">Cargando facturas...</div>;
+
+  if (facturas.length === 0) {
+    return (
+      <EmptyState
+        icon={<CreditCardIcon className="h-6 w-6" />}
+        title="Sin facturas validadas"
+        description="No hay facturas validadas para mostrar."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filtro por obligación */}
+      <div className="flex gap-3">
+        <select
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          value={obligacionFilter}
+          onChange={(e) => setObligacionFilter(e.target.value)}
+        >
+          <option value="">Todas las obligaciones</option>
+          {perfil.obligaciones.map(ob => (
+            <option key={ob.id} value={ob.id}>{ob.descripcion}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Lista agrupada */}
+      {Object.entries(facturasAgrupadas).map(([obligacionId, facs]) => {
+        const obligacion = perfil.obligaciones.find(o => o.id === obligacionId);
+        return (
+          <Card key={obligacionId}>
+            <h3 className="text-sm font-bold text-gray-900 mb-3">
+              {obligacion?.descripcion || 'Obligación'}
+            </h3>
+            <div className="space-y-2">
+              {facs.map(f => (
+                <div key={f.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                  <div>
+                    <p className="text-sm font-bold text-blue-900">
+                      Etiqueta Factura:</p>
+                      <p className="text-sm font-medium text-gray-900">
+                      {f.etiqueta || 'Sin etiqueta'}</p>
+                      <br />
+                    <p className="text-xs text-gray-500">
+                      Referencia de Pago: {f.referencia_pago || '—'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-black-900">
+                      Fecha de Vencimiento:
+                    </p>
+                    <p className="text-sm font-medium text-blue-900">
+                      {f.fecha_vencimiento ? formatDate(f.fecha_vencimiento) : 'Sin fecha'}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
 }
