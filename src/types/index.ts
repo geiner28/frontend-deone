@@ -95,6 +95,8 @@ export interface Factura {
   extraccion_confianza?: number;
   obligacion_id?: string;
   motivo_rechazo?: string;
+  etiqueta?: string;
+  referencia_pago?: string;
 }
 
 // ─── Obligación ───────────────────────────────────────────────────────────────

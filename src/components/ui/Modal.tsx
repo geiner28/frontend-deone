@@ -29,9 +29,9 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'md' 
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${widths[maxWidth]} rounded-2xl bg-white shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200`}
+        className={`relative w-full ${widths[maxWidth]} max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200`}
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 shrink-0">
           <h3 className="text-base font-semibold text-gray-900">{title}</h3>
           <button
             onClick={onClose}
@@ -40,7 +40,7 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'md' 
             <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="px-6 py-5 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

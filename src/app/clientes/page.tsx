@@ -21,6 +21,7 @@ import {
   rechazarRecarga,
   crearPago,
   confirmarPago,
+  crearNotificacion,
 } from '@/lib/api';
 import type {
   Usuario,
@@ -454,24 +455,29 @@ function ObligacionesTab({
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const [validarForm, setValidarForm] = useState({ monto: '', fecha_vencimiento: '', fecha_emision: '', observaciones_admin: '' });
+  const [validarForm, setValidarForm] = useState({
+    monto: '',
+    servicio: '',
+    periodo: '',
+    referencia_pago: '',
+    etiqueta: '',
+    fecha_emision: '',
+    fecha_vencimiento: '',
+    origen: '',
+    extraccion_estado: '',
+    archivo_url: '',
+    observaciones_admin: '',
+  });
   const [rechazarMotivo, setRechazarMotivo] = useState('');
   const [confirmarForm, setConfirmarForm] = useState({ proveedor_pago: '', referencia_pago: '', comprobante_pago_url: '' });
-
-  // Modal: Editar y Pagar (actualiza monto/fecha + crea pago + confirma en un solo paso)
-  const [editarPagarOpen, setEditarPagarOpen] = useState(false);
-  const [editarPagarForm, setEditarPagarForm] = useState({ monto: '', fecha_vencimiento: '', proveedor_pago: '', referencia_pago: '', comprobante_pago_url: '' });
 
   // Saldo global del usuario (del resumen del perfil)
   const saldoGlobal = perfil.resumen.saldo_disponible;
 
-  // Determinar si una obligación es la primera (creada manualmente) o posterior (auto-generada).
-  // La primera es la más antigua por fecha de creación. Las posteriores son auto-generadas.
-  const sortedObligaciones = [...perfil.obligaciones].sort(
-    (a, b) => new Date(a.creado_en).getTime() - new Date(b.creado_en).getTime()
-  );
-  const firstObligacionId = sortedObligaciones.length > 0 ? sortedObligaciones[0].id : null;
-  const isFirstObligacion = (obId: string) => obId === firstObligacionId;
+  // El endpoint GET /api/facturas/obligacion/:id devuelve _id en vez de id y no incluye obligacion_id
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const normalizeFacturas = (facturas: any[], obligacionId: string): Factura[] =>
+    facturas.map((f) => ({ ...f, id: f.id || f._id, obligacion_id: f.obligacion_id || obligacionId }));
 
   const toggleObligacion = async (obId: string) => {
     if (expanded === obId) { setExpanded(null); return; }
@@ -480,17 +486,22 @@ function ObligacionesTab({
       setLoadingFacturas(obId);
       const res = await getFacturasByObligacion(obId);
       setLoadingFacturas(null);
-      if (res.ok && res.data) setFacturasMap((m) => ({ ...m, [obId]: res.data! }));
+      if (res.ok && res.data) setFacturasMap((m) => ({ ...m, [obId]: normalizeFacturas(res.data!, obId) }));
     }
   };
 
   const handleValidar = async () => {
-    if (!selectedFactura) return;
+    if (!selectedFactura || !selectedFactura.id) {
+      showToast('Error: No se pudo identificar la factura. Recarga la página e intenta de nuevo.', 'error');
+      return;
+    }
     setActionLoading(true);
     const res = await validarFactura(selectedFactura.id, {
       monto: Number(validarForm.monto),
       fecha_vencimiento: validarForm.fecha_vencimiento || undefined,
       fecha_emision: validarForm.fecha_emision || undefined,
+      referencia_pago: validarForm.referencia_pago || undefined,
+      etiqueta: validarForm.etiqueta || undefined,
       observaciones_admin: validarForm.observaciones_admin || undefined,
     });
     setActionLoading(false);
@@ -500,7 +511,7 @@ function ObligacionesTab({
       // refresh facturas for this obligacion
       if (selectedFactura.obligacion_id) {
         const fRes = await getFacturasByObligacion(selectedFactura.obligacion_id);
-        if (fRes.ok && fRes.data) setFacturasMap((m) => ({ ...m, [selectedFactura.obligacion_id!]: fRes.data! }));
+        if (fRes.ok && fRes.data) setFacturasMap((m) => ({ ...m, [selectedFactura.obligacion_id!]: normalizeFacturas(fRes.data!, selectedFactura.obligacion_id!) }));
       }
       await onReload();
     } else {
@@ -509,7 +520,7 @@ function ObligacionesTab({
   };
 
   const handleRechazar = async () => {
-    if (!selectedFactura || !rechazarMotivo.trim()) return;
+    if (!selectedFactura || !selectedFactura.id || !rechazarMotivo.trim()) return;
     setActionLoading(true);
     const res = await rechazarFactura(selectedFactura.id, { motivo_rechazo: rechazarMotivo });
     setActionLoading(false);
@@ -519,7 +530,7 @@ function ObligacionesTab({
       setRechazarMotivo('');
       if (selectedFactura.obligacion_id) {
         const fRes = await getFacturasByObligacion(selectedFactura.obligacion_id);
-        if (fRes.ok && fRes.data) setFacturasMap((m) => ({ ...m, [selectedFactura.obligacion_id!]: fRes.data! }));
+        if (fRes.ok && fRes.data) setFacturasMap((m) => ({ ...m, [selectedFactura.obligacion_id!]: normalizeFacturas(fRes.data!, selectedFactura.obligacion_id!) }));
       }
       await onReload();
     } else {
@@ -528,7 +539,10 @@ function ObligacionesTab({
   };
 
   const handlePagar = async () => {
-    if (!selectedFactura) return;
+    if (!selectedFactura || !selectedFactura.id) {
+      showToast('Error: No se pudo identificar la factura. Recarga la página e intenta de nuevo.', 'error');
+      return;
+    }
     setActionLoading(true);
     // 1. Crear pago
     const crearRes = await crearPago({ telefono: perfil.usuario.telefono, factura_id: selectedFactura.id });
@@ -556,72 +570,11 @@ function ObligacionesTab({
       setConfirmarForm({ proveedor_pago: '', referencia_pago: '', comprobante_pago_url: '' });
       if (selectedFactura.obligacion_id) {
         const fRes = await getFacturasByObligacion(selectedFactura.obligacion_id);
-        if (fRes.ok && fRes.data) setFacturasMap((m) => ({ ...m, [selectedFactura.obligacion_id!]: fRes.data! }));
+        if (fRes.ok && fRes.data) setFacturasMap((m) => ({ ...m, [selectedFactura.obligacion_id!]: normalizeFacturas(fRes.data!, selectedFactura.obligacion_id!) }));
       }
       await onReload();
     } else {
       showToast(getErrorMsg(confRes, 'Error al confirmar pago'), 'error');
-    }
-  };
-
-  // Editar (validar con nuevo monto) + Crear pago + Confirmar pago en un solo paso
-  const handleEditarYPagar = async () => {
-    if (!selectedFactura) return;
-    setActionLoading(true);
-
-    // 1. Validar factura (cambia estado a 'validada' y actualiza monto/fecha)
-    const valRes = await validarFactura(selectedFactura.id, {
-      monto: Number(editarPagarForm.monto),
-      fecha_vencimiento: editarPagarForm.fecha_vencimiento || undefined,
-    });
-    if (!valRes.ok) {
-      setActionLoading(false);
-      showToast(getErrorMsg(valRes, 'Error al validar factura'), 'error');
-      return;
-    }
-
-    // 2. Crear pago
-    const crearRes = await crearPago({ telefono: perfil.usuario.telefono, factura_id: selectedFactura.id });
-    if (!crearRes.ok || !crearRes.data) {
-      setActionLoading(false);
-      const errMsg = getErrorMsg(crearRes, 'Error al crear pago');
-      if (errMsg.toLowerCase().includes('fondos insuficientes') || errMsg.toLowerCase().includes('insufficient')) {
-        showToast(`Factura validada, pero saldo insuficiente para pagar. ${errMsg}. Reporta una recarga para el periodo de esta obligación.`, 'error');
-      } else {
-        showToast(`Factura validada, pero falló el pago: ${errMsg}`, 'error');
-      }
-      // Refrescar facturas porque ya se validó
-      if (selectedFactura.obligacion_id) {
-        const fRes = await getFacturasByObligacion(selectedFactura.obligacion_id);
-        if (fRes.ok && fRes.data) setFacturasMap((m) => ({ ...m, [selectedFactura.obligacion_id!]: fRes.data! }));
-      }
-      await onReload();
-      return;
-    }
-
-    // 3. Confirmar pago
-    const confRes = await confirmarPago(crearRes.data.pago_id, {
-      proveedor_pago: editarPagarForm.proveedor_pago || undefined,
-      referencia_pago: editarPagarForm.referencia_pago || undefined,
-      comprobante_pago_url: editarPagarForm.comprobante_pago_url || undefined,
-    });
-    setActionLoading(false);
-    if (confRes.ok) {
-      showToast('Factura actualizada y pago confirmado exitosamente', 'success');
-      setEditarPagarOpen(false);
-      setEditarPagarForm({ monto: '', fecha_vencimiento: '', proveedor_pago: '', referencia_pago: '', comprobante_pago_url: '' });
-      if (selectedFactura.obligacion_id) {
-        const fRes = await getFacturasByObligacion(selectedFactura.obligacion_id);
-        if (fRes.ok && fRes.data) setFacturasMap((m) => ({ ...m, [selectedFactura.obligacion_id!]: fRes.data! }));
-      }
-      await onReload();
-    } else {
-      showToast(getErrorMsg(confRes, 'Error al confirmar pago'), 'error');
-      if (selectedFactura.obligacion_id) {
-        const fRes = await getFacturasByObligacion(selectedFactura.obligacion_id);
-        if (fRes.ok && fRes.data) setFacturasMap((m) => ({ ...m, [selectedFactura.obligacion_id!]: fRes.data! }));
-      }
-      await onReload();
     }
   };
 
@@ -689,8 +642,8 @@ function ObligacionesTab({
                     <div className="p-4 text-center text-sm text-gray-500">Cargando facturas...</div>
                   ) : facturas && facturas.length > 0 ? (
                     <div className="divide-y divide-gray-50">
-                      {facturas.map((f) => (
-                        <div key={f.id} className="flex items-center justify-between px-5 py-3">
+                      {facturas.map((f, idx) => (
+                        <div key={f.id || `factura-${idx}`} className="flex items-center justify-between px-5 py-3">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900">{f.servicio}</p>
                             <p className="text-xs text-gray-500">
@@ -703,15 +656,26 @@ function ObligacionesTab({
                             <Badge label={f.estado} variant={variantFromEstado(f.estado)} dot={false} />
 
                             {/* Actions por estado */}
-                            {f.estado === 'extraida' && isFirstObligacion(ob.id) && (
-                              /* Primera obligación: flujo de validación inicial */
+                            {f.estado === 'extraida' && (
                               <div className="flex gap-1">
                                 <Button size="sm" onClick={() => {
                                   setSelectedFactura(f);
-                                  setValidarForm({ monto: f.monto.toString(), fecha_vencimiento: f.fecha_vencimiento ?? '', fecha_emision: f.fecha_emision ?? '', observaciones_admin: '' });
+                                  setValidarForm({
+                                    monto: f.monto.toString(),
+                                    servicio: f.servicio ?? '',
+                                    periodo: f.periodo ?? '',
+                                    referencia_pago: f.referencia_pago ?? '',
+                                    etiqueta: f.etiqueta ?? '',
+                                    fecha_emision: f.fecha_emision ?? '',
+                                    fecha_vencimiento: f.fecha_vencimiento ?? '',
+                                    origen: f.origen ?? '',
+                                    extraccion_estado: f.extraccion_estado ?? '',
+                                    archivo_url: f.archivo_url ?? '',
+                                    observaciones_admin: '',
+                                  });
                                   setValidarOpen(true);
                                 }}>
-                                  <CheckCircleIcon className="h-3.5 w-3.5" /> Validar
+                                  <CheckCircleIcon className="h-3.5 w-3.5" /> Editar
                                 </Button>
                                 <Button size="sm" variant="secondary" onClick={() => {
                                   setSelectedFactura(f);
@@ -721,22 +685,6 @@ function ObligacionesTab({
                                   <XCircleIcon className="h-3.5 w-3.5" /> Rechazar
                                 </Button>
                               </div>
-                            )}
-                            {f.estado === 'extraida' && !isFirstObligacion(ob.id) && (
-                              /* Obligaciones posteriores: editar y pagar en un solo paso */
-                              <Button size="sm" onClick={() => {
-                                setSelectedFactura(f);
-                                setEditarPagarForm({
-                                  monto: f.monto.toString(),
-                                  fecha_vencimiento: f.fecha_vencimiento ?? '',
-                                  proveedor_pago: '',
-                                  referencia_pago: '',
-                                  comprobante_pago_url: '',
-                                });
-                                setEditarPagarOpen(true);
-                              }}>
-                                <BanknotesIcon className="h-3.5 w-3.5" /> Editar y Pagar
-                              </Button>
                             )}
                             {f.estado === 'validada' && (
                               <Button size="sm" onClick={() => {
@@ -755,8 +703,8 @@ function ObligacionesTab({
                     // Use inline facturas from profile if API call returned nothing
                     ob.facturas && ob.facturas.length > 0 ? (
                       <div className="divide-y divide-gray-50">
-                        {ob.facturas.map((f) => (
-                          <div key={f.id} className="flex items-center justify-between px-5 py-3">
+                        {ob.facturas.map((f, idx) => (
+                          <div key={f.id || `ob-factura-${idx}`} className="flex items-center justify-between px-5 py-3">
                             <div>
                               <p className="text-sm font-medium text-gray-900">{f.servicio}</p>
                               {f.fecha_vencimiento && <p className="text-xs text-gray-500">Vence: {formatDate(f.fecha_vencimiento)}</p>}
@@ -779,22 +727,38 @@ function ObligacionesTab({
         })}
       </div>
 
-      {/* Modal: Validar */}
-      <Modal open={validarOpen} onClose={() => setValidarOpen(false)} title="Validar Factura">
+      {/* Modal: Editar */}
+      <Modal open={validarOpen} onClose={() => setValidarOpen(false)} title="Editar Factura" maxWidth="lg">
         <div className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
             <p className="text-sm text-blue-800"><strong>{selectedFactura?.servicio}</strong> — {selectedFactura ? formatCurrency(selectedFactura.monto) : ''}</p>
+            <p className="text-xs text-blue-600 mt-1">Verifica y corrige los datos extraídos. Al guardar, la factura quedará validada.</p>
           </div>
+
+          <Input label="Servicio" value={validarForm.servicio} onChange={(e) => setValidarForm((f) => ({ ...f, servicio: e.target.value }))} disabled />
           <Input label="Monto (COP)" type="number" required value={validarForm.monto} onChange={(e) => setValidarForm((f) => ({ ...f, monto: e.target.value }))} />
+          <Input label="Periodo" value={validarForm.periodo} onChange={(e) => setValidarForm((f) => ({ ...f, periodo: e.target.value }))} placeholder="2026-02" disabled />
+          <Input label="Referencia de pago (opcional)" value={validarForm.referencia_pago} onChange={(e) => setValidarForm((f) => ({ ...f, referencia_pago: e.target.value }))} placeholder="TX-PSE-123456" />
+          <Input label="Etiqueta (opcional)" value={validarForm.etiqueta} onChange={(e) => setValidarForm((f) => ({ ...f, etiqueta: e.target.value }))} placeholder="Ej: Factura Marzo" />
+
           <div className="grid grid-cols-2 gap-3">
             <Input label="Fecha emisión" type="date" value={validarForm.fecha_emision} onChange={(e) => setValidarForm((f) => ({ ...f, fecha_emision: e.target.value }))} />
             <Input label="Fecha vencimiento" type="date" value={validarForm.fecha_vencimiento} onChange={(e) => setValidarForm((f) => ({ ...f, fecha_vencimiento: e.target.value }))} />
           </div>
-          <Input label="Observaciones (opcional)" value={validarForm.observaciones_admin} onChange={(e) => setValidarForm((f) => ({ ...f, observaciones_admin: e.target.value }))} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Origen" value={validarForm.origen} onChange={(e) => setValidarForm((f) => ({ ...f, origen: e.target.value }))} disabled />
+            <Input label="Estado extracción" value={validarForm.extraccion_estado} onChange={(e) => setValidarForm((f) => ({ ...f, extraccion_estado: e.target.value }))} disabled />
+          </div>
+
+          <Input label="URL Archivo (opcional)" type="url" value={validarForm.archivo_url} onChange={(e) => setValidarForm((f) => ({ ...f, archivo_url: e.target.value }))} placeholder="https://example.com/factura.pdf" disabled />
+
+          <Input label="Observaciones del admin (opcional)" value={validarForm.observaciones_admin} onChange={(e) => setValidarForm((f) => ({ ...f, observaciones_admin: e.target.value }))} placeholder="Datos verificados correctamente…" />
+
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setValidarOpen(false)}>Cancelar</Button>
             <Button loading={actionLoading} onClick={handleValidar}>
-              <CheckCircleIcon className="h-4 w-4" /> Validar
+              <CheckCircleIcon className="h-4 w-4" /> Guardar y Validar
             </Button>
           </div>
         </div>
@@ -861,49 +825,6 @@ function ObligacionesTab({
         </div>
       </Modal>
 
-      {/* Modal: Editar y Pagar (para facturas extraidas — actualiza monto, valida y paga en un solo paso) */}
-      <Modal open={editarPagarOpen} onClose={() => setEditarPagarOpen(false)} title="Editar y Pagar Factura">
-        <div className="space-y-4">
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
-            <p className="text-sm text-indigo-800"><strong>{selectedFactura?.servicio}</strong> — Monto actual: {selectedFactura ? formatCurrency(selectedFactura.monto) : ''}</p>
-            <p className="text-xs text-indigo-600 mt-1">Edita el monto y fecha si cambió. Se validará y pagará automáticamente.</p>
-          </div>
-
-          {/* Saldo global */}
-          <div className={`border rounded-xl p-3 ${
-            editarPagarForm.monto && saldoGlobal >= Number(editarPagarForm.monto)
-              ? 'bg-blue-50 border-blue-200'
-              : 'bg-amber-50 border-amber-200'
-          }`}>
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-600">💰 Saldo global</p>
-              <p className={`text-sm font-bold ${saldoGlobal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(saldoGlobal)}</p>
-            </div>
-            {editarPagarForm.monto && saldoGlobal < Number(editarPagarForm.monto) && (
-              <p className="text-xs text-amber-700 mt-1">⚠️ El saldo global parece insuficiente para este monto.</p>
-            )}
-          </div>
-
-          <Input label="Monto (COP)" type="number" required value={editarPagarForm.monto} onChange={(e) => setEditarPagarForm((f) => ({ ...f, monto: e.target.value }))} />
-          <Input label="Fecha vencimiento" type="date" value={editarPagarForm.fecha_vencimiento} onChange={(e) => setEditarPagarForm((f) => ({ ...f, fecha_vencimiento: e.target.value }))} />
-
-          <div className="border-t border-gray-100 pt-3">
-            <p className="text-xs font-medium text-gray-500 mb-2">Datos del pago (opcionales)</p>
-            <div className="space-y-3">
-              <Input label="Proveedor de pago" value={editarPagarForm.proveedor_pago} onChange={(e) => setEditarPagarForm((f) => ({ ...f, proveedor_pago: e.target.value }))} placeholder="PSE, Nequi, Daviplata, etc." />
-              <Input label="Referencia de pago" value={editarPagarForm.referencia_pago} onChange={(e) => setEditarPagarForm((f) => ({ ...f, referencia_pago: e.target.value }))} placeholder="TX-PSE-123456" />
-              <Input label="URL Comprobante (opcional)" type="url" value={editarPagarForm.comprobante_pago_url} onChange={(e) => setEditarPagarForm((f) => ({ ...f, comprobante_pago_url: e.target.value }))} placeholder="https://..." />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setEditarPagarOpen(false)}>Cancelar</Button>
-            <Button loading={actionLoading} onClick={handleEditarYPagar} disabled={!editarPagarForm.monto || Number(editarPagarForm.monto) <= 0}>
-              <BanknotesIcon className="h-4 w-4" /> Validar y Pagar
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </>
   );
 }
@@ -927,6 +848,39 @@ function RecargasTab({
   const [selectedMonto, setSelectedMonto] = useState(0);
   const [observaciones, setObservaciones] = useState('');
   const [motivoRechazo, setMotivoRechazo] = useState('');
+
+  // Solicitar recarga (notificación)
+  const [solicitarRecargaOpen, setSolicitarRecargaOpen] = useState(false);
+  const [solicitarLoading, setSolicitarLoading] = useState(false);
+  const [solicitarForm, setSolicitarForm] = useState({
+    mensaje: 'Hola, recuerda recargar para pagar tus facturas.',
+    monto_sugerido: '',
+  });
+
+  const handleSolicitarRecarga = async () => {
+    setSolicitarLoading(true);
+    const payload: Record<string, unknown> = {
+      mensaje: solicitarForm.mensaje,
+    };
+    if (solicitarForm.monto_sugerido) {
+      payload.monto_sugerido = Number(solicitarForm.monto_sugerido);
+    }
+    const res = await crearNotificacion({
+      telefono: perfil.usuario.telefono,
+      tipo: 'recordatorio_recarga',
+      canal: 'whatsapp',
+      payload,
+    });
+    setSolicitarLoading(false);
+    if (res.ok) {
+      showToast('Notificación de recarga enviada al cliente', 'success');
+      setSolicitarRecargaOpen(false);
+      setSolicitarForm({ mensaje: 'Hola, recuerda recargar para pagar tus facturas.', monto_sugerido: '' });
+      await onReload();
+    } else {
+      showToast(getErrorMsg(res, 'Error al enviar notificación'), 'error');
+    }
+  };
 
   const handleAprobar = async () => {
     setActionLoading(true);
@@ -959,16 +913,46 @@ function RecargasTab({
 
   if (perfil.recargas.length === 0) {
     return (
-      <EmptyState
-        icon={<ArrowPathIcon className="h-6 w-6" />}
-        title="Sin recargas"
-        description="Este cliente no tiene recargas registradas."
-      />
+      <>
+        <div className="flex justify-end mb-3">
+          <Button onClick={() => setSolicitarRecargaOpen(true)}>
+            <BellAlertIcon className="h-4 w-4" /> Solicitar recarga al cliente
+          </Button>
+        </div>
+        <EmptyState
+          icon={<ArrowPathIcon className="h-6 w-6" />}
+          title="Sin recargas"
+          description="Este cliente no tiene recargas registradas."
+        />
+        {/* Modal: Solicitar Recarga */}
+        <Modal open={solicitarRecargaOpen} onClose={() => setSolicitarRecargaOpen(false)} title="Solicitar Recarga al Cliente">
+          <div className="space-y-4">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+              <p className="text-sm text-indigo-800">Se enviará una notificación a <strong>{perfil.usuario.nombre} {perfil.usuario.apellido}</strong> (📱 {perfil.usuario.telefono}) solicitando que realice una recarga.</p>
+            </div>
+            <Input label="Mensaje" required value={solicitarForm.mensaje} onChange={(e) => setSolicitarForm((f) => ({ ...f, mensaje: e.target.value }))} placeholder="Hola, recuerda recargar para pagar tus facturas." />
+            <Input label="Monto sugerido (COP) (opcional)" type="number" value={solicitarForm.monto_sugerido} onChange={(e) => setSolicitarForm((f) => ({ ...f, monto_sugerido: e.target.value }))} placeholder="200000" />
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" onClick={() => setSolicitarRecargaOpen(false)}>Cancelar</Button>
+              <Button loading={solicitarLoading} onClick={handleSolicitarRecarga} disabled={!solicitarForm.mensaje.trim()}>
+                <BellAlertIcon className="h-4 w-4" /> Enviar Notificación
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      </>
     );
   }
 
   return (
     <>
+      {/* Header con botón solicitar recarga */}
+      <div className="flex justify-end mb-3">
+        <Button onClick={() => setSolicitarRecargaOpen(true)}>
+          <BellAlertIcon className="h-4 w-4" /> Solicitar recarga al cliente
+        </Button>
+      </div>
+
       <div className="space-y-3 stagger-children">
         {perfil.recargas.map((r) => (
           <Card key={r.id} className="!p-0 overflow-hidden">
@@ -1034,6 +1018,23 @@ function RecargasTab({
             <Button variant="secondary" onClick={() => setRechazarOpen(false)}>Cancelar</Button>
             <Button loading={actionLoading} onClick={handleRechazar}>
               <XCircleIcon className="h-4 w-4" /> Rechazar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Solicitar Recarga al Cliente */}
+      <Modal open={solicitarRecargaOpen} onClose={() => setSolicitarRecargaOpen(false)} title="Solicitar Recarga al Cliente">
+        <div className="space-y-4">
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+            <p className="text-sm text-indigo-800">Se enviará una notificación a <strong>{perfil.usuario.nombre} {perfil.usuario.apellido}</strong> (📱 {perfil.usuario.telefono}) solicitando que realice una recarga.</p>
+          </div>
+          <Input label="Mensaje" required value={solicitarForm.mensaje} onChange={(e) => setSolicitarForm((f) => ({ ...f, mensaje: e.target.value }))} placeholder="Hola, recuerda recargar para pagar tus facturas." />
+          <Input label="Monto sugerido (COP) (opcional)" type="number" value={solicitarForm.monto_sugerido} onChange={(e) => setSolicitarForm((f) => ({ ...f, monto_sugerido: e.target.value }))} placeholder="200000" />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setSolicitarRecargaOpen(false)}>Cancelar</Button>
+            <Button loading={solicitarLoading} onClick={handleSolicitarRecarga} disabled={!solicitarForm.mensaje.trim()}>
+              <BellAlertIcon className="h-4 w-4" /> Enviar Notificación
             </Button>
           </div>
         </div>
