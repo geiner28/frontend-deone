@@ -8,7 +8,7 @@ import { formatDateTime } from '@/lib/utils';
 import Link from 'next/link';
 
 const titles: Record<string, { title: string; subtitle: string }> = {
-  '/': { title: 'Dashboard', subtitle: 'Resumen general de la plataforma' },
+  '/': { title: '', subtitle: '' },
   '/clientes': { title: '', subtitle: '' },
   '/usuarios': { title: 'Usuarios', subtitle: 'Gestión de usuarios y planes' },
   '/obligaciones': { title: 'Obligaciones', subtitle: 'Seguimiento de obligaciones por periodo' },

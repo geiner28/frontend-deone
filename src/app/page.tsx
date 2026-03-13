@@ -1,84 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card } from '@/components/ui/Card';
-import Badge, { variantFromEstado } from '@/components/ui/Badge';
+import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { MetricCard } from '@/components/dashboard/MetricCard';
+import { UtilitiesCard } from '@/components/dashboard/UtilitiesCard';
+import { QuickActionsPanel } from '@/components/dashboard/QuickActionsPanel';
+import { DistributionChart } from '@/components/dashboard/DistributionChart';
+import { FacturesCard } from '@/components/dashboard/FacturesCard';
+import { PlansCard } from '@/components/dashboard/PlansCard';
 import { getHealth } from '@/lib/api';
 import type { HealthData } from '@/types';
-import { formatDateTime } from '@/lib/utils';
-import { useNotifications } from '@/contexts/NotificationContext';
-import {
-  UsersIcon,
-  DocumentTextIcon,
-  CreditCardIcon,
-  ArrowPathIcon,
-  BanknotesIcon,
-  SignalIcon,
-  BellIcon,
-  ArrowTrendingUpIcon,
-  ClockIcon,
-} from '@heroicons/react/24/outline';
-import Link from 'next/link';
-
-const modules = [
-  {
-    label: 'Usuarios',
-    description: 'Crear, actualizar y consultar usuarios.',
-    href: '/usuarios',
-    icon: UsersIcon,
-    gradient: 'from-[#ff8d2d] to-[#ff7a0a]',
-    bg: 'bg-[#ff8d2d]/10',
-    text: 'text-[#ff8d2d]',
-  },
-  {
-    label: 'Obligaciones',
-    description: 'Gestionar obligaciones mensuales.',
-    href: '/obligaciones',
-    icon: DocumentTextIcon,
-    gradient: 'from-blue-500 to-cyan-600',
-    bg: 'bg-blue-50',
-    text: 'text-blue-600',
-  },
-  {
-    label: 'Facturas',
-    description: 'Capturar, validar y pagar facturas.',
-    href: '/facturas',
-    icon: CreditCardIcon,
-    gradient: 'from-emerald-500 to-teal-600',
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-600',
-  },
-  {
-    label: 'Recargas',
-    description: 'Reportar y aprobar recargas.',
-    href: '/recargas',
-    icon: ArrowPathIcon,
-    gradient: 'from-[#ff8d2d] to-[#ff7a0a]',
-    bg: 'bg-[#ff8d2d]/10',
-    text: 'text-[#ff8d2d]',
-  },
-  {
-    label: 'Disponibilidad',
-    description: 'Consultar saldo disponible.',
-    href: '/disponible',
-    icon: BanknotesIcon,
-    gradient: 'from-rose-500 to-pink-600',
-    bg: 'bg-rose-50',
-    text: 'text-rose-600',
-  },
-];
-
-const quickActions = [
-  { label: 'Nuevo usuario', href: '/usuarios', icon: UsersIcon },
-  { label: 'Nueva obligación', href: '/obligaciones', icon: DocumentTextIcon },
-  { label: 'Capturar factura', href: '/facturas', icon: CreditCardIcon },
-  { label: 'Reportar recarga', href: '/recargas', icon: ArrowPathIcon },
-];
 
 export default function DashboardPage() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { notifications, adminUnread } = useNotifications();
+  const [dateFilter, setDateFilter] = useState<{ start: string; end: string } | null>(null);
+  const [planFilter, setPlanFilter] = useState('all');
+
+  // Datos de ejemplo - serán reemplazados con datos reales del backend
+  const metricsData = {
+    totalRecargas: 125430,
+    totalPagado: 98500,
+    totalPendiente: 26930,
+    saldoDisponible: 45000,
+    utilidades: 15250,
+  };
+
+  const distributionData = [
+    { label: 'Pagado', value: 98500, percentage: 58, color: '#FF8D2D' },
+    { label: 'Pendiente', value: 26930, percentage: 16, color: '#52596B' },
+    { label: 'En Proceso', value: 45000, percentage: 26, color: '#C9C9C9' },
+  ];
 
   useEffect(() => {
     getHealth().then((res) => {
@@ -87,170 +39,89 @@ export default function DashboardPage() {
     });
   }, []);
 
-  const recentNotifs = notifications.filter((n) => n.target === 'admin').slice(0, 5);
+  const handleDateChange = (startDate: string, endDate: string) => {
+    setDateFilter({ start: startDate, end: endDate });
+    // TODO: Llama a la API con los nuevos filtros de fecha
+  };
+
+  const handlePlanChange = (plan: string) => {
+    setPlanFilter(plan);
+    // TODO: Llama a la API para filtrar por plan
+  };
+
+  const handleDistributionFilterChange = (filter: string) => {
+    // TODO: Actualiza los datos del gráfico según el filtro temporal
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
-        <KpiCard
-          label="Estado del Servicio"
-          value={loading ? '...' : health ? 'Activo' : 'Offline'}
-          icon={<SignalIcon className="h-5 w-5" />}
-          gradient="from-emerald-500 to-green-600"
-          detail={loading ? 'Verificando...' : health ? `v${health.timestamp?.slice(0, 10) ?? ''}` : 'Sin conexión'}
-          badge={!loading ? <Badge label={health ? health.status : 'error'} variant={variantFromEstado(health?.status ?? '')} /> : undefined}
-        />
-        <KpiCard
-          label="Notificaciones Admin"
-          value={adminUnread.toString()}
-          icon={<BellIcon className="h-5 w-5" />}
-          gradient="from-amber-500 to-orange-600"
-          detail={`${notifications.filter((n) => n.target === 'admin').length} totales`}
-        />
-        <KpiCard
-          label="Último check"
-          value={health ? formatDateTime(health.timestamp).split(',')[1]?.trim() ?? '—' : '—'}
-          icon={<ClockIcon className="h-5 w-5" />}
-          gradient="from-blue-500 to-indigo-600"
-          detail={health ? formatDateTime(health.timestamp).split(',')[0] : 'Sin datos'}
-        />
-        <KpiCard
-          label="Módulos Activos"
-          value="5"
-          icon={<ArrowTrendingUpIcon className="h-5 w-5" />}
-          gradient="from-violet-500 to-purple-600"
-          detail="Todos operativos"
-        />
-      </div>
+    <div className="space-y-8 animate-fade-in">
+      {/* Dashboard Header with Filters */}
+      <DashboardHeader onDateChange={handleDateChange} onPlanChange={handlePlanChange} />
 
-      {/* Quick Actions */}
-      <Card>
-        <p className="text-sm font-semibold text-[#1d212b] mb-3">⚡ Acciones rápidas</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {quickActions.map(({ label, href, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="flex items-center gap-2 rounded-xl border border-[#e5e7eb] px-3 py-2.5 text-sm text-[#1d212b] font-medium hover:bg-[#ff8d2d]/10 hover:border-[#ff8d2d] hover:text-[#ff8d2d] transition-all"
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </Link>
-          ))}
+      {/* Main Grid Layout */}
+      <div className="space-y-6">
+        {/* TOP ROW: 5 Metric Cards - Full Width Horizontal */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <MetricCard
+            title="Total Recargas"
+            value={`$${(metricsData.totalRecargas / 1000).toFixed(1)}k`}
+            label="+12% este mes"
+          />
+          <MetricCard
+            title="Total Pagado"
+            value={`$${(metricsData.totalPagado / 1000).toFixed(1)}k`}
+            label="58% del total"
+          />
+          <MetricCard
+            title="Total Pendiente"
+            value={`$${(metricsData.totalPendiente / 1000).toFixed(1)}k`}
+            label="16% del total"
+          />
+          <MetricCard
+            title="Saldo Disponible"
+            value={`$${(metricsData.saldoDisponible / 1000).toFixed(1)}k`}
+            label="26% reservado"
+          />
+          <MetricCard
+            title="Transacciones"
+            value="342"
+            label="Este período"
+          />
         </div>
-      </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Modules */}
-        <div className="lg:col-span-2">
-          <p className="text-sm font-semibold text-[#1d212b] mb-3">Módulos</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 stagger-children">
-            {modules.map(({ label, description, href, icon: Icon, gradient, bg, text }) => (
-              <Link key={href} href={href}>
-                <div className="group relative rounded-2xl bg-white border border-[#e5e7eb] p-5 hover:shadow-lg hover:border-[#ff8d2d] transition-all duration-300 cursor-pointer overflow-hidden h-full">
-                  <div className="absolute top-0 right-0 w-24 h-24 -mr-6 -mt-6 rounded-full bg-gradient-to-br opacity-5 group-hover:opacity-10 transition-opacity"
-                    style={{ backgroundImage: `linear-gradient(to bottom right, var(--tw-gradient-stops))` }}
-                  />
-                  <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${bg} ${text}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <p className="text-sm font-bold text-[#1d212b] group-hover:text-[#ff8d2d] transition-colors">
-                    {label}
-                  </p>
-                  <p className="mt-1 text-xs text-[#6d7382] leading-relaxed">{description}</p>
-                  <div className={`absolute bottom-0 left-0 h-0.5 w-0 bg-gradient-to-r ${gradient} group-hover:w-full transition-all duration-500`} />
-                </div>
-              </Link>
-            ))}
+        {/* BOTTOM ROW: 3 Equal Sections - Same Height & Width */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 min-h-96">
+          {/* SECTION 1: Utilities + Quick Actions */}
+          <div className="space-y-3 flex flex-col h-96">
+            <UtilitiesCard
+              value={metricsData.utilidades || 15250}
+              label="Utilidades"
+              description="Ganancia neta"
+            />
+            <div className="flex-1 min-h-0">
+              <QuickActionsPanel />
+            </div>
+          </div>
+
+          {/* SECTION 2: Distribution Chart - Full Height */}
+          <div className="h-96 w-full">
+            <DistributionChart
+              data={distributionData}
+              onFilterChange={handleDistributionFilterChange}
+            />
+          </div>
+
+          {/* SECTION 3: Facturas + Plans - Compact */}
+          <div className="flex flex-col h-96 gap-3">
+            <div className="flex-shrink-0">
+              <FacturesCard />
+            </div>
+            <div className="flex-1 min-h-0">
+              <PlansCard />
+            </div>
           </div>
         </div>
-
-        {/* Recent admin activity */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-[#1d212b]">Actividad reciente</p>
-            <Link href="/notificaciones" className="text-xs text-[#ff8d2d] hover:text-[#ff7a0a] font-medium">
-              Ver todo
-            </Link>
-          </div>
-          <Card className="!p-0 overflow-hidden">
-            {recentNotifs.length === 0 ? (
-              <div className="py-12 text-center">
-                <BellIcon className="mx-auto h-8 w-8 text-[#e5e7eb] mb-2" />
-                <p className="text-xs text-[#6d7382]">Sin actividad reciente</p>
-                <p className="text-[10px] text-[#737780] mt-1">Las notificaciones aparecerán aquí</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-[#f0f0f0]">
-                {recentNotifs.map((n) => (
-                  <div
-                    key={n.id}
-                    className={`flex gap-3 px-4 py-3 transition-colors ${n.read ? '' : 'bg-[#ff8d2d]/10'}`}
-                  >
-                    <span className="text-base leading-none mt-0.5">{n.title.split(' ')[0]}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-[#1d212b] truncate">
-                        {n.title.split(' ').slice(1).join(' ')}
-                      </p>
-                      <p className="text-[11px] text-[#6d7382] mt-0.5 truncate">{n.message}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
-
-      {/* Tech info */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <p className="text-xs text-[#6d7382] mb-1">Base URL</p>
-          <p className="text-sm font-mono text-[#1d212b] break-all">{process.env.NEXT_PUBLIC_API_DISPLAY_URL || 'Configurado en servidor'}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-[#6d7382] mb-1">Autenticación</p>
-          <p className="text-sm font-medium text-[#1d212b]">X-admin-api-key (server proxy)</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-[#6d7382] mb-1">Formato</p>
-          <p className="text-sm font-medium text-[#1d212b]">application/json · REST</p>
-        </Card>
       </div>
     </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  icon,
-  gradient,
-  detail,
-  badge,
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  gradient: string;
-  detail: string;
-  badge?: React.ReactNode;
-}) {
-  return (
-    <Card className="relative overflow-hidden">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs text-[#6d7382] font-medium">{label}</p>
-          <p className="text-2xl font-bold text-[#1d212b] mt-1">{value}</p>
-          <p className="text-[11px] text-[#737780] mt-1">{detail}</p>
-        </div>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} text-white shadow-lg`}>
-          {icon}
-        </div>
-      </div>
-      {badge && <div className="mt-2">{badge}</div>}
-      <div className={`absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r ${gradient} opacity-20`} />
-    </Card>
   );
 }
