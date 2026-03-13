@@ -6,6 +6,8 @@ import type {
   Usuario,
   UpsertUsuarioPayload,
   UpsertUsuarioData,
+  UpsertUsuarioAdminPayload,
+  UpsertUsuarioAdminData,
   UpdatePlanPayload,
   UpdatePlanData,
   ListUsuariosData,
@@ -295,9 +297,21 @@ export const batchMarcarEnviadas = (payload: BatchEnviadasPayload) =>
   });
 
 // ─── 10. Admin Dashboard (4 endpoints) ───────────────────────────────────────
-// GET /api/admin/dashboard
-export const getAdminDashboard = () =>
-  request<AdminDashboardData>('/admin/dashboard');
+// GET /api/admin/dashboard?year=2026&month=2&plan=control
+export const getAdminDashboard = (params?: {
+  year?: number;
+  month?: number;
+  plan?: string;
+}) => {
+  const sp = new URLSearchParams();
+  if (params?.year) sp.set('year', String(params.year));
+  if (params?.month) sp.set('month', String(params.month));
+  if (params?.plan && params.plan !== 'all') sp.set('plan', params.plan);
+  
+  const queryStr = sp.toString();
+  const path = queryStr ? `/admin/dashboard?${queryStr}` : '/admin/dashboard';
+  return request<AdminDashboardData>(path);
+};
 
 // GET /api/admin/clientes?page=&limit=&search=&plan=&activo=
 export const getAdminClientes = (params?: {
@@ -336,3 +350,10 @@ export const getAdminPagos = (params?: {
   if (params?.periodo) sp.set('periodo', params.periodo);
   return request<ListAdminPagosData>(`/admin/pagos?${sp.toString()}`);
 };
+
+// POST /api/admin/users/upsert — Crear/actualizar usuario (admin-only con campos extendidos)
+export const upsertUsuarioAdmin = (payload: UpsertUsuarioAdminPayload) =>
+  request<UpsertUsuarioAdminData>('/admin/users/upsert', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });

@@ -1,149 +1,170 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 interface DistributionChartProps {
+  title?: string;
   data?: {
     label: string;
     value: number;
-    percentage: number;
+    percentage?: number;
     color: string;
   }[];
-  onFilterChange?: (filter: string) => void;
 }
 
-export function DistributionChart({ 
-  data = [
-    { label: 'Pagado', value: 45000, percentage: 45, color: '#FF8D2D' },
-    { label: 'Pendiente', value: 35000, percentage: 35, color: '#52596B' },
-    { label: 'En Proceso', value: 20000, percentage: 20, color: '#C9C9C9' },
-  ],
-  onFilterChange 
-}: DistributionChartProps) {
-  const [selectedFilter, setSelectedFilter] = useState('monthly');
+const COLORS = [
+  '#FF8D2D', '#52596B', '#C9C9C9', '#FF6B6B', '#4ECDC4',
+  '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE',
+  '#85C1E2', '#F8B195', '#6C5B7B', '#355C7D', '#2A9D8F',
+  '#E76F51', '#F4A261', '#E9C46A', '#264653', '#9B5DE5'
+];
 
-  const filters = [
-    { id: 'weekly', label: 'Semanal' },
-    { id: 'monthly', label: 'Mensual' },
-    { id: 'yearly', label: 'Anual' },
-  ];
+export function DistributionChart({
+  title = 'Distribución de Saldos por Usuarios',
+  data = [
+    { label: 'Usuario 1', value: 5000, percentage: 45, color: '#FF8D2D' },
+    { label: 'Usuario 2', value: 4000, percentage: 36, color: '#52596B' },
+    { label: 'Usuario 3', value: 2000, percentage: 19, color: '#C9C9C9' },
+  ],
+}: DistributionChartProps) {
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
-  const handleFilterChange = (filterId: string) => {
-    setSelectedFilter(filterId);
-    onFilterChange?.(filterId);
+  // Función para formatear como COP
+  const formatCOP = (value: number): string => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value).replace('$', '$COP ');
   };
 
+  // Asignar colores a cada usuario si no los tienen
+  const dataWithColors = data.map((item, idx) => ({
+    ...item,
+    color: item.color || COLORS[idx % COLORS.length],
+    percentage: total > 0 ? Math.round((item.value / total) * 100) : 0,
+  }));
+
+  // Generar segmentos del círculo
+  const segments = dataWithColors.reduce((acc: any[], item, idx) => {
+    const prevPercentage = acc.reduce((sum, seg) => sum + seg.percentage, 0);
+    const startAngle = (prevPercentage / 100) * 360;
+    const endAngle = ((prevPercentage + item.percentage) / 100) * 360;
+
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+
+    const x1 = 100 + 75 * Math.cos(startRad);
+    const y1 = 100 + 75 * Math.sin(startRad);
+    const x2 = 100 + 75 * Math.cos(endRad);
+    const y2 = 100 + 75 * Math.sin(endRad);
+
+    const largeArc = item.percentage > 50 ? 1 : 0;
+
+    return [
+      ...acc,
+      {
+        ...item,
+        path: `M ${x1} ${y1} A 75 75 0 ${largeArc} 1 ${x2} ${y2}`,
+      },
+    ];
+  }, []);
+
   return (
-    <div className="rounded-[11.5px] border border-[#C9C9C9] bg-[#F9F9F9] p-6 h-full flex flex-col">
-      <div className="flex justify-between items-center mb-4 flex-shrink-0">
-        <h3 className="text-sm font-semibold text-[#1D212B]">Distribución de Saldo</h3>
-        <div className="relative">
-          <select
-            value={selectedFilter}
-            onChange={(e) => handleFilterChange(e.target.value)}
-            className="appearance-none px-3 py-1.5 text-xs rounded-lg border border-[#C9C9C9] bg-white text-[#1D212B] focus:outline-none focus:border-[#FF8D2D] pr-6 cursor-pointer"
-          >
-            {filters.map((filter) => (
-              <option key={filter.id} value={filter.id}>
-                {filter.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDownIcon className="absolute right-1.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#6D7382] pointer-events-none" />
+    <div className="rounded-[11.5px] border border-[#C9C9C9] bg-[#F9F9F9] p-4 h-full flex flex-col">
+      <h3 className="text-sm font-semibold text-[#1D212B] mb-3 flex-shrink-0">{title}</h3>
+
+      <div className="flex flex-col lg:flex-row gap-4 flex-1 justify-between overflow-hidden">
+        {/* Lista de usuarios con scroll */}
+        <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
+          {dataWithColors.map((item, idx) => (
+            <div
+              key={idx}
+              onClick={() => setSelectedIndex(selectedIndex === idx ? null : idx)}
+              className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all ${
+                selectedIndex === idx 
+                  ? 'bg-white border border-[#1D212B]' 
+                  : 'bg-white/50 border border-transparent hover:bg-white'
+              }`}
+            >
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div
+                  className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="text-xs font-medium text-[#1D212B] truncate">{item.label}</span>
+              </div>
+              <div className="text-right flex-shrink-0 ml-2">
+                <p className="text-xs font-bold text-[#1D212B] whitespace-nowrap">{item.percentage}%</p>
+                <p className="text-[10px] text-[#999999] whitespace-nowrap">{formatCOP(item.value)}</p>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
 
-      <div className="flex flex-col lg:flex-row gap-4 flex-1 justify-center items-center overflow-hidden">
-        {/* Circular Chart */}
-        <div className="flex justify-center flex-shrink-0">
-          <div className="relative w-48 h-48">
-            <svg className="w-full h-full" viewBox="0 0 200 200">
-              {/* Base circle */}
-              <circle
-                cx="100"
-                cy="100"
-                r="80"
-                fill="none"
-                stroke="#F0F0F0"
-                strokeWidth="20"
-              />
-              
-              {/* Colored segments */}
-              {data.reduce((segments: any[], item, index) => {
-                const prevPercentage = segments.reduce((sum, seg) => sum + seg.percentage, 0);
-                const startAngle = (prevPercentage / 100) * 360;
-                const endAngle = ((prevPercentage + item.percentage) / 100) * 360;
-                
-                const startRad = (startAngle * Math.PI) / 180;
-                const endRad = (endAngle * Math.PI) / 180;
-                
-                const x1 = 100 + 80 * Math.cos(startRad);
-                const y1 = 100 + 80 * Math.sin(startRad);
-                const x2 = 100 + 80 * Math.cos(endRad);
-                const y2 = 100 + 80 * Math.sin(endRad);
-                
-                const largeArc = item.percentage > 50 ? 1 : 0;
+        {/* Gráfico circular */}
+        <div className="flex justify-center items-center flex-shrink-0 w-full lg:w-auto">
+          <div className="relative w-40 h-40 flex flex-col items-center justify-center">
+            <svg className="w-40 h-40" viewBox="0 0 200 200">
+              {/* Base circle background */}
+              <circle cx="100" cy="100" r="75" fill="none" stroke="#F0F0F0" strokeWidth="16" />
 
-                segments.push({
-                  ...item,
-                  path: `M ${x1} ${y1} A 80 80 0 ${largeArc} 1 ${x2} ${y2}`,
-                });
-                
-                return segments;
-              }, []).map((segment, idx) => (
+              {/* Segmentos de color */}
+              {segments.map((segment, idx) => (
                 <path
                   key={idx}
                   d={segment.path}
                   fill="none"
                   stroke={segment.color}
-                  strokeWidth="20"
+                  strokeWidth="16"
                   strokeLinecap="round"
+                  opacity={selectedIndex === null || selectedIndex === idx ? 1 : 0.3}
+                  className="transition-opacity cursor-pointer"
+                  onClick={() => setSelectedIndex(selectedIndex === idx ? null : idx)}
                 />
               ))}
 
-              {/* Center text */}
+              {/* Centro blanco */}
+              <circle cx="100" cy="100" r="40" fill="white" stroke="#F0F0F0" strokeWidth="1" />
+
+              {/* Texto del total */}
               <text
                 x="100"
                 y="95"
                 textAnchor="middle"
-                className="text-lg font-bold fill-[#1D212B]"
+                style={{
+                  fontSize: formatCOP(total).length > 20 ? '8px' : '9px',
+                  fontWeight: 'bold',
+                  fill: '#1D212B',
+                }}
               >
-                {(total / 1000).toFixed(0)}k
+                Total
               </text>
               <text
                 x="100"
-                y="115"
+                y="110"
                 textAnchor="middle"
-                className="text-xs fill-[#6D7382]"
+                style={{
+                  fontSize: formatCOP(total).length > 20 ? '7px' : '8px',
+                  fontWeight: 'bold',
+                  fill: '#1D212B',
+                }}
               >
-                Total
+                {formatCOP(total)}
               </text>
             </svg>
           </div>
         </div>
+      </div>
 
-        {/* Legend */}
-        <div className="lg:flex-1 flex flex-col justify-center gap-3 min-w-0">
-          {data.map((item, idx) => (
-            <div key={idx} className="flex items-center justify-between gap-2 flex-shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <div
-                  className="w-3 h-3 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-xs text-[#1D212B] font-medium truncate">{item.label}</span>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-xs font-bold text-[#1D212B]">
-                  ${(item.value / 1000).toFixed(1)}k
-                </p>
-                <p className="text-xs text-[#6D7382]">{item.percentage}%</p>
-              </div>
-            </div>
-          ))}
+      {/* Footer con resumen */}
+      <div className="mt-2 pt-2 border-t border-[#E5E7EB] flex-shrink-0">
+        <div className="flex justify-between items-center text-xs gap-2">
+          <span className="text-[#6D7382] font-medium">Total Usuarios: {dataWithColors.length}</span>
+          <span className="font-bold text-[#1D212B]">{formatCOP(total)}</span>
         </div>
       </div>
     </div>

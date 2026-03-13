@@ -78,6 +78,24 @@ export interface ListUsuariosData {
   total_pages: number;
 }
 
+// Admin: Upsert usuario con campos extendidos
+export interface UpsertUsuarioAdminPayload {
+  telefono: string;
+  nombre?: string;
+  apellido?: string;
+  correo?: string;
+  direccion?: string;
+  plan?: Plan;
+}
+
+export interface UpsertUsuarioAdminData {
+  usuario_id: string;
+  creado: boolean;
+  nombre: string;
+  telefono: string;
+  plan: Plan;
+}
+
 // ─── Factura ──────────────────────────────────────────────────────────────────
 export interface Factura {
   id: string;
@@ -352,28 +370,45 @@ export interface BatchEnviadasPayload {
 }
 
 // ─── Admin Dashboard ──────────────────────────────────────────────────────────
+export interface AdminDashboardMetrics {
+  totalRecargasAprobadas: number;
+  totalPagado: number;
+  saldoDisponible: number;
+  cantidadTransacciones: number;
+  deudaTotal: number;
+  deudaPendiente: number;
+  balance: number;
+}
+
+export interface DistribucionSaldo {
+  usuario: string;
+  saldo: number;
+}
+
+export interface DistribucionFacturas {
+  pagadas: number;
+  pendientes: number;
+  vencidas: number;
+  enRevision: number;
+  rechazadas: number;
+}
+
+export interface DistribucionPlanes {
+  control: number;
+  tranquilidad: number;
+  respaldo: number;
+}
+
 export interface AdminDashboardData {
-  clientes: {
-    total: number;
-    activos: number;
+  metricas: AdminDashboardMetrics;
+  distribucionSaldo: DistribucionSaldo[];
+  distribucionFacturas: DistribucionFacturas;
+  distribucionPlanes: DistribucionPlanes;
+  periodo: {
+    year: number;
+    month: number;
+    plan: string;
   };
-  obligaciones: {
-    activas: number;
-    completadas: number;
-  };
-  financiero: {
-    total_recargas_aprobadas: number;
-    total_pagos_realizados: number;
-    pagos_en_proceso: number;
-    recargas_pendientes_validacion: number;
-    saldo_global: number;
-  };
-  revisiones_pendientes: {
-    total: number;
-    facturas: number;
-    recargas: number;
-  };
-  notificaciones_pendientes: number;
 }
 
 // ─── Admin Clientes ───────────────────────────────────────────────────────────

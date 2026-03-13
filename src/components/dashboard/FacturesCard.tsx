@@ -1,7 +1,5 @@
 'use client';
 
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
-
 interface FactureIndicator {
   label: string;
   count: number;
@@ -13,18 +11,17 @@ interface FacturesCardProps {
   total?: number;
 }
 
-const defaultIndicators: FactureIndicator[] = [
-  { label: 'Pagadas', count: 24, color: '#FF8D2D' },
-  { label: 'Pendientes', count: 8, color: '#52596B' },
-  { label: 'Vencidas', count: 3, color: '#DC2626' },
-  { label: 'Sin Factura', count: 5, color: '#C9C9C9' },
-];
-
 export function FacturesCard({ 
-  indicators = defaultIndicators, 
-  total = 40 
+  indicators = [
+    { label: 'Pagadas', count: 24, color: '#FF8D2D' },
+    { label: 'Pendientes', count: 8, color: '#52596B' },
+    { label: 'Vencidas', count: 3, color: '#DC2626' },
+    { label: 'En Revisión', count: 2, color: '#F59E0B' },
+    { label: 'Rechazadas', count: 1, color: '#6B7280' },
+  ], 
+  total
 }: FacturesCardProps) {
-  const totalCount = indicators.reduce((sum, ind) => sum + ind.count, 0);
+  const totalCount = total ?? indicators.reduce((sum, ind) => sum + ind.count, 0);
 
   return (
     <div className="rounded-[11.5px] border border-[#C9C9C9] bg-[#F9F9F9] p-3 flex flex-col h-full">
