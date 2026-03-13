@@ -28,22 +28,26 @@ const navGroups: { title: string; items: NavItem[] }[] = [
   {
     title: 'Gestión',
     items: [
-      { label: 'Clientes', href: '/clientes', icon: UserGroupIcon },
-      { label: 'Usuarios', href: '/usuarios', icon: UsersIcon },
-      { label: 'Obligaciones', href: '/obligaciones', icon: DocumentTextIcon },
-    ],
-  },
-  {
-    title: 'Operaciones',
-    items: [
+      { label: 'Usuarios', href: '/clientes', icon: UserGroupIcon },
+      // { label: 'Clientes', href: '/usuarios', icon: UsersIcon },
       { label: 'Facturas', href: '/facturas', icon: CreditCardIcon },
-      { label: 'Recargas', href: '/recargas', icon: ArrowPathIcon },
-      { label: 'Disponibilidad', href: '/disponible', icon: BanknotesIcon },
+      { label: 'Pagos', href: '/recargas', icon: ArrowPathIcon },
+      // { label: 'Obligaciones', href: '/obligaciones', icon: DocumentTextIcon },
     ],
   },
+  // {
+  //   title: 'Operaciones',
+  //   items: [
+  //     { label: 'Disponibilidad', href: '/disponible', icon: BanknotesIcon },
+  //   ],
+  // },
   {
     title: 'Sistema',
-    items: [{ label: 'Notificaciones', href: '/notificaciones', icon: BellIcon }],
+    items: [{ label: 'Historial', href: '/historial', icon: ArrowPathIcon },
+            { label: 'Notificaciones', href: '/notificaciones', icon: BellIcon} ,
+            
+    ],
+    
   },
 ];
 
@@ -54,14 +58,13 @@ export default function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col bg-gray-950 border-r border-white/5">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 px-5 border-b border-white/5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25">
-          <span className="text-white font-bold text-sm">D1</span>
-        </div>
-        <div>
-          <p className="text-sm font-bold text-white leading-none tracking-tight">DeOne</p>
-          <p className="text-[10px] text-gray-500 mt-0.5">Panel Admin</p>
-        </div>
+      <div className="flex flex-col h-20 items-start gap-1.5 px-5 border-b border-white/5 pt-3 pb-3">
+        <img 
+          src="/deOne_logo.png" 
+          alt="DeOne" 
+          className="h-7 w-auto" 
+        />
+        <p className="text-xs font-bold text-white leading-tight tracking-tight ml-0.5 pt-0.5">Admin</p>
       </div>
 
       {/* Navigation */}
@@ -102,16 +105,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-white/5 px-5 py-4">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse-dot" />
-          <span className="text-[11px] text-gray-500">API Conectada</span>
-        </div>
-        <p className="text-[10px] text-gray-600 break-all">
-          localhost:3001 (local)
-        </p>
-      </div>
+      {/* Footer removed per Figma wireframe */}
     </aside>
   );
 }

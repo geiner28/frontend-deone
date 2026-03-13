@@ -20,9 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${geist.variable} antialiased bg-slate-50`}>
-        <ClientShell>{children}</ClientShell>
-      </body>
+        <body className={`${geist.variable} antialiased bg-slate-50`}>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+          <ClientShell>{children}</ClientShell>
+        </body>
     </html>
   );
 }
