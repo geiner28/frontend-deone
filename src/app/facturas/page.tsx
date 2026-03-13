@@ -188,14 +188,14 @@ export default function FacturasPage() {
         <div className="flex items-center gap-2">
           {steps.map(({ n, label, desc, color }, i) => (
             <div key={n} className="flex items-center flex-1">
-              <div className={`flex-1 rounded-xl p-3 transition-all ${n <= currentStep ? 'bg-white shadow-sm ring-1 ring-gray-100' : 'bg-gray-50 opacity-60'}`}>
+              <div className={`flex-1 rounded-xl p-3 transition-all ${n <= currentStep ? 'bg-white shadow-sm ring-1 ring-[#e5e7eb]' : 'bg-[#f9f9f9] opacity-60'}`}>
                 <div className="flex items-center gap-2 mb-1">
                   <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${n <= currentStep ? color : 'bg-gray-300'}`}>
                     {n <= currentStep && n < currentStep ? '✓' : n}
                   </div>
-                  <span className="text-xs font-bold text-gray-900">{label}</span>
+                  <span className="text-xs font-bold text-[#1d212b]">{label}</span>
                 </div>
-                <p className="text-[10px] text-gray-500 leading-tight">{desc}</p>
+                <p className="text-[10px] text-[#6d7382] leading-tight">{desc}</p>
               </div>
               {i < steps.length - 1 && <ArrowRightIcon className="h-3.5 w-3.5 text-gray-300 mx-1 shrink-0" />}
             </div>
@@ -250,10 +250,10 @@ export default function FacturasPage() {
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">Obligación</label>
               {searchLoading ? (
-                <div className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500">Cargando...</div>
+                <div className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#6d7382]">Cargando...</div>
               ) : obligaciones.length > 0 ? (
                 <select
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]"
                   value={form.obligacion_id}
                   onChange={(e) => setForm((f) => ({ ...f, obligacion_id: e.target.value }))}
                   required
@@ -264,9 +264,9 @@ export default function FacturasPage() {
                   ))}
                 </select>
               ) : form.telefono ? (
-                <div className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500">No hay obligaciones</div>
+                <div className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#6d7382]">No hay obligaciones</div>
               ) : (
-                <div className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500">Ingresa un teléfono</div>
+                <div className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#6d7382]">Ingresa un teléfono</div>
               )}
             </div>
           </div>
@@ -286,7 +286,7 @@ export default function FacturasPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">Origen</label>
-              <select className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" value={form.origen} onChange={set('origen')}>
+              <select className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]" value={form.origen} onChange={set('origen')}>
                 <option value="manual">Manual</option>
                 <option value="bot_whatsapp">Bot WhatsApp</option>
                 <option value="api">API</option>
@@ -369,8 +369,8 @@ export default function FacturasPage() {
 function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <div className="text-sm font-medium text-gray-900 mt-0.5">{value}</div>
+      <p className="text-xs text-[#6d7382]">{label}</p>
+      <div className="text-sm font-medium text-[#1d212b] mt-0.5">{value}</div>
     </div>
   );
 }

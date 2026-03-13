@@ -72,8 +72,8 @@ export default function DisponiblePage() {
             <StatCard
               label="Recargas aprobadas"
               value={formatCurrency(data.total_recargas)}
-              color="text-indigo-600"
-              gradient="from-indigo-500 to-blue-600"
+              color="text-[#ff8d2d]"
+              gradient="from-[#ff8d2d] to-[#ff7a0a]"
               emoji="📥"
             />
             <StatCard
@@ -105,38 +105,38 @@ export default function DisponiblePage() {
 
             {/* Progress bar */}
             <div className="mt-6">
-              <div className="flex justify-between text-xs text-gray-500 mb-2">
+              <div className="flex justify-between text-xs text-[#6d7382] mb-2">
                 <span>Saldo consumido</span>
                 <span className="font-semibold">{Math.min(100, Math.max(0, 100 - pct))}%</span>
               </div>
-              <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div className="h-3 w-full rounded-full bg-[#e5e7eb] overflow-hidden">
                 <div className="h-3 rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 transition-all duration-700 relative"
                   style={{ width: `${Math.min(100, Math.max(0, 100 - pct))}%` }}
                 >
                   <div className="absolute inset-0 bg-white/20 animate-pulse" />
                 </div>
               </div>
-              <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+              <div className="flex justify-between text-[10px] text-[#737780] mt-1">
                 <span>Pagado: {formatCurrency(data.total_pagos)}</span>
                 <span>Total: {formatCurrency(data.total_recargas)}</span>
               </div>
             </div>
 
             {/* Calculation */}
-            <div className="mt-6 rounded-2xl bg-gradient-to-br from-gray-50 to-slate-50 p-5 border border-gray-100">
-              <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Cálculo</p>
-              <div className="space-y-2 text-sm text-gray-700">
+            <div className="mt-6 rounded-2xl bg-gradient-to-br from-[#f9f9f9] to-[#f5f5f5] p-5 border border-[#e5e7eb]">
+              <p className="text-xs font-bold text-[#6d7382] mb-3 uppercase tracking-wider">Cálculo</p>
+              <div className="space-y-2 text-sm text-[#1d212b]">
                 <div className="flex justify-between items-center">
                   <span className="flex items-center gap-2">📥 Recargas aprobadas</span>
-                  <span className="font-bold text-indigo-600">+{formatCurrency(data.total_recargas)}</span>
+                  <span className="font-bold text-[#ff8d2d]">+{formatCurrency(data.total_recargas)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="flex items-center gap-2">📤 Pagos realizados</span>
-                  <span className="font-bold text-red-500">−{formatCurrency(data.total_pagos)}</span>
+                  <span className="font-bold text-[#ef4444]">−{formatCurrency(data.total_pagos)}</span>
                 </div>
-                <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent my-1" />
+                <div className="h-px bg-gradient-to-r from-transparent via-[#e5e7eb] to-transparent my-1" />
                 <div className="flex justify-between items-center">
-                  <span className="font-bold text-gray-900">💎 Disponible</span>
+                  <span className="font-bold text-[#1d212b]">💎 Disponible</span>
                   <span className={`text-lg font-black ${data.disponible >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(data.disponible)}
                   </span>
@@ -150,11 +150,11 @@ export default function DisponiblePage() {
       {!data && !loading && (
         <Card>
           <div className="flex flex-col items-center py-16 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-500 mb-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ff8d2d]/10 to-[#ff8d2d]/20 text-[#ff8d2d] mb-4">
               <BanknotesIcon className="h-8 w-8" />
             </div>
-            <p className="text-base font-bold text-gray-900">Consulta el saldo disponible</p>
-            <p className="text-sm text-gray-500 mt-1 max-w-sm">Ingresa el teléfono del usuario y el periodo para calcular su saldo disponible.</p>
+            <p className="text-base font-bold text-[#1d212b]">Consulta el saldo disponible</p>
+            <p className="text-sm text-[#6d7382] mt-1 max-w-sm">Ingresa el teléfono del usuario y el periodo para calcular su saldo disponible.</p>
           </div>
         </Card>
       )}
@@ -178,11 +178,11 @@ function StatCard({
   highlight?: boolean;
 }) {
   return (
-    <Card className={`relative overflow-hidden ${highlight ? 'ring-2 ring-offset-2 ring-emerald-200' : ''}`}>
+    <Card className={`relative overflow-hidden ${highlight ? 'ring-2 ring-offset-2 ring-[#10b981]/20' : ''}`}>
       <div className={`absolute top-0 left-0 h-1 w-full bg-gradient-to-r ${gradient}`} />
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs text-gray-600 font-medium mb-1">{label}</p>
+          <p className="text-xs text-[#6d7382] font-medium mb-1">{label}</p>
           <p className={`text-2xl font-black ${color}`}>{value}</p>
         </div>
         <span className="text-2xl">{emoji}</span>
@@ -194,8 +194,8 @@ function StatCard({
 function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <div className="text-sm font-medium text-gray-900 mt-0.5">{value}</div>
+      <p className="text-xs text-[#6d7382]">{label}</p>
+      <div className="text-sm font-medium text-[#1d212b] mt-0.5">{value}</div>
     </div>
   );
 }

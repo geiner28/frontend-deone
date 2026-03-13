@@ -1,11 +1,54 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc
-  --foreground: #0f172a;
-  --table-header: #1E222A;
-  --primary-orange: #FF8D2D;
+  /* Design System Colors - Based on Wireframes */
+  /* Primary Colors */
+  --color-primary-dark: #1d212b;
+  --color-primary-light: #f9f9f9;
+  --color-accent-orange: #ff8d2d;
+  --color-white: #ffffff;
+  
+  /* Text Colors */
+  --text-primary: #1d212b;
+  --text-secondary: #6d7382;
+  --text-tertiary: #737780;
+  --text-light: #c7c7c7;
+  
+  /* Background Colors */
+  --background: #f9f9f9;
+  --background-secondary: #ffffff;
+  --foreground: #1d212b;
+  
+  /* Border & UI Colors */
+  --border-color: #e5e7eb;
+  --border-light: #f0f0f0;
+  --table-header: #1d212b;
+  --table-row-hover: #f5f5f5;
+  
+  /* Semantic Colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+  
+  /* Legacy/Compatibility */
+  --primary-orange: #ff8d2d;
+  --primary: #ff8d2d;
+  --primary-glow: rgba(255, 141, 45, 0.3);
   --sidebar-width: 260px;
+  
+  /* Spacing & Size */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
 }
 
 body {
@@ -94,9 +137,8 @@ body {
 
 /* Sidebar active */
 .nav-active {
- 
-  Background: var(--primary-orange);
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  background: var(--color-accent-orange);
+  box-shadow: 0 0 20px rgba(255, 141, 45, 0.3);
 }
 
 /* Table styles Figma */

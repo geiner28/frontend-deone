@@ -1,19 +1,19 @@
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
 const styles: Record<Variant, string> = {
-  success: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  warning: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
-  error: 'bg-red-50 text-red-700 ring-1 ring-red-200',
-  info: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-  neutral: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
+  success: 'bg-[#10b981]/10 text-[#10b981] ring-1 ring-[#10b981]/20',
+  warning: 'bg-[#f59e0b]/10 text-[#f59e0b] ring-1 ring-[#f59e0b]/20',
+  error: 'bg-[#ef4444]/10 text-[#ef4444] ring-1 ring-[#ef4444]/20',
+  info: 'bg-[#3b82f6]/10 text-[#3b82f6] ring-1 ring-[#3b82f6]/20',
+  neutral: 'bg-[#e5e7eb] text-[#6d7382] ring-1 ring-[#e5e7eb]',
 };
 
 const dots: Record<Variant, string> = {
-  success: 'bg-emerald-500',
-  warning: 'bg-amber-500',
-  error: 'bg-red-500',
-  info: 'bg-blue-500',
-  neutral: 'bg-gray-400',
+  success: 'bg-[#10b981]',
+  warning: 'bg-[#f59e0b]',
+  error: 'bg-[#ef4444]',
+  info: 'bg-[#3b82f6]',
+  neutral: 'bg-[#9ca3af]',
 };
 
 interface BadgeProps {

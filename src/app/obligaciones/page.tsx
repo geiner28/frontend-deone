@@ -109,7 +109,7 @@ export default function ObligacionesPage() {
       {/* Summary strip */}
       {obligaciones.length > 0 && !searchLoading && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 stagger-children">
-          <MiniKpi label="Obligaciones" value={obligaciones.length.toString()} color="text-indigo-600" />
+          <MiniKpi label="Obligaciones" value={obligaciones.length.toString()} color="text-[#ff8d2d]" />
           <MiniKpi label="Total facturas" value={totalFacturas.toString()} color="text-blue-600" />
           <MiniKpi label="Monto total" value={formatCurrency(totalMonto)} color="text-amber-600" />
           <MiniKpi label="Monto pagado" value={formatCurrency(totalPagado)} color="text-emerald-600" />
@@ -150,8 +150,8 @@ function ObligacionCard({ obligacion: o }: { obligacion: Obligacion }) {
       <div className="p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <p className="text-sm font-bold text-gray-900">{o.descripcion || o.servicio}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-sm font-bold text-[#1d212b]">{o.descripcion || o.servicio}</p>
+            <p className="text-xs text-[#6d7382] mt-0.5">
               {o.periodicidad} · Periodo: {formatDate(o.periodo)}
             </p>
           </div>
@@ -167,13 +167,13 @@ function ObligacionCard({ obligacion: o }: { obligacion: Obligacion }) {
 
         {/* Progress bar */}
         <div>
-          <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+          <div className="flex justify-between text-xs text-[#6d7382] mb-1.5">
             <span>Progreso de pago</span>
             <span className="font-semibold">{pct}%</span>
           </div>
-          <div className="h-2 w-full rounded-full bg-gray-100">
+          <div className="h-2 w-full rounded-full bg-[#e5e7eb]">
             <div
-              className={`h-2 rounded-full transition-all duration-700 ${isComplete ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+              className={`h-2 rounded-full transition-all duration-700 ${isComplete ? 'bg-[#10b981]' : 'bg-[#ff8d2d]'}`}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -185,21 +185,21 @@ function ObligacionCard({ obligacion: o }: { obligacion: Obligacion }) {
         <>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="w-full flex items-center justify-center gap-1 py-2 text-xs font-medium text-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 transition-colors border-t border-gray-100"
+            className="w-full flex items-center justify-center gap-1 py-2 text-xs font-medium text-[#ff8d2d] bg-[#ff8d2d]/10 hover:bg-[#ff8d2d]/20 transition-colors border-t border-[#e5e7eb]"
           >
             {expanded ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />}
             {expanded ? 'Ocultar' : 'Ver'} {o.facturas.length} factura{o.facturas.length !== 1 ? 's' : ''}
           </button>
           {expanded && (
-            <div className="border-t border-gray-100 divide-y divide-gray-50 animate-slide-in-down">
+            <div className="border-t border-[#e5e7eb] divide-y divide-[#f0f0f0] animate-slide-in-down">
               {o.facturas.map((f) => (
                 <div key={f.id} className="flex items-center justify-between px-5 py-3 text-sm">
                   <div>
-                    <p className="font-medium text-gray-900">{f.servicio}</p>
-                    {f.fecha_vencimiento && <p className="text-[11px] text-gray-500">Vence: {formatDate(f.fecha_vencimiento)}</p>}
+                    <p className="font-medium text-[#1d212b]">{f.servicio}</p>
+                    {f.fecha_vencimiento && <p className="text-[11px] text-[#6d7382]">Vence: {formatDate(f.fecha_vencimiento)}</p>}
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="font-semibold text-gray-900">{formatCurrency(f.monto)}</span>
+                    <span className="font-semibold text-[#1d212b]">{formatCurrency(f.monto)}</span>
                     <Badge label={f.estado} variant={variantFromEstado(f.estado)} dot={false} />
                   </div>
                 </div>
@@ -215,8 +215,8 @@ function ObligacionCard({ obligacion: o }: { obligacion: Obligacion }) {
 function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
-      <p className="text-[11px] text-gray-500">{label}</p>
-      <p className="text-sm font-bold text-gray-900">{value}</p>
+      <p className="text-[11px] text-[#6d7382]">{label}</p>
+      <p className="text-sm font-bold text-[#1d212b]">{value}</p>
     </div>
   );
 }
@@ -224,7 +224,7 @@ function MiniStat({ label, value }: { label: string; value: string | number }) {
 function MiniKpi({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <Card>
-      <p className="text-[11px] text-gray-500 font-medium">{label}</p>
+      <p className="text-[11px] text-[#6d7382] font-medium">{label}</p>
       <p className={`text-xl font-bold ${color} mt-0.5`}>{value}</p>
     </Card>
   );

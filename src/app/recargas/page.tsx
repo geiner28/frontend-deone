@@ -105,12 +105,12 @@ export default function RecargasPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {flowSteps.map(({ n, label, desc, color, emoji }, i) => (
             <div key={n} className="relative">
-              <div className="rounded-2xl bg-white border border-gray-100 p-4 h-full hover:shadow-md transition-shadow">
+              <div className="rounded-2xl bg-white border border-[#e5e7eb] p-4 h-full hover:shadow-md transition-shadow">
                 <div className={`flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br ${color} text-white text-sm font-bold mb-3 shadow-lg`}>
                   {emoji}
                 </div>
-                <p className="text-sm font-bold text-gray-900">{label}</p>
-                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{desc}</p>
+                <p className="text-sm font-bold text-[#1d212b]">{label}</p>
+                <p className="text-[11px] text-[#6d7382] mt-1 leading-relaxed">{desc}</p>
               </div>
               {i < flowSteps.length - 1 && (
                 <ArrowRightIcon className="hidden sm:block absolute top-1/2 -right-2.5 h-4 w-4 text-gray-300 z-10 -translate-y-1/2" />
@@ -129,11 +129,11 @@ export default function RecargasPage() {
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <p className="text-xs text-gray-500">ID Recarga</p>
-              <p className="text-sm font-mono break-all text-gray-900 mt-0.5">{lastRecarga.recarga_id}</p>
+              <p className="text-xs text-[#6d7382]">ID Recarga</p>
+              <p className="text-sm font-mono break-all text-[#1d212b] mt-0.5">{lastRecarga.recarga_id}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Estado</p>
+              <p className="text-xs text-[#6d7382]">Estado</p>
               <div className="mt-0.5">
                 <Badge label={lastRecarga.estado} variant={variantFromEstado(lastRecarga.estado)} />
               </div>
@@ -188,7 +188,7 @@ export default function RecargasPage() {
           {lastRecarga && lastRecarga.estado === 'en_validacion' && (
             <button
               type="button"
-              className="text-xs text-indigo-600 hover:underline"
+              className="text-xs text-[#ff8d2d] hover:underline"
               onClick={() => setRecargaId(lastRecarga.recarga_id)}
             >
               Usar último ID: {lastRecarga.recarga_id.slice(0, 20)}…
