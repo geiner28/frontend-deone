@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { UserPlusIcon, DocumentPlusIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import UpsertUsuarioAdminModal from '@/components/modals/UpsertUsuarioAdminModal';
+import UpsertObligacionConFacturasModal from '@/components/modals/UpsertObligacionConFacturasModal';
+import ReportarRecargaModal from '@/components/modals/ReportarRecargaModal';
 
 interface QuickAction {
   id: string;
@@ -40,10 +42,16 @@ interface QuickActionsPanelProps {
 export function QuickActionsPanel({ actions = defaultActions }: QuickActionsPanelProps) {
   const [activeButton, setActiveButton] = useState<string | null>(null);
   const [openUserModal, setOpenUserModal] = useState(false);
+  const [openObligacionModal, setOpenObligacionModal] = useState(false);
+  const [openRecargaModal, setOpenRecargaModal] = useState(false);
 
   const handleActionClick = (action: QuickAction) => {
     if (action.id === 'new-user') {
       setOpenUserModal(true);
+    } else if (action.id === 'new-obligation') {
+      setOpenObligacionModal(true);
+    } else if (action.id === 'register-recharge') {
+      setOpenRecargaModal(true);
     } else {
       setActiveButton(action.id);
     }
@@ -52,11 +60,69 @@ export function QuickActionsPanel({ actions = defaultActions }: QuickActionsPane
   return (
     <>
       <div className="rounded-[11.5px] border border-[#C9C9C9] bg-gray-950 p-3 h-full flex flex-col">
-        <h3 className="text-xs font-semibold text-white mb-2 flex-shrink-0">⚡ Acciones</h3>
+        <h3 className="text-xs font-semibold text-white mb-2 flex-shrink-0">⚡ Acciones Rápidas</h3>
         <div className="grid grid-cols-1 gap-2 flex-1 content-start">
           {actions.map((action) => {
             // Para 'new-user', renderizar como button sin Link
             if (action.id === 'new-user') {
+              return (
+                <button
+                  key={action.id}
+                  onClick={() => handleActionClick(action)}
+                  onMouseLeave={() => setActiveButton(null)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 bg-gray-900 text-white font-medium text-xs transition-all duration-200 hover:border-[#FF8D2D] hover:bg-gray-800 active:scale-95"
+                  style={{
+                    borderColor: activeButton === action.id ? '#FF8D2D' : undefined,
+                    backgroundColor: activeButton === action.id ? 'rgba(255, 141, 45, 0.1)' : undefined,
+                    color: activeButton === action.id ? '#FF8D2D' : undefined,
+                  }}
+                >
+                  <span
+                    className="flex-shrink-0"
+                    style={{
+                      color: activeButton === action.id ? '#FF8D2D' : 'currentColor',
+                    }}
+                  >
+                    <span className="h-4 w-4 flex items-center justify-center">
+                      {action.icon}
+                    </span>
+                  </span>
+                  <span className="truncate">{action.label}</span>
+                </button>
+              );
+            }
+
+            // Para 'new-obligation', renderizar como button sin Link
+            if (action.id === 'new-obligation') {
+              return (
+                <button
+                  key={action.id}
+                  onClick={() => handleActionClick(action)}
+                  onMouseLeave={() => setActiveButton(null)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 bg-gray-900 text-white font-medium text-xs transition-all duration-200 hover:border-[#FF8D2D] hover:bg-gray-800 active:scale-95"
+                  style={{
+                    borderColor: activeButton === action.id ? '#FF8D2D' : undefined,
+                    backgroundColor: activeButton === action.id ? 'rgba(255, 141, 45, 0.1)' : undefined,
+                    color: activeButton === action.id ? '#FF8D2D' : undefined,
+                  }}
+                >
+                  <span
+                    className="flex-shrink-0"
+                    style={{
+                      color: activeButton === action.id ? '#FF8D2D' : 'currentColor',
+                    }}
+                  >
+                    <span className="h-4 w-4 flex items-center justify-center">
+                      {action.icon}
+                    </span>
+                  </span>
+                  <span className="truncate">{action.label}</span>
+                </button>
+              );
+            }
+
+            // Para 'register-recharge', renderizar como button sin Link
+            if (action.id === 'register-recharge') {
               return (
                 <button
                   key={action.id}
@@ -122,6 +188,26 @@ export function QuickActionsPanel({ actions = defaultActions }: QuickActionsPane
         onSuccess={() => {
           // Opcional: notificar al padre que se creó un usuario
           console.log('Usuario creado/actualizado desde dashboard');
+        }}
+      />
+
+      {/* Modal: Nueva Obligación con Facturas */}
+      <UpsertObligacionConFacturasModal
+        open={openObligacionModal}
+        onClose={() => setOpenObligacionModal(false)}
+        onSuccess={(obligacion) => {
+          // Opcional: notificar al padre que se creó una obligación
+          console.log('Obligación creada desde dashboard:', obligacion);
+        }}
+      />
+
+      {/* Modal: Reportar Recarga */}
+      <ReportarRecargaModal
+        open={openRecargaModal}
+        onClose={() => setOpenRecargaModal(false)}
+        onSuccess={(data) => {
+          // Opcional: notificar al padre que se reportó una recarga
+          console.log('Recarga reportada desde dashboard:', data);
         }}
       />
     </>
