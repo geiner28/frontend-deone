@@ -109,7 +109,7 @@ export const updatePlan = (payload: UpdatePlanPayload) =>
 
 // GET /api/users/by-telefono/:telefono
 export const getUsuarioByTelefono = (telefono: string) =>
-  request<Usuario>(`/users/by-telefono/${encodeURIComponent(telefono)}`);
+  request<Usuario>(`/admin/users/by-telefono/${encodeURIComponent(telefono)}`);
 
 // GET /api/users?page=&limit=&search=
 export const listUsuarios = (params?: { page?: number; limit?: number; search?: string }) => {

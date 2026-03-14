@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
@@ -20,6 +20,8 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
   const [loading, setLoading] = useState(false);
   const [fetchingUser, setFetchingUser] = useState(false);
   const [existingUser, setExistingUser] = useState<{ nombre: string; apellido: string; correo: string; direccion: string | null; plan: Plan } | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [userCheckComplete, setUserCheckComplete] = useState(false);
 
   const [form, setForm] = useState({
     telefono: '',
@@ -36,53 +38,73 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
   useEffect(() => {
     if (!open) return;
 
+    setUserCheckComplete(false);
+
     const timer = setTimeout(async () => {
       if (form.telefono.trim().length < 7) {
+        console.log('[DEBUG] Teléfono muy corto, limpiando existingUser');
         setExistingUser(null);
+        setUserCheckComplete(true);
         return;
       }
 
+      console.log('[DEBUG] Buscando usuario con teléfono:', form.telefono.trim());
       setFetchingUser(true);
       const res = await getUsuarioByTelefono(form.telefono.trim());
       setFetchingUser(false);
 
+      console.log('[DEBUG] Respuesta del servidor:', res);
+      console.log('[DEBUG] res.ok:', res.ok);
+      console.log('[DEBUG] res.data:', res.data);
+
       if (res.ok && res.data) {
-        // Pre-fill form with existing user data
-        const data = res.data;
+        console.log('[DEBUG] Usuario encontrado! Estableciendo existingUser');
+        // Solo detectar que existe, NO pre-llenar
         setExistingUser({
-          nombre: data.nombre,
-          apellido: data.apellido,
-          correo: data.correo,
-          direccion: data.direccion,
-          plan: data.plan,
+          nombre: res.data.nombre,
+          apellido: res.data.apellido,
+          correo: res.data.correo,
+          direccion: res.data.direccion,
+          plan: res.data.plan,
         });
-        setForm(f => ({
-          ...f,
-          nombre: data.nombre,
-          apellido: data.apellido,
-          correo: data.correo,
-          direccion: data.direccion || '',
-          plan: data.plan,
-        }));
       } else {
+        console.log('[DEBUG] Usuario NO encontrado, limpiando existingUser');
         setExistingUser(null);
       }
+
+      setUserCheckComplete(true);
     }, 500); // Debounce 500ms
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      setUserCheckComplete(false);
+    };
   }, [form.telefono, open]);
 
   const handleClose = () => {
-    // Reset form
     setForm({ telefono: '', nombre: '', apellido: '', correo: '', direccion: '', plan: 'control' });
     setExistingUser(null);
+    setShowConfirmation(false);
     setToast(null);
     onClose();
   };
 
-  const handleSave = async () => {
+  const handleSaveClick = async () => {
+    console.log('[DEBUG] handleSaveClick ejecutado');
+    console.log('[DEBUG] form.telefono:', form.telefono);
+    console.log('[DEBUG] form.nombre:', form.nombre);
+    console.log('[DEBUG] existingUser:', existingUser);
+    console.log('[DEBUG] userCheckComplete:', userCheckComplete);
+    console.log('[DEBUG] fetchingUser:', fetchingUser);
+
     if (!form.telefono.trim()) {
       showToast('El teléfono es requerido', 'error');
+      return;
+    }
+
+    if (!userCheckComplete) {
+      console.log('[DEBUG] Búsqueda incompleta');
+      showToast('Por favor, espera a que se complete la búsqueda del usuario', 'error');
       return;
     }
 
@@ -91,7 +113,23 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
       return;
     }
 
+    // Si es actualización (usuario existente), mostrar confirmación
+    console.log('[DEBUG] ¿existingUser es truthy?', !!existingUser);
+    if (existingUser) {
+      console.log('[DEBUG] Usuario existe! Mostrando confirmación');
+      setShowConfirmation(true);
+      return;
+    }
+
+    console.log('[DEBUG] Usuario NO existe. Procediendo a crear');
+    // Si es creación, proceder directo
+    await handleConfirmedSave();
+  };
+
+  const handleConfirmedSave = async () => {
     setLoading(true);
+    setShowConfirmation(false);
+
     const res = await upsertUsuarioAdmin({
       telefono: form.telefono.trim(),
       nombre: form.nombre.trim(),
@@ -118,12 +156,17 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
 
   return (
     <>
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {/* Toast - DEBE estar FUERA del Modal para tener z-index alto */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-[9999] animate-fade-in">
+          <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+        </div>
+      )}
       
       <Modal
         open={open}
         onClose={handleClose}
-        title={existingUser ? '✏️ Actualizar Usuario' : 'Crear / Actualizar Usuario'}
+        title={existingUser ? ' Actualizar Usuario' : ' Nuevo Usuario'}
       >
         <div className="space-y-4">
           {/* Teléfono - Primary identifier with fetch indicator */}
@@ -131,7 +174,7 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
             <Input
               label="Teléfono"
               required
-              placeholder="3001234567"
+              placeholder="Ej: 3001234567"
               value={form.telefono}
               onChange={(e) => setForm(f => ({ ...f, telefono: e.target.value }))}
             />
@@ -142,29 +185,31 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
             )}
           </div>
 
-          {/* Visual indicator */}
+          {/* Visual indicator de cliente existente */}
           {existingUser && (
-            <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2">
-              <p className="text-xs text-blue-700 font-medium">
-                ℹ️ Cliente existente - Actualizando datos
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+              <p className="text-xs text-amber-800 font-medium">
+                ⚠️ Cliente ya registrado - Se actualizarán los datos proporcionados
               </p>
             </div>
           )}
+
+      
 
           {/* Nombre + Apellido */}
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Nombre"
               required
+              placeholder="Ej: Juan"
               value={form.nombre}
               onChange={(e) => setForm(f => ({ ...f, nombre: e.target.value }))}
-              disabled={fetchingUser}
             />
             <Input
               label="Apellido"
+              placeholder="Ej: Pérez"
               value={form.apellido}
               onChange={(e) => setForm(f => ({ ...f, apellido: e.target.value }))}
-              disabled={fetchingUser}
             />
           </div>
 
@@ -172,17 +217,17 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
           <Input
             label="Correo"
             type="email"
+            placeholder="Ej: juan@example.com"
             value={form.correo}
             onChange={(e) => setForm(f => ({ ...f, correo: e.target.value }))}
-            disabled={fetchingUser}
           />
 
           {/* Dirección */}
           <Input
             label="Dirección"
+            placeholder="Ej: Calle 1 #10, Apartamento 5"
             value={form.direccion}
             onChange={(e) => setForm(f => ({ ...f, direccion: e.target.value }))}
-            disabled={fetchingUser}
           />
 
           {/* Plan */}
@@ -191,14 +236,13 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
               Plan <span className="text-red-500">*</span>
             </label>
             <select
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={form.plan}
               onChange={(e) => setForm(f => ({ ...f, plan: e.target.value as Plan }))}
-              disabled={fetchingUser}
             >
-              <option value="control">Control (Default)</option>
-              <option value="tranquilidad">Tranquilidad</option>
-              <option value="respaldo">Respaldo</option>
+              <option value="control">Control (Básico)</option>
+              <option value="tranquilidad">Tranquilidad (Intermedio)</option>
+              <option value="respaldo">Respaldo (Premium)</option>
             </select>
           </div>
 
@@ -207,8 +251,54 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
             <Button variant="secondary" onClick={handleClose} disabled={loading}>
               Cancelar
             </Button>
-            <Button loading={loading} onClick={handleSave} disabled={!form.telefono.trim() || !form.nombre.trim()}>
+            <Button 
+              loading={loading} 
+              onClick={handleSaveClick}
+              disabled={!form.telefono.trim() || !form.nombre.trim() || fetchingUser}
+            >
               {existingUser ? 'Actualizar' : 'Crear'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de confirmación para actualización */}
+      <Modal
+        open={showConfirmation}
+        onClose={() => setShowConfirmation(false)}
+        title="⚠️ Confirmar Actualización"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3">
+            <p className="text-sm text-yellow-900">
+              <strong>Este usuario ya está registrado en el sistema.</strong>
+            </p>
+            <p className="text-sm text-yellow-800 mt-1">
+              Los datos que proporciones sobrescribirán la información existente.
+            </p>
+          </div>
+
+          <p className="text-sm text-gray-700">
+            <strong>Teléfono:</strong> {form.telefono}
+          </p>
+
+          <p className="text-sm text-gray-600 italic">
+            ¿Estás seguro de que deseas confirmar la actualización de los datos de este usuario?
+          </p>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button 
+              variant="secondary" 
+              onClick={() => setShowConfirmation(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              loading={loading}
+              onClick={handleConfirmedSave}
+            >
+              Sí, Actualizar
             </Button>
           </div>
         </div>
