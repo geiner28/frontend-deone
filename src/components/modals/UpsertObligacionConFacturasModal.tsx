@@ -40,12 +40,16 @@ interface UpsertObligacionConFacturasModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess?: (obligacion: Obligacion) => void;
+  mode?: 'create' | 'from-profile';
+  initialTelefono?: string;
 }
 
 export default function UpsertObligacionConFacturasModal({
   open,
   onClose,
   onSuccess,
+  mode = 'create',
+  initialTelefono,
 }: UpsertObligacionConFacturasModalProps) {
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -125,6 +129,13 @@ export default function UpsertObligacionConFacturasModal({
       setSection3Expandido(false);
     }
   }, [section1Estado]);
+
+  // ─── Auto-precarga de Teléfono en modo 'from-profile' ────────────────────────
+  useEffect(() => {
+    if (open && mode === 'from-profile' && initialTelefono && !telefono) {
+      setTelefono(initialTelefono);
+    }
+  }, [open, mode, initialTelefono]);
 
   // ─── Funciones de Sección 3 ───────────────────────────────────────────────────
   const handleAgregarFactura = () => {
@@ -335,12 +346,15 @@ export default function UpsertObligacionConFacturasModal({
 
             {section1Expandido && (
               <div className="px-4 py-4 border-t border-[#e5e7eb] space-y-3">
+                
+
                 <Input
                   label="Teléfono"
                   required
                   placeholder="3001234567"
                   value={telefono}
                   onChange={(e) => setTelefono(e.target.value)}
+                  disabled={mode === 'from-profile'}
                 />
 
                 {mensajeErrorUsuario && section1Estado === 'error' && (
@@ -394,7 +408,7 @@ export default function UpsertObligacionConFacturasModal({
                 }`}>
                   {isSection2Valid ? '✓' : !isSection1Valid ? '🔒' : '2'}
                 </div>
-                <span>Obligación del Período</span>
+                <span>Datos de la Obligación</span>
               </div>
               {section2Expandido ? (
                 <ChevronUpIcon className={`h-4 w-4 ${!isSection1Valid ? 'text-gray-400' : ''}`} />
@@ -470,7 +484,7 @@ export default function UpsertObligacionConFacturasModal({
                 }`}>
                   {isSection3Valid ? '✓' : !isSection1Valid || !isSection2Valid ? '🔒' : '3'}
                 </div>
-                <span>Facturas</span>
+                <span>Datos de las Facturas</span>
                 {facturasAgregadas.length > 0 && (
                   <Badge label={facturasAgregadas.length.toString()} variant="info" />
                 )}

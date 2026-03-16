@@ -115,6 +115,7 @@ export interface Factura {
   motivo_rechazo?: string;
   etiqueta?: string;
   referencia_pago?: string;
+  grupo?: number;
 }
 
 // ─── Obligación ───────────────────────────────────────────────────────────────
@@ -206,6 +207,20 @@ export interface RechazarFacturaData {
   estado: string;
 }
 
+// ─── Factura Aproximar ────────────────────────────────────────────────────────
+export interface AproximarFacturaPayload {
+  monto: number;
+  observaciones_admin?: string;
+}
+
+export interface AproximarFacturaData {
+  factura_id: string;
+  servicio: string;
+  monto_anterior: number;
+  monto_nuevo: number;
+  estado: string;
+}
+
 // ─── Pago ─────────────────────────────────────────────────────────────────────
 export interface CrearPagoPayload {
   telefono: string;
@@ -282,6 +297,32 @@ export interface RechazarRecargaData {
   estado: string;
   motivo_rechazo: string;
   validada_en: string;
+}
+
+// ─── Recargas Pendientes por Teléfono ──────────────────────────────────────────
+export interface RecargaPendiente {
+  id: string;
+  usuario_id: string;
+  monto: number;
+  estado: string;
+  periodo: string;
+  comprobante_url: string;
+  referencia_tx?: string;
+  creado_en: string;
+}
+
+export interface UsuarioRecargaInfo {
+  usuario_id: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+  plan: string;
+}
+
+export interface ObtenerRecargasPendientesData {
+  usuario: UsuarioRecargaInfo;
+  recargas_pendientes: RecargaPendiente[];
+  no_pending?: boolean; // Flag para indicar que el usuario existe pero sin recargas pendientes
 }
 
 // ─── Disponible ───────────────────────────────────────────────────────────────
@@ -420,8 +461,30 @@ export interface ListAdminClientesData {
   total_pages: number;
 }
 
+export interface ProgramacionRecargas {
+  id: string;
+  usuario_id: string;
+  cantidad_recargas: 1 | 2;
+  dia_1: number;
+  dia_2?: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CuotaDelMes {
+  fecha: number;
+  monto: number;
+  estado?: string;
+}
+
+export interface CuotasDelMes {
+  grupo1: CuotaDelMes | null;
+  grupo2: CuotaDelMes | null;
+}
+
 export interface AdminClientePerfilData {
   usuario: Usuario;
+  periodo?: string;
   resumen: {
     total_obligaciones: number;
     obligaciones_activas: number;
@@ -429,8 +492,15 @@ export interface AdminClientePerfilData {
     total_recargas_aprobadas: number;
     total_pagos_realizados: number;
     saldo_disponible: number;
+    // Nuevos campos para datos del mes
+    total_recargas_aprobadas_mes: number;
+    total_pagos_realizados_mes: number;
+    total_pendiente_mes: number;
+    facturas_validadas_count_mes: number;
+    recargas_aprobadas_count_mes: number;
   };
   obligaciones: Obligacion[];
+  obligaciones_mes?: Obligacion[];
   recargas: {
     id: string;
     monto: number;
@@ -455,6 +525,12 @@ export interface AdminClientePerfilData {
     };
   }[];
   notificaciones_recientes: NotificacionAPI[];
+  programacion_recargas?: ProgramacionRecargas;
+  cuotas_mes?: CuotasDelMes;
+  cuotasCalculadas?: {
+    cuota1?: { facturas: Array<{ id: string; [key: string]: unknown }> };
+    cuota2?: { facturas: Array<{ id: string; [key: string]: unknown }> };
+  };
 }
 
 // ─── Admin Pagos ──────────────────────────────────────────────────────────────

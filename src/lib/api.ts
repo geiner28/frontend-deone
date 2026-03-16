@@ -21,12 +21,15 @@ import type {
   ValidarFacturaData,
   RechazarFacturaPayload,
   RechazarFacturaData,
+  AproximarFacturaPayload,
+  AproximarFacturaData,
   ReportarRecargaPayload,
   RecargaData,
   AprobarRecargaPayload,
   AprobarRecargaData,
   RechazarRecargaPayload,
   RechazarRecargaData,
+  ObtenerRecargasPendientesData,
   DisponibleData,
   CrearPagoPayload,
   CrearPagoData,
@@ -47,6 +50,7 @@ import type {
   ListAdminClientesData,
   AdminClientePerfilData,
   ListAdminPagosData,
+  ProgramacionRecargas,
 } from '@/types';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -172,6 +176,13 @@ export const rechazarFactura = (facturaId: string, payload: RechazarFacturaPaylo
     body: JSON.stringify(payload),
   });
 
+// PUT /api/facturas/:id/aproximar
+export const aproximarFactura = (facturaId: string, payload: AproximarFacturaPayload) =>
+  request<AproximarFacturaData>(`/facturas/${facturaId}/aproximar`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+
 // ─── 5. Recargas (3 endpoints) ───────────────────────────────────────────────
 // POST /api/recargas/reportar
 export const reportarRecarga = (payload: ReportarRecargaPayload) =>
@@ -192,6 +203,12 @@ export const rechazarRecarga = (recargaId: string, payload: RechazarRecargaPaylo
   request<RechazarRecargaData>(`/recargas/${recargaId}/rechazar`, {
     method: 'PUT',
     body: JSON.stringify(payload),
+  });
+
+// GET /api/recargas/pendientes?telefono=XXXX
+export const obtenerRecargasPendientes = (telefono: string) =>
+  request<ObtenerRecargasPendientesData>(`/recargas/pendientes?telefono=${encodeURIComponent(telefono)}`, {
+    method: 'GET',
   });
 
 // ─── 6. Disponible (1 endpoint) ──────────────────────────────────────────────
@@ -330,9 +347,14 @@ export const getAdminClientes = (params?: {
   return request<ListAdminClientesData>(`/admin/clientes?${sp.toString()}`);
 };
 
-// GET /api/admin/clientes/:telefono
-export const getAdminClientePerfil = (telefono: string) =>
-  request<AdminClientePerfilData>(`/admin/clientes/${encodeURIComponent(telefono)}`);
+// GET /api/admin/clientes/:telefono?periodo=YYYY-MM-DD
+export const getAdminClientePerfil = (telefono: string, periodo?: string) => {
+  const sp = new URLSearchParams();
+  if (periodo) sp.set('periodo', periodo);
+  const query = sp.toString();
+  const path = query ? `/admin/clientes/${encodeURIComponent(telefono)}?${query}` : `/admin/clientes/${encodeURIComponent(telefono)}`;
+  return request<AdminClientePerfilData>(path);
+};
 
 // GET /api/admin/pagos?page=&limit=&telefono=&estado=&periodo=
 export const getAdminPagos = (params?: {
@@ -355,5 +377,21 @@ export const getAdminPagos = (params?: {
 export const upsertUsuarioAdmin = (payload: UpsertUsuarioAdminPayload) =>
   request<UpsertUsuarioAdminData>('/admin/users/upsert', {
     method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+// GET /api/programacion-recargas?usuario_id=
+export const getProgramacionRecargas = (usuario_id: string) =>
+  request<ProgramacionRecargas>(`/programacion-recargas?usuario_id=${encodeURIComponent(usuario_id)}`);
+
+// PUT /api/programacion-recargas — Actualizar/crear programacion de recargas
+export const updateProgramacionRecargas = (payload: {
+  usuario_id: string;
+  cantidad_recargas: 1 | 2;
+  dia_1: number;
+  dia_2?: number;
+}) =>
+  request<ProgramacionRecargas>('/programacion-recargas', {
+    method: 'PUT',
     body: JSON.stringify(payload),
   });

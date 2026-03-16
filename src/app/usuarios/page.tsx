@@ -7,9 +7,10 @@ import Input from '@/components/ui/Input';
 import Badge, { variantFromEstado } from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
+import UpdatePlanModal from '@/components/modals/UpdatePlanModal';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import EmptyState from '@/components/ui/EmptyState';
-import { upsertUsuario, getUsuarioByTelefono, updatePlan } from '@/lib/api';
+import { upsertUsuario, getUsuarioByTelefono } from '@/lib/api';
 import type { Usuario, Plan } from '@/types';
 import { formatDateTime, formatDate, getErrorMsg } from '@/lib/utils';
 import { useNotifications, notifFromAction } from '@/contexts/NotificationContext';
@@ -41,7 +42,7 @@ export default function UsuariosPage() {
 
   // Modal actualizar plan
   const [openPlan, setOpenPlan] = useState(false);
-  const [planForm, setPlanForm] = useState<{ telefono: string; plan: Plan }>({ telefono: '', plan: 'control' });
+  const [planUpdateTelefono, setPlanUpdateTelefono] = useState<string>('');
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
@@ -80,22 +81,13 @@ export default function UsuariosPage() {
     }
   };
 
-  const handleUpdatePlan = async () => {
-    setLoading(true);
-    const res = await updatePlan(planForm);
-    setLoading(false);
-    if (res.ok && res.data) {
-      showToast(`Plan actualizado: ${res.data.plan_anterior} → ${res.data.plan_nuevo}`, 'success');
-      setOpenPlan(false);
-      addNotification(notifFromAction('plan_actualizado', {
-        plan_anterior: res.data.plan_anterior,
-        plan_nuevo: res.data.plan_nuevo,
-      }));
-      if (usuario?.telefono === planForm.telefono) {
-        setUsuario((u) => u ? { ...u, plan: planForm.plan } : u);
-      }
-    } else {
-      showToast(getErrorMsg(res, 'Error al actualizar plan'), 'error');
+  const handleUpdatePlan = (data: { plan_anterior: Plan; plan_nuevo: Plan }) => {
+    addNotification(notifFromAction('plan_actualizado', {
+      plan_anterior: data.plan_anterior,
+      plan_nuevo: data.plan_nuevo,
+    }));
+    if (usuario?.telefono === planUpdateTelefono) {
+      setUsuario((u) => u ? { ...u, plan: data.plan_nuevo } : u);
     }
   };
 
@@ -178,7 +170,7 @@ export default function UsuariosPage() {
             {/* Quick actions */}
             <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
               <Button size="sm" variant="secondary" onClick={() => {
-                setPlanForm({ telefono: usuario.telefono, plan: usuario.plan === 'control' ? 'tranquilidad' : 'control' });
+                setPlanUpdateTelefono(usuario.telefono);
                 setOpenPlan(true);
               }}>
                 <PencilSquareIcon className="h-3.5 w-3.5" /> Cambiar plan
@@ -230,27 +222,13 @@ export default function UsuariosPage() {
       </Modal>
 
       {/* Modal: Plan */}
-      <Modal open={openPlan} onClose={() => setOpenPlan(false)} title="Actualizar Plan de Usuario">
-        <div className="space-y-4">
-          <Input label="Teléfono" required placeholder="3001234567" value={planForm.telefono} onChange={(e) => setPlanForm((f) => ({ ...f, telefono: e.target.value }))} />
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Plan <span className="text-red-500">*</span></label>
-            <select
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={planForm.plan}
-              onChange={(e) => setPlanForm((f) => ({ ...f, plan: e.target.value as Plan }))}
-            >
-              <option value="control">Control</option>
-              <option value="tranquilidad">Tranquilidad</option>
-              <option value="respaldo">Respaldo</option>
-            </select>
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setOpenPlan(false)}>Cancelar</Button>
-            <Button loading={loading} onClick={handleUpdatePlan}>Actualizar</Button>
-          </div>
-        </div>
-      </Modal>
+      <UpdatePlanModal
+        open={openPlan}
+        onClose={() => setOpenPlan(false)}
+        telefono={planUpdateTelefono}
+        currentPlan={(usuario && usuario.telefono === planUpdateTelefono ? usuario.plan : 'control') as Plan}
+        onSuccess={handleUpdatePlan}
+      />
     </div>
   );
 }

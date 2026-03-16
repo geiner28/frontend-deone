@@ -17,6 +17,18 @@ export function formatDate(dateStr: string): string {
   });
 }
 
+export function formatPeriodo(periodoStr: string): string {
+  if (!periodoStr) return '—';
+  // El periodo viene en formato YYYY-MM-DD, simplemente lo parseamos sin considerar zona horaria
+  const [year, month, day] = periodoStr.split('-');
+  if (!year || !month || !day) return periodoStr;
+  return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString('es-CO', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export function formatDateTime(dateStr: string): string {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleString('es-CO', {

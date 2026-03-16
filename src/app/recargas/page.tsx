@@ -7,7 +7,8 @@ import Input from '@/components/ui/Input';
 import Badge, { variantFromEstado } from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
-import { reportarRecarga, aprobarRecarga } from '@/lib/api';
+import { reportarRecarga } from '@/lib/api';
+import AprobarRechazarRecargaModal from '@/components/modals/AprobarRechazarRecargaModal';
 import type { RecargaData } from '@/types';
 import { formatCurrency, getErrorMsg } from '@/lib/utils';
 import { useNotifications, notifFromAction } from '@/contexts/NotificationContext';
@@ -38,11 +39,9 @@ export default function RecargasPage() {
   const { addNotification } = useNotifications();
 
   const [openReportar, setOpenReportar] = useState(false);
+  const [openAprobarRechazar, setOpenAprobarRechazar] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [lastRecarga, setLastRecarga] = useState<RecargaData | null>(null);
-
-  const [openAprobar, setOpenAprobar] = useState(false);
-  const [recargaId, setRecargaId] = useState('');
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
@@ -68,22 +67,9 @@ export default function RecargasPage() {
     }
   };
 
-  const handleAprobar = async () => {
-    if (!recargaId.trim()) return;
-    setLoading(true);
-    const res = await aprobarRecarga(recargaId.trim());
-    setLoading(false);
-    if (res.ok) {
-      showToast('Recarga aprobada correctamente', 'success');
-      addNotification(notifFromAction('recarga_aprobada', {}));
-      setOpenAprobar(false);
-      setRecargaId('');
-      if (lastRecarga?.recarga_id === recargaId) {
-        setLastRecarga((r) => r ? { ...r, estado: 'aprobada' } : r);
-      }
-    } else {
-      showToast(getErrorMsg(res, 'Error al aprobar recarga'), 'error');
-    }
+  const handleAprobarRechazarSuccess = async () => {
+    setOpenAprobarRechazar(false);
+    // Opcionalmente, aquí podrías recargar datos
   };
 
   return (
@@ -94,8 +80,8 @@ export default function RecargasPage() {
         <Button onClick={() => setOpenReportar(true)}>
           <PlusIcon className="h-4 w-4" /> Reportar Recarga
         </Button>
-        <Button variant="secondary" onClick={() => setOpenAprobar(true)}>
-          <CheckBadgeIcon className="h-4 w-4" /> Aprobar Recarga
+        <Button variant="secondary" onClick={() => setOpenAprobarRechazar(true)}>
+          <CheckBadgeIcon className="h-4 w-4" /> Aprobar/Rechazar Recarga
         </Button>
       </div>
 
@@ -144,8 +130,8 @@ export default function RecargasPage() {
               <p className="text-sm text-amber-700">
                 🔍 Esta recarga está pendiente de aprobación.
               </p>
-              <Button size="sm" onClick={() => { setRecargaId(lastRecarga.recarga_id); setOpenAprobar(true); }}>
-                Aprobar ahora
+              <Button size="sm" onClick={() => setOpenAprobarRechazar(true)}>
+                Resolver ahora
               </Button>
             </div>
           )}
@@ -174,34 +160,13 @@ export default function RecargasPage() {
         </div>
       </Modal>
 
-      {/* Modal: Aprobar */}
-      <Modal open={openAprobar} onClose={() => setOpenAprobar(false)} title="Aprobar Recarga">
-        <div className="space-y-4">
-          <Input
-            label="ID de Recarga"
-            required
-            placeholder="UUID de la recarga"
-            value={recargaId}
-            onChange={(e) => setRecargaId(e.target.value)}
-            hint="Puedes encontrar el ID en el resultado de 'Reportar Recarga'."
-          />
-          {lastRecarga && lastRecarga.estado === 'en_validacion' && (
-            <button
-              type="button"
-              className="text-xs text-[#ff8d2d] hover:underline"
-              onClick={() => setRecargaId(lastRecarga.recarga_id)}
-            >
-              Usar último ID: {lastRecarga.recarga_id.slice(0, 20)}…
-            </button>
-          )}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setOpenAprobar(false)}>Cancelar</Button>
-            <Button loading={loading} onClick={handleAprobar}>
-              <CheckBadgeIcon className="h-4 w-4" /> Aprobar
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {/* Modal: Aprobar/Rechazar Recarga */}
+      <AprobarRechazarRecargaModal
+        open={openAprobarRechazar}
+        onClose={() => setOpenAprobarRechazar(false)}
+        onSuccess={handleAprobarRechazarSuccess}
+        showToast={showToast}
+      />
     </div>
   );
 }

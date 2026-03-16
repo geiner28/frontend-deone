@@ -12,10 +12,24 @@ import { getErrorMsg } from '@/lib/utils';
 interface UpsertUsuarioAdminModalProps {
   open: boolean;
   onClose: () => void;
-  onSuccess?: (data: { usuario_id: string; creado: boolean; nombre: string; telefono: string; plan: Plan }) => void;
+  mode?: 'upsert' | 'edit-profile'; // 'upsert' = default, 'edit-profile' = editar info personal
+  initialData?: {
+    telefono: string;
+    nombre: string;
+    apellido: string;
+    correo: string;
+    direccion: string | null;
+  };
+  onSuccess?: (data: { usuario_id: string; creado: boolean; nombre: string; telefono: string; plan?: Plan }) => void;
 }
 
-export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: UpsertUsuarioAdminModalProps) {
+export default function UpsertUsuarioAdminModal({ 
+  open, 
+  onClose, 
+  mode = 'upsert',
+  initialData,
+  onSuccess 
+}: UpsertUsuarioAdminModalProps) {
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchingUser, setFetchingUser] = useState(false);
@@ -34,9 +48,31 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
-  // Debounced fetch user on phone change
+  // Inicializar formulario cuando se abre en modo edit-profile
   useEffect(() => {
-    if (!open) return;
+    if (mode === 'edit-profile' && initialData) {
+      setForm({
+        telefono: initialData.telefono,
+        nombre: initialData.nombre,
+        apellido: initialData.apellido,
+        correo: initialData.correo,
+        direccion: initialData.direccion || '',
+        plan: 'control',
+      });
+      setExistingUser({
+        nombre: initialData.nombre,
+        apellido: initialData.apellido,
+        correo: initialData.correo,
+        direccion: initialData.direccion,
+        plan: 'control',
+      });
+      setUserCheckComplete(true);
+    }
+  }, [open, mode, initialData]);
+
+  // Debounced fetch user on phone change (solo en modo 'upsert')
+  useEffect(() => {
+    if (!open || mode === 'edit-profile') return;
 
     setUserCheckComplete(false);
 
@@ -79,7 +115,7 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
       clearTimeout(timer);
       setUserCheckComplete(false);
     };
-  }, [form.telefono, open]);
+  }, [form.telefono, open, mode]);
 
   const handleClose = () => {
     setForm({ telefono: '', nombre: '', apellido: '', correo: '', direccion: '', plan: 'control' });
@@ -130,14 +166,27 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
     setLoading(true);
     setShowConfirmation(false);
 
-    const res = await upsertUsuarioAdmin({
+    const payload: {
+      telefono: string;
+      nombre: string;
+      apellido: string;
+      correo?: string;
+      direccion?: string;
+      plan?: Plan;
+    } = {
       telefono: form.telefono.trim(),
       nombre: form.nombre.trim(),
       apellido: form.apellido.trim(),
       correo: form.correo.trim() || undefined,
       direccion: form.direccion.trim() || undefined,
-      plan: form.plan,
-    });
+    };
+
+    // Solo incluir plan en modo 'upsert'
+    if (mode === 'upsert') {
+      payload.plan = form.plan;
+    }
+
+    const res = await upsertUsuarioAdmin(payload);
     setLoading(false);
 
     if (res.ok && res.data) {
@@ -186,10 +235,19 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
           </div>
 
           {/* Visual indicator de cliente existente */}
-          {existingUser && (
+          {existingUser && mode === 'upsert' && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
               <p className="text-xs text-amber-800 font-medium">
                 ⚠️ Cliente ya registrado - Se actualizarán los datos proporcionados
+              </p>
+            </div>
+          )}
+
+          {/* Visual indicator en modo edit-profile */}
+          {mode === 'edit-profile' && (
+            <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2">
+              <p className="text-xs text-yellow-800 font-medium">
+                ⚠️ Ten mucho cuidado al actualizar los datos personales proporcionados
               </p>
             </div>
           )}
@@ -230,21 +288,23 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
             onChange={(e) => setForm(f => ({ ...f, direccion: e.target.value }))}
           />
 
-          {/* Plan */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">
-              Plan <span className="text-red-500">*</span>
-            </label>
-            <select
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={form.plan}
-              onChange={(e) => setForm(f => ({ ...f, plan: e.target.value as Plan }))}
-            >
-              <option value="control">Control (Básico)</option>
-              <option value="tranquilidad">Tranquilidad (Intermedio)</option>
-              <option value="respaldo">Respaldo (Premium)</option>
-            </select>
-          </div>
+          {/* Plan - Solo en modo 'upsert' */}
+          {mode === 'upsert' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">
+                Plan <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.plan}
+                onChange={(e) => setForm(f => ({ ...f, plan: e.target.value as Plan }))}
+              >
+                <option value="control">Control (Básico)</option>
+                <option value="tranquilidad">Tranquilidad (Intermedio)</option>
+                <option value="respaldo">Respaldo (Premium)</option>
+              </select>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
@@ -269,14 +329,27 @@ export default function UpsertUsuarioAdminModal({ open, onClose, onSuccess }: Up
         title="⚠️ Confirmar Actualización"
       >
         <div className="space-y-4">
-          <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3">
-            <p className="text-sm text-yellow-900">
-              <strong>Este usuario ya está registrado en el sistema.</strong>
-            </p>
-            <p className="text-sm text-yellow-800 mt-1">
-              Los datos que proporciones sobrescribirán la información existente.
-            </p>
-          </div>
+          {mode === 'upsert' && (
+            <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3">
+              <p className="text-sm text-yellow-900">
+                <strong>Este usuario ya está registrado en el sistema.</strong>
+              </p>
+              <p className="text-sm text-yellow-800 mt-1">
+                Los datos que proporciones sobrescribirán la información existente.
+              </p>
+            </div>
+          )}
+
+          {mode === 'edit-profile' && (
+            <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3">
+              <p className="text-sm text-yellow-900">
+                <strong>Confirmar actualización de datos personales</strong>
+              </p>
+              <p className="text-sm text-yellow-800 mt-1">
+                Se actualizarán los datos personales del cliente. Asegúrate de que toda la información sea correcta antes de confirmar.
+              </p>
+            </div>
+          )}
 
           <p className="text-sm text-gray-700">
             <strong>Teléfono:</strong> {form.telefono}
