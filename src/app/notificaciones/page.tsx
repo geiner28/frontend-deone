@@ -307,7 +307,7 @@ export default function NotificacionesPage() {
                 className="px-2 py-1 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 hover:border-[#ff8d2d] transition"
                 title="Filtrar notificaciones por rango de fechas"
               >
-                <option value="hoy">📅 Hoy</option>
+                <option value="hoy">📅 Últimas 24h</option>
                 <option value="semana">📆 Última semana</option>
                 <option value="mes">📋 Último mes</option>
               </select>
