@@ -490,3 +490,97 @@ export const generarNotificacionesMock = () =>
     mensaje: string;
     notificaciones: NotificacionAPI[];
   }>(`/admin/notificaciones/mock/generar`);
+
+// GET /api/admin/notificaciones/alertas — Listar SOLO alertas
+export const getAdminAlertasAdmin = (filters?: {
+  desde?: string;
+  hasta?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const sp = new URLSearchParams();
+  if (filters?.desde) sp.set('desde', filters.desde);
+  if (filters?.hasta) sp.set('hasta', filters.hasta);
+  if (filters?.page) sp.set('page', String(filters.page));
+  if (filters?.limit) sp.set('limit', String(filters.limit));
+  return request<{
+    alertas: NotificacionAPI[];
+    total: number;
+    page: number;
+    limit: number;
+    total_pages: number;
+  }>(`/admin/notificaciones/alertas?${sp.toString()}`);
+};
+
+// GET /api/admin/notificaciones/automaticas — Listar SOLO notificaciones automáticas
+export const getAdminNotificacionesAutomaticas = (filters?: {
+  desde?: string;
+  hasta?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const sp = new URLSearchParams();
+  if (filters?.desde) sp.set('desde', filters.desde);
+  if (filters?.hasta) sp.set('hasta', filters.hasta);
+  if (filters?.page) sp.set('page', String(filters.page));
+  if (filters?.limit) sp.set('limit', String(filters.limit));
+  return request<{
+    notificaciones: NotificacionAPI[];
+    total: number;
+    page: number;
+    limit: number;
+    total_pages: number;
+  }>(`/admin/notificaciones/automaticas?${sp.toString()}`);
+};
+
+// GET /api/admin/notificaciones/:alerta_id/solicitud-original — Obtener solicitud original
+export const getAdminSolicitudOriginal = (alerta_id: string) =>
+  request<{
+    alerta: NotificacionAPI;
+    solicitud_original: NotificacionAPI;
+  }>(`/admin/notificaciones/${alerta_id}/solicitud-original`);
+
+// GET /api/admin/notificaciones/acciones — Obtener acciones pendientes agrupadas por usuario
+export const getAdminNotificacionesAcciones = (filters?: {
+  usuario_id?: string;
+  tipo?: string;
+  estado?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const sp = new URLSearchParams();
+  if (filters?.usuario_id) sp.set('usuario_id', filters.usuario_id);
+  if (filters?.tipo) sp.set('tipo', filters.tipo);
+  if (filters?.estado) sp.set('estado', filters.estado);
+  if (filters?.page) sp.set('page', filters.page.toString());
+  if (filters?.limit) sp.set('limit', filters.limit.toString());
+  return request<{
+    acciones_por_usuario: Array<{
+      usuario_id: string;
+      usuario: { id: string; nombre: string; apellido: string; telefono: string };
+      acciones: Array<{
+        revision_id: string;
+        tipo: 'factura' | 'recarga';
+        prioridad: number;
+        razon: string;
+        creado_en: string;
+        estado: string;
+        factura_id?: string;
+        servicio?: string;
+        monto?: number;
+        periodo?: string;
+        factura_estado?: string;
+        recarga_id?: string;
+        recarga_estado?: string;
+        comprobante_url?: string;
+        display_label: string;
+      }>;
+      total: number;
+    }>;
+    total_usuarios: number;
+    total_acciones: number;
+    page: number;
+    limit: number;
+    total_pages: number;
+  }>(`/admin/notificaciones/acciones?${sp.toString()}`);
+};

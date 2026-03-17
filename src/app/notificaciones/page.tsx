@@ -10,14 +10,20 @@ import Toast, { ToastType } from '@/components/ui/Toast';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import EmptyState from '@/components/ui/EmptyState';
 import { useNotifications } from '@/contexts/NotificationContext';
+import ValidarFacturaModal from '@/components/modals/ValidarFacturaModal';
+import AprobarRechazarRecargaModal from '@/components/modals/AprobarRechazarRecargaModal';
 import {
   getAdminNotificaciones,
   getAdminNotificacionesEstadisticas,
   marcarNotificacionEnviada,
   marcarNotificacionesEnviadasBatch,
   generarNotificacionesMock,
+  getAdminAlertasAdmin,
+  getAdminNotificacionesAutomaticas,
+  getAdminSolicitudOriginal,
+  getAdminNotificacionesAcciones,
 } from '@/lib/api';
-import type { NotificacionAPI } from '@/types';
+import type { NotificacionAPI, Factura } from '@/types';
 import { formatDateTime, getErrorMsg } from '@/lib/utils';
 import {
   BellIcon,
@@ -33,7 +39,7 @@ import {
   QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline';
 
-type Tab = 'admin' | 'usuario';
+type Tab = 'todas' | 'alertas' | 'acciones';
 
 type NotificacionConUsuario = NotificacionAPI & {
   usuarios?: { nombre: string; apellido: string; telefono: string };
@@ -70,7 +76,7 @@ const TIPO_ICONS: Record<string, string> = {
 };
 
 export default function NotificacionesPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('admin');
+  const [activeTab, setActiveTab] = useState<Tab>('todas');
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   
   // Notificaciones simuladas del usuario
@@ -86,18 +92,46 @@ export default function NotificacionesPage() {
   const [page, setPage] = useState(1);
   const limit = 20;
 
-  // Datos admin
-  const [notificaciones, setNotificaciones] = useState<NotificacionConUsuario[]>([]);
+  // Datos para cada tab
+  const [notificacionesTodas, setNotificacionesTodas] = useState<NotificacionConUsuario[]>([]);
+  const [accionesData, setAccionesData] = useState<any>(null);
+  const [alertas, setAlertas] = useState<NotificacionConUsuario[]>([]);
   const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
   const [loading, setLoading] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Estado dinámico basado en la tab activa
+  const getActiveData = () => {
+    switch (activeTab) {
+      case 'todas':
+        return notificacionesTodas;
+      case 'alertas':
+        return alertas;
+      case 'acciones':
+        return accionesData?.acciones_por_usuario || [];
+      default:
+        return notificacionesTodas;
+    }
+  };
+
+  const notificaciones = getActiveData();
+
   // Modales
   const [selectedNotif, setSelectedNotif] = useState<NotificacionConUsuario | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedAlerta, setSelectedAlerta] = useState<NotificacionConUsuario | null>(null);
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [originalSolicitud, setOriginalSolicitud] = useState<any>(null);
+  const [loadingOriginal, setLoadingOriginal] = useState(false);
   const [showMarkModal, setShowMarkModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [copyNotifId, setCopyNotifId] = useState<string | null>(null);
+
+  // Modales para acciones (Facturas y Recargas)
+  const [showValidarFacturaModal, setShowValidarFacturaModal] = useState(false);
+  const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null);
+  const [showAprobarRechazarModal, setShowAprobarRechazarModal] = useState(false);
+  const [selectedRecargaUsuarioTelefono, setSelectedRecargaUsuarioTelefono] = useState<string>('');
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
@@ -140,52 +174,113 @@ export default function NotificacionesPage() {
 
   // Cargar datos admin
   useEffect(() => {
-    if (activeTab === 'admin') loadData();
+    setPage(1);
+  }, [activeTab]);
+
+  useEffect(() => {
+    loadData();
   }, [filterTipo, filterEstado, dateFilter, searchUsuario, page, activeTab]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const { desde, hasta } = getDateRange(dateFilter);
-      console.log('📊 LOADING NOTIFICACIONES:', { filterTipo, filterEstado, desde, hasta, page, limit });
+      console.log(`📊 LOADING ${activeTab.toUpperCase()}:`, { page, limit });
 
-      const resNotifs = await getAdminNotificaciones({
-        tipo: filterTipo || undefined,
-        estado: filterEstado || undefined,
-        desde,
-        hasta,
-        page,
-        limit,
-      });
-
-      console.log('📨 API RESPUESTA:', resNotifs);
-
-      if (resNotifs.ok && resNotifs.data) {
-        console.log('✅ Notificaciones recibidas:', resNotifs.data.notificaciones?.length || 0, resNotifs.data);
-        setNotificaciones(resNotifs.data.notificaciones || []);
-        setTotalPages(resNotifs.data.total_pages || 1);
-      } else {
-        console.log('❌ Error en API:', resNotifs);
-        showToast(getErrorMsg(resNotifs, 'Error cargando notificaciones'), 'error');
-        setNotificaciones([]);
-      }
-
-      // Estadísticas del período seleccionado
-      const resStats = await getAdminNotificacionesEstadisticas({
-        desde,
-        hasta,
-      });
-
-      console.log('📈 Estadísticas:', resStats);
-
-      if (resStats.ok && resStats.data) {
-        setEstadisticas(resStats.data.estadisticas);
+      if (activeTab === 'todas') {
+        const { desde, hasta } = getDateRange(dateFilter);
+        await loadTodas(desde, hasta);
+      } else if (activeTab === 'alertas') {
+        const { desde, hasta } = getDateRange(dateFilter);
+        await loadAlertas(desde, hasta);
+      } else if (activeTab === 'acciones') {
+        await loadAcciones();
       }
     } catch (err) {
       console.error('❌ Error catch:', err);
       showToast('Error al cargar datos: ' + (err as any).message, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTodas = async (desde: string, hasta: string) => {
+    const resNotifs = await getAdminNotificaciones({
+      tipo: filterTipo || undefined,
+      estado: filterEstado || undefined,
+      desde,
+      hasta,
+      page,
+      limit,
+    });
+
+    console.log('📨 API RESPUESTA (Todas):', resNotifs);
+
+    if (resNotifs.ok && resNotifs.data) {
+      console.log('✅ Notificaciones recibidas:', resNotifs.data.notificaciones?.length || 0);
+      setNotificacionesTodas(resNotifs.data.notificaciones || []);
+      setTotalPages(resNotifs.data.total_pages || 1);
+    } else {
+      console.log('❌ Error en API:', resNotifs);
+      showToast(getErrorMsg(resNotifs, 'Error cargando notificaciones'), 'error');
+      setNotificacionesTodas([]);
+    }
+
+    // Estadísticas del período seleccionado
+    const resStats = await getAdminNotificacionesEstadisticas({
+      desde,
+      hasta,
+    });
+
+    console.log('📈 Estadísticas:', resStats);
+
+    if (resStats.ok && resStats.data) {
+      setEstadisticas(resStats.data.estadisticas);
+    }
+  };
+
+  const loadAutomaticas = async (desde: string, hasta: string) => {
+    // Esta función se mantiene por compatibilidad pero será reemplazada
+    // La lógica de "acciones" está en loadAcciones()
+  };
+
+  const loadAcciones = async () => {
+    const res = await getAdminNotificacionesAcciones({
+      usuario_id: searchUsuario || undefined,
+      page,
+      limit,
+    });
+
+    console.log('📨 API RESPUESTA (Acciones):', res);
+
+    if (res.ok && res.data) {
+      console.log('✅ Acciones recibidas:', res.data.total_acciones);
+      setAccionesData(res.data);
+      setTotalPages(res.data.total_pages || 1);
+    } else {
+      console.log('❌ Error en API:', res);
+      showToast(getErrorMsg(res, 'Error cargando acciones'), 'error');
+      setAccionesData(null);
+    }
+  };
+
+  const loadAlertas = async (desde: string, hasta: string) => {
+    const resNotifs = await getAdminAlertasAdmin({
+      desde,
+      hasta,
+      page,
+      limit,
+    });
+
+    console.log('📨 API RESPUESTA (Alertas):', resNotifs);
+
+    if (resNotifs.ok && resNotifs.data) {
+      console.log('✅ Alertas recibidas:', resNotifs.data.alertas?.length || 0);
+      setAlertas(resNotifs.data.alertas || []);
+      setTotalPages(resNotifs.data.total_pages || 1);
+    } else {
+      console.log('❌ Error en API:', resNotifs);
+      showToast(getErrorMsg(resNotifs, 'Error cargando alertas'), 'error');
+      setAlertas([]);
     }
   };
 
@@ -258,15 +353,18 @@ export default function NotificacionesPage() {
     setSelectedIds(newSelected);
   };
 
-  // FILTRO CLIENT-SIDE: Búsqueda de usuario
-  const notificacionesFiltradas = searchUsuario
-    ? notificaciones.filter(n => {
-        const nombre = `${n.usuarios?.nombre || ''} ${n.usuarios?.apellido || ''}`.toLowerCase();
-        const telefono = (n.usuarios?.telefono || '').toLowerCase();
+  // FILTRO CLIENT-SIDE: Búsqueda de usuario (solo para 'todas')
+  const notificacionesFiltradas = (activeTab === 'todas' && searchUsuario)
+    ? notificaciones.filter((n: any) => {
+        const notif = n as NotificacionConUsuario;
+        const nombre = `${notif.usuarios?.nombre || ''} ${notif.usuarios?.apellido || ''}`.toLowerCase();
+        const telefono = (notif.usuarios?.telefono || '').toLowerCase();
         const search = searchUsuario.toLowerCase();
         return nombre.includes(search) || telefono.includes(search);
       })
     : notificaciones;
+
+  const currentNotifications = notificacionesFiltradas;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -274,28 +372,36 @@ export default function NotificacionesPage() {
 
       {/* Tabs con indicadores visuales */}
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex bg-white rounded-xl border border-[#e5e7eb] p-1 shadow-sm">
+        <div className="flex bg-white rounded-xl border border-[#e5e7eb] p-1 shadow-sm overflow-x-auto">
           <TabButton
-            active={activeTab === 'admin'}
-            onClick={() => { setActiveTab('admin'); setPage(1); setSearchUsuario(''); setFilterTipo(''); setFilterEstado(''); }}
+            active={activeTab === 'todas'}
+            onClick={() => { setActiveTab('todas'); setPage(1); setSearchUsuario(''); setFilterTipo(''); setFilterEstado(''); }}
             icon={<ShieldCheckIcon className="h-4 w-4" />}
-            label="Administrador"
-            count={estadisticas?.no_enviadas || 0}
-            description="Gestión profesional desde BD"
+            label="👨‍💼 Todas"
+            count={notificacionesTodas.length}
+            description="Todas las notificaciones"
           />
           <TabButton
-            active={activeTab === 'usuario'}
-            onClick={() => setActiveTab('usuario')}
-            icon={<UserIcon className="h-4 w-4" />}
-            label="Usuario (Simuladas)"
-            count={userUnread}
-            description="Notificaciones de prueba"
+            active={activeTab === 'alertas'}
+            onClick={() => { setActiveTab('alertas'); setPage(1); }}
+            icon={<ShieldCheckIcon className="h-4 w-4" />}
+            label="🚨 ALERTAS"
+            count={alertas.length}
+            description="Alertas críticas"
+          />
+          <TabButton
+            active={activeTab === 'acciones'}
+            onClick={() => { setActiveTab('acciones'); setPage(1); setSearchUsuario(''); }}
+            icon={<ShieldCheckIcon className="h-4 w-4" />}
+            label="⚡ ACCIONES"
+            count={accionesData?.total_acciones || 0}
+            description="Validaciones pendientes"
           />
         </div>
 
         {/* Indicador de modo y acciones rápidas */}
         <div className="flex items-center gap-3 flex-wrap">
-          {activeTab === 'admin' && (
+          {activeTab !== 'acciones' && (
             <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200">
               <label className="text-xs font-semibold text-gray-700">Período:</label>
               <select
@@ -337,7 +443,7 @@ export default function NotificacionesPage() {
             </div>
           )}
 
-          {activeTab === 'admin' && selectedIds.size > 0 && (
+          {selectedIds.size > 0 && activeTab === 'todas' && (
             <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
               <span className="text-sm font-medium text-blue-900">{selectedIds.size} seleccionadas</span>
               <Button
@@ -349,33 +455,22 @@ export default function NotificacionesPage() {
               </Button>
             </div>
           )}
-
-          {activeTab === 'usuario' && userUnread > 0 && (
-            <div className="flex gap-2">
-              <Button size="sm" variant="secondary" onClick={() => markAllRead('usuario')} title="Marca todas como leídas">
-                <CheckIcon className="h-3.5 w-3.5" /> Leer todas
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => clearAll('usuario')} title="Elimina todas las notificaciones simuladas">
-                <TrashIcon className="h-3.5 w-3.5" /> Limpiar
-              </Button>
-            </div>
-          )}
         </div>
       </div>
 
       {/* Info banner */}
-      {activeTab === 'usuario' && (
-        <div className="rounded-xl bg-purple-50 border border-purple-100 px-4 py-3 text-sm text-purple-700">
-          💡 Estas son las <strong>notificaciones que recibiría el usuario</strong> tras cada acción del admin.
+      {activeTab === 'alertas' && alertas.length === 0 && (
+        <div className="rounded-xl bg-green-50 border border-green-100 px-4 py-3 text-sm text-green-700">
+          ✅ No hay alertas activas. El sistema funciona correctamente.
         </div>
       )}
 
       {/* Estadísticas Admin con más info */}
-      {activeTab === 'admin' && estadisticas && (
+      {activeTab === 'todas' && estadisticas && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 mb-2">
-            <h3 className="text-sm font-semibold text-[#1d212b]">Resumen del Mes</h3>
-            <button title="Las estadísticas se calculan por el período del mes actual" className="text-gray-400 hover:text-[#ff8d2d]">
+            <h3 className="text-sm font-semibold text-[#1d212b]">Resumen del Período</h3>
+            <button title="Las estadísticas se calculan por el período seleccionado" className="text-gray-400 hover:text-[#ff8d2d]">
               <QuestionMarkCircleIcon className="h-4 w-4" />
             </button>
           </div>
@@ -410,7 +505,7 @@ export default function NotificacionesPage() {
       )}
 
       {/* Panel de Filtros mejorado */}
-      {activeTab === 'admin' && (
+      {activeTab === 'todas' && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 mb-2">
             <FunnelIcon className="h-4 w-4 text-[#6d7382]" />
@@ -503,68 +598,35 @@ export default function NotificacionesPage() {
       )}
 
       {/* Contenido principal */}
-      {activeTab === 'usuario' ? (
-        userNotifications.length === 0 ? (
-          <div className="space-y-4">
-            <EmptyState
-              icon={<BellIcon className="h-6 w-6" />}
-              title="Sin notificaciones simuladas"
-              description="Las notificaciones del usuario aparecerán aquí al realizar operaciones en el sistema."
-            />
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-900">
-                <strong>Cómo generar simuladas:</strong> Realiza operaciones como crear clientes, registrar recargas, validar facturas, etc., y aparecerán aquí automáticamente en el tab "Usuario".
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2 stagger-children">
-            {userNotifications.map((n) => (
-              <Card
-                key={n.id}
-                className={`!p-0 overflow-hidden transition-all cursor-pointer hover:shadow-md ${
-                  n.read ? 'opacity-70' : ''
-                }`}
-              >
-                <div
-                  className="flex gap-4 px-5 py-4"
-                  onClick={() => {
-                    if (!n.read) markRead(n.id);
-                    if (n.actionUrl) window.location.href = n.actionUrl;
-                  }}
-                >
-                  <div className="text-2xl leading-none mt-0.5 shrink-0">
-                    {n.title.split(' ')[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-bold text-[#1d212b]">
-                        {n.title.split(' ').slice(1).join(' ')}
-                      </p>
-                      {!n.read && <span className="h-2 w-2 rounded-full bg-[#ff8d2d]" />}
-                    </div>
-                    <p className="text-xs text-gray-600">{n.message}</p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-[10px] text-gray-400">{formatDateTime(n.timestamp)}</span>
-                      <Badge label={n.type.replace(/_/g, ' ')} variant="neutral" dot={false} />
-                    </div>
-                  </div>
-                  {n.actionLabel && <ArrowRightIcon className="h-4 w-4 text-[#ff8d2d]" />}
-                </div>
-              </Card>
-            ))}
-          </div>
-        )
-      ) : loading ? (
+      {loading ? (
         <FullPageSpinner />
-      ) : notificacionesFiltradas.length === 0 ? (
+      ) : activeTab === 'acciones' ? (
+        <AccionesView
+          accionesData={accionesData}
+          onRefresh={() => loadData()}
+          searchUsuario={searchUsuario}
+          onSearchChange={setSearchUsuario}
+          onShowToast={showToast}
+          totalPages={totalPages}
+          page={page}
+          onPageChange={setPage}
+          onOpenValidarFactura={(factura) => {
+            setSelectedFactura(factura);
+            setShowValidarFacturaModal(true);
+          }}
+          onOpenAprobarRecarga={(usuarioTelefono) => {
+            setSelectedRecargaUsuarioTelefono(usuarioTelefono);
+            setShowAprobarRechazarModal(true);
+          }}
+        />
+      ) : currentNotifications.length === 0 ? (
         <div className="space-y-4">
           <EmptyState
             icon={<BellIcon className="h-6 w-6" />}
-            title={searchUsuario ? "No hay resultados" : "Sin notificaciones para mostrar"}
+            title={searchUsuario ? "No hay resultados" : `Sin ${activeTab === 'alertas' ? 'alertas' : 'notificaciones'} para mostrar`}
             description={searchUsuario ? `No se encontraron resultados para "${searchUsuario}"` : "No hay notificaciones que coincidan con los filtros seleccionados."}
           />
-          {estadisticas && estadisticas.total > 0 && !searchUsuario && (
+          {activeTab === 'todas' && estadisticas && estadisticas.total > 0 && !searchUsuario && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <p className="text-sm text-amber-900 mb-3">
                 <strong>ℹ️ Tienes {estadisticas.total} notificaciones en la BD</strong>, pero no aparecen en la tabla. Esto sugiere:
@@ -585,12 +647,12 @@ export default function NotificacionesPage() {
                 <th className="p-4 text-left w-12">
                   <input
                     type="checkbox"
-                    checked={selectedIds.size === notificacionesFiltradas.length && notificacionesFiltradas.length > 0}
+                    checked={selectedIds.size === currentNotifications.length && currentNotifications.length > 0}
                     onChange={() => {
-                      if (selectedIds.size === notificacionesFiltradas.length) {
+                      if (selectedIds.size === currentNotifications.length) {
                         setSelectedIds(new Set());
                       } else {
-                        setSelectedIds(new Set(notificacionesFiltradas.map(n => n.id)));
+                        setSelectedIds(new Set(currentNotifications.map((n: any) => n.id)));
                       }
                     }}
                     aria-label="Seleccionar todas las notificaciones"
@@ -605,58 +667,123 @@ export default function NotificacionesPage() {
               </tr>
             </thead>
             <tbody>
-              {notificacionesFiltradas.map((notif) => (
-                <tr key={notif.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="p-4"><input type="checkbox" checked={selectedIds.has(notif.id)} onChange={() => toggleSelect(notif.id)} /></td>
-                  <td className="p-4">
-                    <p className="text-sm font-medium">{notif.usuarios?.nombre} {notif.usuarios?.apellido}</p>
-                    <p className="text-xs text-gray-500">{notif.usuarios?.telefono}</p>
-                  </td>
-                  <td className="p-4">
-                    <Badge label={`${TIPO_ICONS[notif.tipo] || '📋'} ${notif.tipo}`} variant="neutral" dot={false} />
-                  </td>
-                  <td className="p-4">
-                    <Badge
-                      label={notif.estado}
-                      variant={notif.estado === 'pendiente' ? 'error' : notif.estado === 'enviada' ? 'warning' : 'success'}
-                      dot={false}
-                    />
-                  </td>
-                  <td className="p-4 text-sm text-gray-600">{formatDateTime(notif.creado_en)}</td>
-                  <td className="p-4 text-right">
+              {currentNotifications.map((notif: any) => {
+                const notifTyped = notif as NotificacionConUsuario;
+                return (
+                  <tr key={notif.id} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="p-4"><input type="checkbox" checked={selectedIds.has(notif.id)} onChange={() => toggleSelect(notif.id)} /></td>
+                    <td className="p-4">
+                      <p className="text-sm font-medium">{notifTyped.usuarios?.nombre} {notifTyped.usuarios?.apellido}</p>
+                      <p className="text-xs text-gray-500">{notifTyped.usuarios?.telefono}</p>
+                    </td>
+                    <td className="p-4">
+                      <Badge label={`${TIPO_ICONS[notifTyped.tipo] || '📋'} ${notifTyped.tipo}`} variant="neutral" dot={false} />
+                    </td>
+                    <td className="p-4">
+                      <Badge
+                        label={notifTyped.estado}
+                        variant={notifTyped.estado === 'pendiente' ? 'error' : notifTyped.estado === 'enviada' ? 'warning' : 'success'}
+                        dot={false}
+                      />
+                    </td>
+                    <td className="p-4 text-sm text-gray-600">{formatDateTime(notifTyped.creado_en)}</td>
+                    <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => { setSelectedNotif(notif); setShowDetailsModal(true); }}
-                        className="p-2 text-gray-400 hover:text-[#ff8d2d] rounded hover:bg-gray-100 transition-all"
-                        aria-label={`Ver detalles de ${notif.tipo} para ${notif.usuarios?.nombre}`}
-                        title="Ver contenido completo de la notificación"
-                      >
-                        <EyeIcon className="h-4 w-4" />
-                      </button>
-                      {notif.estado === 'pendiente' && (
+                      {activeTab === 'alertas' ? (
+                        // Acciones para alertas
                         <>
                           <button
-                            onClick={() => handleCopyMessage(notif)}
+                            onClick={async () => {
+                              setSelectedAlerta(notifTyped);
+                              setShowAlertModal(true);
+                              setLoadingOriginal(true);
+                              try {
+                                const res = await getAdminSolicitudOriginal(notif.id);
+                                if (res.ok && res.data) {
+                                  setOriginalSolicitud(res.data.solicitud_original);
+                                } else {
+                                  showToast('Error cargando solicitud original', 'error');
+                                }
+                              } catch (err) {
+                                showToast('Error cargando solicitud original', 'error');
+                              } finally {
+                                setLoadingOriginal(false);
+                              }
+                            }}
+                            className="p-2 text-red-400 hover:text-red-600 rounded hover:bg-red-50 transition-all"
+                            aria-label={`Ver alerta para ${notifTyped.usuarios?.nombre}`}
+                            title="Ver alerta y solicitud original"
+                          >
+                            <EyeIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await getAdminSolicitudOriginal(notif.id);
+                                if (res.ok && res.data && res.data.solicitud_original) {
+                                  const mensaje = (res.data.solicitud_original.payload as any)?.mensaje || `Notificación: ${res.data.solicitud_original.tipo}`;
+                                  navigator.clipboard.writeText(mensaje);
+                                  showToast('✓ Mensaje copiado al portapapeles', 'success');
+                                  setCopyNotifId(notif.id);
+                                  setTimeout(() => setCopyNotifId(null), 2000);
+                                }
+                              } catch (err) {
+                                showToast('Error al copiar mensaje', 'error');
+                              }
+                            }}
                             className={`p-2 rounded transition-all ${copyNotifId === notif.id ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-[#ff8d2d] hover:bg-gray-100'}`}
-                            aria-label={`Copiar contenido de ${notif.tipo}`}
-                            title="Copia el contenido para enviarlo manualmente (Ctrl+C)"
+                            title="Copiar mensaje original para reenviar"
                           >
                             <ClipboardDocumentIcon className="h-4 w-4" />
                           </button>
+                          {notifTyped.estado === 'pendiente' && (
+                            <button
+                              onClick={() => { setSelectedNotif(notifTyped); setShowMarkModal(true); }}
+                              className="p-2 text-gray-400 hover:text-[#ff8d2d] rounded hover:bg-gray-100 transition-all"
+                              title="Registra que ya enviaste esta alerta"
+                            >
+                              <CheckIcon className="h-4 w-4" />
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        // Acciones para otras notificaciones de admin
+                        <>
                           <button
-                            onClick={() => { setSelectedNotif(notif); setShowMarkModal(true); }}
+                            onClick={() => { setSelectedNotif(notifTyped); setShowDetailsModal(true); }}
                             className="p-2 text-gray-400 hover:text-[#ff8d2d] rounded hover:bg-gray-100 transition-all"
-                            aria-label={`Marcar como enviada ${notif.tipo}`}
-                            title="Registra que ya enviaste esta notificación"
+                            aria-label={`Ver detalles de ${notifTyped.tipo} para ${notifTyped.usuarios?.nombre}`}
+                            title="Ver contenido completo de la notificación"
                           >
-                            <CheckIcon className="h-4 w-4" />
+                            <EyeIcon className="h-4 w-4" />
                           </button>
+                          {notifTyped.estado === 'pendiente' && (
+                            <>
+                              <button
+                                onClick={() => handleCopyMessage(notifTyped)}
+                                className={`p-2 rounded transition-all ${copyNotifId === notif.id ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-[#ff8d2d] hover:bg-gray-100'}`}
+                                aria-label={`Copiar contenido de ${notifTyped.tipo}`}
+                                title="Copia el contenido para enviarlo manualmente (Ctrl+C)"
+                              >
+                                <ClipboardDocumentIcon className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => { setSelectedNotif(notifTyped); setShowMarkModal(true); }}
+                                className="p-2 text-gray-400 hover:text-[#ff8d2d] rounded hover:bg-gray-100 transition-all"
+                                aria-label={`Marcar como enviada ${notifTyped.tipo}`}
+                                title="Registra que ya enviaste esta notificación"
+                              >
+                                <CheckIcon className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
                         </>
                       )}
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
 
@@ -792,6 +919,377 @@ export default function NotificacionesPage() {
           </div>
         )}
       </Modal>
+
+      {/* Modal para detalles de alerta con solicitud original */}
+      <Modal
+        open={showAlertModal && !!selectedAlerta}
+        onClose={() => {
+          setShowAlertModal(false);
+          setSelectedAlerta(null);
+          setOriginalSolicitud(null);
+        }}
+        title="Detalles de Alerta"
+        maxWidth="md"
+      >
+        {selectedAlerta && (
+          <div className="space-y-4 p-5">
+            {/* Alert Info */}
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🚨</span>
+                <div>
+                  <p className="text-sm font-bold text-red-900">ALERTA CRÍTICA</p>
+                  <p className="text-xs text-red-800 mt-1">
+                    {(selectedAlerta.payload as any)?.tipo_alerta || 'Usuario no respondió a solicitud'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Alert Payload */}
+            {selectedAlerta.payload && (
+              <div className="space-y-2">
+                <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Detalles</p>
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-2">
+                  <p className="text-sm">
+                    <span className="font-medium text-gray-700">Usuario:</span>{' '}
+                    <span className="text-gray-900">{(selectedAlerta.payload as any)?.usuario_nombre}</span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium text-gray-700">Teléfono:</span>{' '}
+                    <span className="text-gray-900">{(selectedAlerta.payload as any)?.usuario_telefono}</span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium text-gray-700">Días sin respuesta:</span>{' '}
+                    <span className="text-red-600 font-bold">{(selectedAlerta.payload as any)?.dias_sin_respuesta || 'N/A'}</span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium text-gray-700">Creada:</span>{' '}
+                    <span className="text-gray-900">{formatDateTime(selectedAlerta.creado_en)}</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Original Solicitud */}
+            {loadingOriginal && (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin h-5 w-5 text-[#ff8d2d]" />
+              </div>
+            )}
+
+            {originalSolicitud && !loadingOriginal && (
+              <div className="space-y-2">
+                <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Solicitud Original que desencadenó esta alerta</p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{TIPO_ICONS[originalSolicitud.tipo] || '📋'}</span>
+                    <p className="font-medium text-blue-900">{originalSolicitud.tipo.replace(/_/g, ' ')}</p>
+                  </div>
+                  <p className="text-sm text-blue-800">{(originalSolicitud.payload as any)?.mensaje || 'Ver contenido de la solicitud'}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2 border-t">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setShowAlertModal(false);
+                  setSelectedAlerta(null);
+                  setOriginalSolicitud(null);
+                }}
+              >
+                Cerrar
+              </Button>
+              {originalSolicitud && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const mensaje = (originalSolicitud.payload as any)?.mensaje || `Notificación: ${originalSolicitud.tipo}`;
+                    navigator.clipboard.writeText(mensaje);
+                    showToast('✓ Mensaje original copiado', 'success');
+                  }}
+                  title="Copia el mensaje original para reenviar"
+                >
+                  📋 Copiar Original
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal: Validar Factura - para Tab ACCIONES */}
+      <ValidarFacturaModal
+        open={showValidarFacturaModal}
+        factura={selectedFactura}
+        onClose={() => {
+          setShowValidarFacturaModal(false);
+          setSelectedFactura(null);
+        }}
+        onSuccess={async () => {
+          await loadData();
+        }}
+        showToast={showToast}
+      />
+
+      {/* Modal: Aprobar/Rechazar Recarga - para Tab ACCIONES */}
+      <AprobarRechazarRecargaModal
+        open={showAprobarRechazarModal}
+        onClose={() => {
+          setShowAprobarRechazarModal(false);
+          setSelectedRecargaUsuarioTelefono('');
+        }}
+        onSuccess={async () => {
+          await loadData();
+        }}
+        showToast={showToast}
+      />
+    </div>
+  );
+}
+
+/**
+ * Componente AccionesView
+ * Muestra acciones pendientes (validaciones de facturas y recargas) agrupadas por usuario
+ */
+interface AccionesViewProps {
+  accionesData: any;
+  onRefresh: () => void;
+  searchUsuario: string;
+  onSearchChange: (search: string) => void;
+  onShowToast: (msg: string, type: ToastType) => void;
+  totalPages: number;
+  page: number;
+  onPageChange: (page: number) => void;
+  onOpenValidarFactura: (factura: Factura) => void;
+  onOpenAprobarRecarga: (usuarioTelefono: string) => void;
+}
+
+function AccionesView({
+  accionesData,
+  onRefresh,
+  searchUsuario,
+  onSearchChange,
+  onShowToast,
+  totalPages,
+  page,
+  onPageChange,
+  onOpenValidarFactura,
+  onOpenAprobarRecarga,
+}: AccionesViewProps) {
+  if (!accionesData || !accionesData.acciones_por_usuario) {
+    return (
+      <EmptyState
+        icon={<BellIcon className="h-6 w-6" />}
+        title="Sin acciones pendientes"
+        description="No hay validaciones pendientes en este momento. ¡Buen trabajo!"
+      />
+    );
+  }
+
+  const { acciones_por_usuario, total_acciones, total_usuarios } = accionesData;
+
+  return (
+    <div className="space-y-6">
+      {/* Resumen y controles */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-bold text-[#1d212b]">
+            ⚡ {total_acciones} {total_acciones === 1 ? 'acción' : 'acciones'} pendiente{total_acciones !== 1 ? 's' : ''}
+          </h3>
+          <span className="text-sm text-gray-500">en {total_usuarios} {total_usuarios === 1 ? 'usuario' : 'usuarios'}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="🔍 Buscar usuario..."
+            value={searchUsuario}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="w-48"
+          />
+          <Button
+            size="sm"
+            onClick={onRefresh}
+            title="Actualizar acciones (no usa auto-refresh)"
+          >
+            🔄 Actualizar
+          </Button>
+        </div>
+      </div>
+
+      {/* Info banner */}
+      <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-700 space-y-2">
+        <p>
+          <strong>ℹ️ Cómo funciona:</strong> Las acciones muestran facturas y recargas pendientes de validación. 
+          Haz click en "Validar" o "Revisar" para abrir el modal correspondiente. No hay auto-refresh; 
+          usa el botón "🔄 Actualizar" cuando necesites refrescar los datos.
+        </p>
+        <p className="text-xs text-blue-600">
+          💡 Tip: Busca por usuario para filtrar, pero recuerda que el búsqueda es temporal. 
+          Después de validar/aprobar, refresca manualmente para ver cambios.
+        </p>
+      </div>
+
+      {/* Acciones por usuario */}
+      {acciones_por_usuario.length === 0 ? (
+        <EmptyState
+          icon={<CheckIcon className="h-6 w-6 text-green-600" />}
+          title="¡Todo al día!"
+          description="No hay validaciones pendientes. Todas las facturas y recargas han sido revisadas."
+        />
+      ) : (
+        <div className="space-y-4">
+          {acciones_por_usuario.map((item: any) => (
+            <div
+              key={item.usuario_id}
+              className="border border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-md transition-all"
+            >
+              {/* Header con info del usuario */}
+              <div className="bg-gradient-to-r from-blue-50 to-blue-25 px-6 py-4 border-b border-blue-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-lg font-bold text-[#1d212b]">
+                      👤 {item.usuario.nombre} {item.usuario.apellido}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-1">📞 {item.usuario.telefono}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-blue-900">
+                      {item.total} {item.total === 1 ? 'acción' : 'acciones'}
+                    </p>
+                    <p className="text-xs text-blue-700 mt-1">pendiente{item.total !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Acciones del usuario */}
+              <div className="divide-y">
+                {item.acciones.map((accion: any) => (
+                  <div key={accion.revision_id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start justify-between gap-4">
+                      {/* Info de la acción */}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">
+                            {accion.tipo === 'factura' ? '📄' : '💳'}
+                          </span>
+                          <div>
+                            <p className="font-bold text-[#1d212b]">{accion.display_label}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {formatDateTime(accion.creado_en)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Detalles específicos por tipo */}
+                        {accion.tipo === 'factura' && (
+                          <div className="ml-10 text-sm space-y-1 text-gray-600 mb-3">
+                            {accion.servicio && <p>Servicio: <strong>{accion.servicio}</strong></p>}
+                            {accion.periodo && <p>Período: <strong>{accion.periodo}</strong></p>}
+                            {accion.monto && <p>Monto: <strong>${accion.monto}</strong></p>}
+                          </div>
+                        )}
+                        {accion.tipo === 'recarga' && (
+                          <div className="ml-10 text-sm space-y-1 text-gray-600 mb-3">
+                            {accion.monto && <p>Monto: <strong>${accion.monto}</strong></p>}
+                            {accion.comprobante_url && (
+                              <p>
+                                Comprobante:{' '}
+                                <a
+                                  href={accion.comprobante_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  Ver documento
+                                </a>
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Botones de acción */}
+                      <div className="flex flex-col gap-2">
+                        {accion.tipo === 'factura' ? (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => {
+                              if (accion.factura_id) {
+                                const facturaPartial: Factura = {
+                                  id: accion.factura_id,
+                                  usuario_id: item.usuario_id,
+                                  obligacion_id: '',
+                                  monto: accion.monto || 0,
+                                  servicio: accion.servicio || '',
+                                  periodo: accion.periodo || '',
+                                  estado: accion.factura_estado || 'pendiente',
+                                  referencia_pago: undefined,
+                                  etiqueta: undefined,
+                                  fecha_emision: undefined,
+                                  fecha_vencimiento: undefined,
+                                  origen: 'admin_panel',
+                                  extraccion_estado: 'manual',
+                                  archivo_url: undefined,
+                                  creado_en: new Date().toISOString(),
+                                  actualizado_en: new Date().toISOString(),
+                                } as Factura;
+                                onOpenValidarFactura(facturaPartial);
+                              } else {
+                                onShowToast('No se puede identificar la factura', 'error');
+                              }
+                            }}
+                            title="Validar factura y generar notificación"
+                          >
+                            📄 Validar
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => {
+                              onOpenAprobarRecarga(item.usuario.telefono);
+                            }}
+                            title="Aprobar o rechazar recarga"
+                          >
+                            💳 Revisar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Paginación */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 p-4 border-t">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={page <= 1}
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+          >
+            ← Anterior
+          </Button>
+          <span className="text-sm text-gray-600">Página {page} de {totalPages}</span>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          >
+            Siguiente →
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
