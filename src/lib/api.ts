@@ -395,3 +395,98 @@ export const updateProgramacionRecargas = (payload: {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+
+// ─── 11. Admin Notificaciones (5 endpoints - PANEL PROFESIONAL) ──────────────
+// GET /api/admin/notificaciones/list — Listar con filtros avanzados
+export const getAdminNotificaciones = (filters?: {
+  tipo?: string;
+  estado?: string;
+  usuario_id?: string;
+  periodo?: string;
+  desde?: string;
+  hasta?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const sp = new URLSearchParams();
+  if (filters?.tipo) sp.set('tipo', filters.tipo);
+  if (filters?.estado) sp.set('estado', filters.estado);
+  if (filters?.usuario_id) sp.set('usuario_id', filters.usuario_id);
+  if (filters?.periodo) sp.set('periodo', filters.periodo);
+  if (filters?.desde) sp.set('desde', filters.desde);
+  if (filters?.hasta) sp.set('hasta', filters.hasta);
+  if (filters?.page) sp.set('page', String(filters.page));
+  if (filters?.limit) sp.set('limit', String(filters.limit));
+  return request<{
+    notificaciones: NotificacionAPI[];
+    total: number;
+    page: number;
+    limit: number;
+    total_pages: number;
+  }>(`/admin/notificaciones/list?${sp.toString()}`);
+};
+
+// GET /api/admin/notificaciones/estadisticas — Obtener estadísticas
+export const getAdminNotificacionesEstadisticas = (filters?: {
+  usuario_id?: string;
+  periodo?: string;
+  desde?: string;
+  hasta?: string;
+}) => {
+  const sp = new URLSearchParams();
+  if (filters?.usuario_id) sp.set('usuario_id', filters.usuario_id);
+  if (filters?.periodo) sp.set('periodo', filters.periodo);
+  if (filters?.desde) sp.set('desde', filters.desde);
+  if (filters?.hasta) sp.set('hasta', filters.hasta);
+  return request<{
+    estadisticas: {
+      total: number;
+      no_enviadas: number;
+      enviadas: number;
+      leidas: number;
+      por_tipo: Record<string, { total: number; pendiente: number; enviada: number; leida: number }>;
+    };
+  }>(`/admin/notificaciones/estadisticas?${sp.toString()}`);
+};
+
+// GET /api/admin/notificaciones/cliente/:usuario_id — Notificaciones de un cliente
+export const getAdminNotificacionesCliente = (usuario_id: string, filters?: {
+  tipo?: string;
+  periodo?: string;
+}) => {
+  const sp = new URLSearchParams();
+  if (filters?.tipo) sp.set('tipo', filters.tipo);
+  if (filters?.periodo) sp.set('periodo', filters.periodo);
+  const query = sp.toString();
+  const path = query 
+    ? `/admin/notificaciones/cliente/${usuario_id}?${query}`
+    : `/admin/notificaciones/cliente/${usuario_id}`;
+  return request<{
+    usuario: { nombre: string; apellido: string; telefono: string };
+    notificaciones: NotificacionAPI[];
+    total: number;
+  }>(path);
+};
+
+// PUT /api/admin/notificaciones/:id/enviada — Marcar como enviada
+export const marcarNotificacionEnviada = (notificacion_id: string) =>
+  request<NotificacionAPI>(`/admin/notificaciones/${notificacion_id}/enviada`, {
+    method: 'PUT',
+  });
+
+// POST /api/admin/notificaciones/batch/enviadas — Marcar múltiples como enviadas
+export const marcarNotificacionesEnviadasBatch = (notificacion_ids: string[]) =>
+  request<{
+    actualizadas: number;
+    notificaciones: NotificacionAPI[];
+  }>(`/admin/notificaciones/batch/enviadas`, {
+    method: 'POST',
+    body: JSON.stringify({ notificacion_ids }),
+  });
+
+// 🧪 GET /api/admin/notificaciones/mock/generar — SOLO TESTING: Generar datos de prueba
+export const generarNotificacionesMock = () =>
+  request<{
+    mensaje: string;
+    notificaciones: NotificacionAPI[];
+  }>(`/admin/notificaciones/mock/generar`);
