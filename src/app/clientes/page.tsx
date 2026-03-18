@@ -46,6 +46,14 @@ const getPlanNameColor = (plan: string): string => {
   }
 };
 
+const getDynamicBalanceSize = (saldoFormatted: string): string => {
+  const length = saldoFormatted.length;
+  if (length <= 8) return 'text-3xl';        // $0.00 a $9,999.99
+  if (length <= 12) return 'text-2xl';      // $10,000.00 a $999,999.99
+  if (length <= 15) return 'text-xl';       // $1,000,000.00 a $999,999,999.99
+  return 'text-lg';                          // Más grande
+};
+
 
 const estadoRecargaVariant = (e: string) => {
   if (e === 'aprobada') return 'success' as const;
@@ -82,7 +90,7 @@ const [listLoading, setListLoading] = useState(true);
     setListLoading(true);
       const res = await getAdminClientes({ 
         page, 
-        limit: 20, 
+        limit: 9, 
         search: search || undefined, 
         plan: filterPlan || undefined
       });
@@ -280,7 +288,7 @@ const [listLoading, setListLoading] = useState(true);
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-6">
-              {clientes.map((c) => {
+              {clientes.map((c: any) => {
                 const ultima = c.ultima_obligacion?.[0] || {};
                 const totalFacturas = ultima.total_facturas || 0;
                 return (
@@ -302,7 +310,7 @@ const [listLoading, setListLoading] = useState(true);
 
                           {/* Balance Section */}
                           <div className="flex items-baseline gap-1.5">
-                            <span className="text-3xl font-extrabold text-gray-900">
+                            <span className={`font-extrabold text-gray-900 ${getDynamicBalanceSize(formatCurrency(c.saldo || 0))}`}>
                               {formatCurrency(c.saldo || 0)}
                             </span>
                             <span className="text-xs font-light text-gray-400">Saldo</span>
