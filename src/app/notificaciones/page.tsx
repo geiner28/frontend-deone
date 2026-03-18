@@ -9,6 +9,7 @@ import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import EmptyState from '@/components/ui/EmptyState';
+import UserAccionesCard from '@/components/UserAccionesCard';
 import { useNotifications } from '@/contexts/NotificationContext';
 import ValidarFacturaModal from '@/components/modals/ValidarFacturaModal';
 import RechazarFacturaModal from '@/components/modals/RechazarFacturaModal';
@@ -1199,7 +1200,7 @@ function AccionesView({
         </p>
       </div>
 
-      {/* Acciones por usuario - CON FILTRADO */}
+      {/* Acciones por usuario - CON FILTRADO Y ACORDEONES POR USUARIO */}
       {(() => {
         // Filtrar por búsqueda de usuario si existe
         const filteredAcciones = searchUsuario
@@ -1221,203 +1222,30 @@ function AccionesView({
           />
         ) : (
           <div className="space-y-4">
-            {filteredAcciones.map((item: any) => (
-            <div
-              key={item.usuario_id}
-              className="border border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-md transition-all"
-            >
-              {/* Header con info del usuario */}
-              <div className="bg-gradient-to-r from-blue-50 to-blue-25 px-6 py-4 border-b border-blue-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-lg font-bold text-[#1d212b]">
-                      👤 {item.usuario.nombre} {item.usuario.apellido}
-                    </p>
-                    <p className="text-sm text-gray-600 mt-1">📞 {item.usuario.telefono}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-blue-900">
-                      {item.total} {item.total === 1 ? 'acción' : 'acciones'}
-                    </p>
-                    <p className="text-xs text-blue-700 mt-1">pendiente{item.total !== 1 ? 's' : ''}</p>
-                  </div>
-                </div>
-              </div>
+            {filteredAcciones.map((item: any) => {
+              // Agrupar acciones del usuario por tipo
+              const recargasUsuario = item.acciones.filter((a: any) => a.tipo === 'recarga');
+              const facturasUsuario = item.acciones.filter((a: any) => a.tipo === 'factura' && !a.es_heredada);
+              const facturasHeredadasUsuario = item.acciones.filter((a: any) => a.tipo === 'factura' && a.es_heredada);
 
-              {/* Acciones del usuario */}
-              <div className="divide-y">
-                {item.acciones.map((accion: any) => (
-                  <div key={accion.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      {/* Info de la acción */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">
-                            {accion.tipo === 'factura' ? '📄' : '💳'}
-                          </span>
-                          <div>
-                            <p className="font-bold text-[#1d212b]">{accion.display_label}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {formatDateTime(accion.creado_en)}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Detalles específicos por tipo */}
-                        {accion.tipo === 'factura' && (
-                          <div className="ml-10 text-sm space-y-1 text-gray-600 mb-3">
-                            {accion.servicio && <p>Servicio: <strong>{accion.servicio}</strong></p>}
-                            {accion.periodo && <p>Período: <strong>{accion.periodo}</strong></p>}
-                            {accion.monto && <p>Monto: <strong>${accion.monto}</strong></p>}
-                          </div>
-                        )}
-                        {accion.tipo === 'recarga' && (
-                          <div className="ml-10 text-sm space-y-1 text-gray-600 mb-3">
-                            {accion.monto && <p>Monto: <strong>${accion.monto}</strong></p>}
-                            {accion.comprobante_url && (
-                              <p>
-                                Comprobante:{' '}
-                                <a
-                                  href={accion.comprobante_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:underline"
-                                >
-                                  Ver documento
-                                </a>
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Botones de acción */}
-                      <div className="flex flex-col gap-2">
-                        {accion.tipo === 'factura' ? (
-                          <div className="flex gap-2 flex-wrap">
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              onClick={() => {
-                                if (accion.factura_id) {
-                                  const facturaPartial: Factura = {
-                                    id: accion.factura_id,
-                                    usuario_id: item.usuario_id,
-                                    obligacion_id: '',
-                                    monto: accion.monto || 0,
-                                    servicio: accion.servicio || '',
-                                    periodo: accion.periodo || '',
-                                    estado: accion.factura_estado || 'pendiente',
-                                    referencia_pago: undefined,
-                                    etiqueta: undefined,
-                                    fecha_emision: undefined,
-                                    fecha_vencimiento: undefined,
-                                    origen: 'admin_panel',
-                                    extraccion_estado: 'manual',
-                                    archivo_url: undefined,
-                                    creado_en: new Date().toISOString(),
-                                    actualizado_en: new Date().toISOString(),
-                                  } as Factura;
-                                  onOpenValidarFactura(facturaPartial);
-                                } else {
-                                  onShowToast('No se puede identificar la factura', 'error');
-                                }
-                              }}
-                              title="Validar factura y generar notificación"
-                            >
-                              ✓ Validar
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                if (accion.factura_id) {
-                                  const facturaPartial: Factura = {
-                                    id: accion.factura_id,
-                                    usuario_id: item.usuario_id,
-                                    obligacion_id: '',
-                                    monto: accion.monto || 0,
-                                    servicio: accion.servicio || '',
-                                    periodo: accion.periodo || '',
-                                    estado: accion.factura_estado || 'pendiente',
-                                    referencia_pago: undefined,
-                                    etiqueta: undefined,
-                                    fecha_emision: undefined,
-                                    fecha_vencimiento: undefined,
-                                    origen: 'admin_panel',
-                                    extraccion_estado: 'manual',
-                                    archivo_url: undefined,
-                                    creado_en: new Date().toISOString(),
-                                    actualizado_en: new Date().toISOString(),
-                                  } as Factura;
-                                  onOpenRechazarFactura(facturaPartial);
-                                } else {
-                                  onShowToast('No se puede identificar la factura', 'error');
-                                }
-                              }}
-                              title="Rechazar factura y notificar al usuario"
-                            >
-                              ✗ Rechazar
-                            </Button>
-
-                            {accion.extraccion_estado && ['dudosa', 'fallida'].includes(accion.extraccion_estado) && (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => {
-                                  if (accion.factura_id) {
-                                    const facturaPartial: Factura = {
-                                      id: accion.factura_id,
-                                      usuario_id: item.usuario_id,
-                                      obligacion_id: '',
-                                      monto: accion.monto || 0,
-                                      servicio: accion.servicio || '',
-                                      periodo: accion.periodo || '',
-                                      estado: accion.factura_estado || 'pendiente',
-                                      referencia_pago: undefined,
-                                      etiqueta: undefined,
-                                      fecha_emision: undefined,
-                                      fecha_vencimiento: undefined,
-                                      origen: 'admin_panel',
-                                      extraccion_estado: 'manual',
-                                      archivo_url: undefined,
-                                      creado_en: new Date().toISOString(),
-                                      actualizado_en: new Date().toISOString(),
-                                    } as Factura;
-                                    onOpenAproximarValor(facturaPartial);
-                                  } else {
-                                    onShowToast('No se puede identificar la factura', 'error');
-                                  }
-                                }}
-                                title="Aproximar valor de factura dudosa/fallida"
-                              >
-                                ↻ Aproximar
-                              </Button>
-                            )}
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => {
-                              onOpenAprobarRecarga(item.usuario.telefono, accion.recarga_id);
-                            }}
-                            title="Aprobar o rechazar recarga"
-                          >
-                            💳 Revisar
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            ))}
+              return (
+                <UserAccionesCard
+                  key={item.usuario_id}
+                  usuario={item.usuario}
+                  recargasUsuario={recargasUsuario}
+                  facturasUsuario={facturasUsuario}
+                  facturasHeredadasUsuario={facturasHeredadasUsuario}
+                  onOpenValidarFactura={onOpenValidarFactura}
+                  onOpenRechazarFactura={onOpenRechazarFactura}
+                  onOpenAproximarValor={onOpenAproximarValor}
+                  onOpenAprobarRecarga={onOpenAprobarRecarga}
+                  onShowToast={onShowToast}
+                />
+              );
+            })}
           </div>
         );
-        })()}
+      })()}
 
       {/* Paginación */}
       {totalPages > 1 && (
