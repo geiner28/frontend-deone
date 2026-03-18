@@ -1223,10 +1223,10 @@ function AccionesView({
         ) : (
           <div className="space-y-4">
             {filteredAcciones.map((item: any) => {
-              // Agrupar acciones del usuario por tipo
+              // Agrupar acciones del usuario por tipo - USANDO ORIGEN COMO DIFERENCIADOR
               const recargasUsuario = item.acciones.filter((a: any) => a.tipo === 'recarga');
-              const facturasUsuario = item.acciones.filter((a: any) => a.tipo === 'factura' && !a.es_heredada);
-              const facturasHeredadasUsuario = item.acciones.filter((a: any) => a.tipo === 'factura' && a.es_heredada);
+              const facturasUsuario = item.acciones.filter((a: any) => a.tipo === 'factura' && a.origen !== 'auto');
+              const facturasHeredadasUsuario = item.acciones.filter((a: any) => a.tipo === 'factura' && a.origen === 'auto');
 
               return (
                 <UserAccionesCard

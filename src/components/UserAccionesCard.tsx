@@ -79,6 +79,15 @@ export default function UserAccionesCard({
   onShowToast,
 }: UserAccionesCardProps) {
   const [isOpen, setIsOpen] = useState(true);
+  
+  // Debug: mostrar qué se recibe para diagnosticar
+  if (facturasUsuario.length > 0 || facturasHeredadasUsuario.length > 0) {
+    console.log('DEBUG UserAccionesCard:', {
+      facturasUsuario: facturasUsuario.map(f => ({ servicio: f.servicio, origen: f.origen, es_heredada: f.es_heredada })),
+      facturasHeredadasUsuario: facturasHeredadasUsuario.map(f => ({ servicio: f.servicio, origen: f.origen, es_heredada: f.es_heredada }))
+    });
+  }
+
   const totalAcciones = recargasUsuario.length + facturasUsuario.length + facturasHeredadasUsuario.length;
 
   return (
@@ -231,41 +240,6 @@ export default function UserAccionesCard({
                       >
                         ✗
                       </Button>
-                      {accion.extraccion_estado && ['dudosa', 'fallida'].includes(accion.extraccion_estado) && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => {
-                            if (accion.factura_id) {
-                              const facturaPartial: Factura = {
-                                id: accion.factura_id,
-                                usuario_id: accion.usuario_id,
-                                obligacion_id: '',
-                                monto: accion.monto || 0,
-                                servicio: accion.servicio || '',
-                                periodo: accion.periodo || '',
-                                estado: accion.factura_estado || 'pendiente',
-                                referencia_pago: undefined,
-                                etiqueta: undefined,
-                                fecha_emision: undefined,
-                                fecha_vencimiento: undefined,
-                                origen: 'admin_panel',
-                                extraccion_estado: 'manual',
-                                archivo_url: undefined,
-                                creado_en: new Date().toISOString(),
-                                actualizado_en: new Date().toISOString(),
-                              } as Factura;
-                              onOpenAproximarValor(facturaPartial);
-                            } else {
-                              onShowToast('No se puede identificar la factura', 'error');
-                            }
-                          }}
-                          title="Aproximar valor"
-                          className="px-2"
-                        >
-                          ↻
-                        </Button>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -353,7 +327,7 @@ export default function UserAccionesCard({
                       >
                         ✗
                       </Button>
-                      {accion.extraccion_estado && ['dudosa', 'fallida'].includes(accion.extraccion_estado) && (
+                      {accion.origen === 'auto' && (
                         <Button
                           size="sm"
                           variant="secondary"
@@ -382,7 +356,7 @@ export default function UserAccionesCard({
                               onShowToast('No se puede identificar la factura', 'error');
                             }
                           }}
-                          title="Aproximar valor"
+                          title="Aproximar valor de factura heredada"
                           className="px-2"
                         >
                           ↻
