@@ -37,6 +37,15 @@ const getPlanVariant = (plan: string): string => {
   }
 };
 
+const getPlanNameColor = (plan: string): string => {
+  switch (plan) {
+    case 'control': return 'text-blue-600';
+    case 'tranquilidad': return 'text-orange-500';
+    case 'respaldo': return 'text-cyan-500';
+    default: return 'text-gray-600';
+  }
+};
+
 
 const estadoRecargaVariant = (e: string) => {
   if (e === 'aprobada') return 'success' as const;
@@ -270,25 +279,61 @@ const [listLoading, setListLoading] = useState(true);
               </table>
             </div>
           ) : (
-            <div className="grid gap-3 stagger-children">
-              {clientes.map((c) => (
-                <Card key={c.id} className="!p-0 overflow-hidden cursor-pointer hover:shadow-md transition-all group">
-                  <div className="flex items-center gap-4 px-5 py-4" onClick={() => openClientProfile(c.telefono)}>
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--table-header)] text-white font-bold text-sm shadow-lg">
-                      {(c.nombre?.[0] ?? '?').toUpperCase()}{(c.apellido?.[0] ?? '').toUpperCase()}
+            <div className="grid grid-cols-3 gap-6">
+              {clientes.map((c) => {
+                const ultima = c.ultima_obligacion?.[0] || {};
+                const totalFacturas = ultima.total_facturas || 0;
+                return (
+                  <div
+                    key={c.id}
+                    className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group"
+                    onClick={() => openClientProfile(c.telefono)}
+                  >
+                    {/* Main Container */}
+                    <div className="p-6">
+                      {/* Two-Section Layout */}
+                      <div className="flex gap-6">
+                        {/* LEFT SECTION: Identity & Balance */}
+                        <div className="flex-1">
+                          {/* Client Name */}
+                          <h3 className="text-base font-semibold text-gray-900 mb-3">
+                            {c.nombre} {c.apellido}
+                          </h3>
+
+                          {/* Balance Section */}
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-3xl font-extrabold text-gray-900">
+                              {formatCurrency(c.saldo || 0)}
+                            </span>
+                            <span className="text-xs font-light text-gray-400">Saldo</span>
+                          </div>
+                        </div>
+
+                        {/* DIVIDER */}
+                        <div className="w-px bg-gray-200"></div>
+
+                        {/* RIGHT SECTION: Plan Info */}
+                        <div className="flex-1 pl-2">
+                          {/* Plan Label */}
+                          <p className="text-xs font-light text-gray-400 uppercase tracking-wide mb-2">
+                            Plan
+                          </p>
+
+                          {/* Plan Name with Color */}
+                          <h4 className={`text-base font-medium mb-4 capitalize ${getPlanNameColor(c.plan)}`}>
+                            {c.plan}
+                          </h4>
+
+                          {/* Invoice Counter */}
+                          <p className="text-xs font-light text-gray-500">
+                            {totalFacturas} {totalFacturas === 1 ? 'Factura' : 'Facturas'}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate">{c.nombre} {c.apellido}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">📱 {c.telefono} · ✉️ {c.correo || '—'}</p>
-                    </div>
-                    <span className={getPlanVariant(c.plan)} style={{fontSize: '0.75rem', fontWeight: 500}}>
-                          {c.plan}
-                        </span>
-                    <Badge label={c.activo ? 'Activo' : 'Inactivo'} variant={c.activo ? 'success' : 'error'} />
-                    <ChevronRightIcon className="h-5 w-5 text-gray-300 group-hover:text-indigo-500 transition-colors shrink-0" />
                   </div>
-                </Card>
-              ))}
+                );
+              })}
             </div>
           )}
 
