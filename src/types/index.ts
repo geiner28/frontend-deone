@@ -221,6 +221,26 @@ export interface AproximarFacturaData {
   estado: string;
 }
 
+// ─── Listar todas las facturas (Admin Panel) ──────────────────────────────────
+export interface FacturaEnriquecida extends Factura {
+  factura_id: string;
+  usuario_id: string;
+  usuario?: { id: string; nombre: string; apellido: string; telefono: string };
+  obligacion?: { id: string; descripcion: string; numero_referencia?: string; tipo_referencia?: string; pagina_pago?: string };
+  usuario_nombre: string;
+  badge_color: string;
+}
+
+export interface ListarTodasLasFacturasData {
+  facturas: FacturaEnriquecida[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    total_pages: number;
+  };
+}
+
 // ─── Pago ─────────────────────────────────────────────────────────────────────
 export interface CrearPagoPayload {
   telefono: string;

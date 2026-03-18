@@ -15,6 +15,8 @@ import type {
   CreateObligacionPayload,
   UpdateObligacionPayload,
   Factura,
+  FacturaEnriquecida,
+  ListarTodasLasFacturasData,
   CapturaFacturaPayload,
   CapturaFacturaData,
   ValidarFacturaPayload,
@@ -182,6 +184,17 @@ export const aproximarFactura = (facturaId: string, payload: AproximarFacturaPay
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+
+// GET /api/admin/facturas — Listar todas las facturas (admin panel)
+export const getAllFacturas = (params?: { estado?: string; usuario_id?: string; periodo?: string; page?: number; limit?: number }) => {
+  const sp = new URLSearchParams();
+  if (params?.estado) sp.set('estado', params.estado);
+  if (params?.usuario_id) sp.set('usuario_id', params.usuario_id);
+  if (params?.periodo) sp.set('periodo', params.periodo);
+  if (params?.page) sp.set('page', String(params.page));
+  if (params?.limit) sp.set('limit', String(params.limit));
+  return request<ListarTodasLasFacturasData>(`/admin/facturas?${sp.toString()}`);
+};
 
 // ─── 5. Recargas (3 endpoints) ───────────────────────────────────────────────
 // POST /api/recargas/reportar

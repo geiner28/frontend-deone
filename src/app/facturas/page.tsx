@@ -1,376 +1,169 @@
 'use client';
 
-import { useState } from 'react';
-import { Card, CardHeader } from '@/components/ui/Card';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import Badge, { variantFromEstado } from '@/components/ui/Badge';
-import Modal from '@/components/ui/Modal';
+import { useEffect, useState } from 'react';
 import Toast, { ToastType } from '@/components/ui/Toast';
-import { capturaFactura, getObligaciones, validarFactura, crearPago, confirmarPago } from '@/lib/api';
-import type { CapturaFacturaData, Obligacion, CrearPagoData } from '@/types';
+import { getAllFacturas } from '@/lib/api';
+import type { FacturaEnriquecida, ListarTodasLasFacturasData } from '@/types';
 import { formatCurrency, getErrorMsg } from '@/lib/utils';
-import { useNotifications, notifFromAction } from '@/contexts/NotificationContext';
-import {
-  PlusIcon,
-  CheckCircleIcon,
-  ArrowRightIcon,
-} from '@heroicons/react/24/outline';
+import TimelineView from './TimelineView';
+import TableView from './TableView';
 
-const initialForm = {
-  telefono: '',
-  obligacion_id: '',
-  servicio: '',
-  monto: '',
-  fecha_vencimiento: '',
-  fecha_emision: '',
-  periodo: '',
-  referencia_pago: '',
-  etiqueta: '',
-  origen: 'manual',
-  archivo_url: '',
-  extraccion_estado: 'ok',
-};
-
-// ─── Workflow steps ───────────────────────────────────────────────────────────
-const steps = [
-  { n: 1, label: 'Capturar', desc: 'Registrar factura en la obligación', color: 'bg-blue-500' },
-  { n: 2, label: 'Validar', desc: 'Admin valida datos de la factura', color: 'bg-amber-500' },
-  { n: 3, label: 'Pago', desc: 'Crear intención de pago', color: 'bg-purple-500' },
-  { n: 4, label: 'Confirmar', desc: 'Confirmar con comprobante', color: 'bg-emerald-500' },
-];
+type ViewType = 'timeline' | 'table';
+type EstadoFilter = 'todas' | 'pagada' | 'pendiente' | 'sin_factura';
 
 export default function FacturasPage() {
+  const [currentView, setCurrentView] = useState<ViewType>('table');
+  const [facturas, setFacturas] = useState<FacturaEnriquecida[]>([]);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(initialForm);
-  const [result, setResult] = useState<CapturaFacturaData | null>(null);
-  const [obligaciones, setObligaciones] = useState<Obligacion[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const { addNotification } = useNotifications();
-
-  const [openValidar, setOpenValidar] = useState(false);
-  const [openCrearPago, setOpenCrearPago] = useState(false);
-  const [openConfirmarPago, setOpenConfirmarPago] = useState(false);
-  const [facturaSeleccionada, setFacturaSeleccionada] = useState<CapturaFacturaData | null>(null);
-  const [pagoActual, setPagoActual] = useState<CrearPagoData | null>(null);
-  const [currentStep, setCurrentStep] = useState(1);
-
-  const [validarForm, setValidarForm] = useState({
-    monto: '',
-    fecha_vencimiento: '',
-    fecha_emision: '',
-    referencia_pago: '',
-    etiqueta: '',
-    observaciones_admin: '',
-  });
-
-  const [confirmarForm, setConfirmarForm] = useState({
-    proveedor_pago: '',
-    referencia_pago: '',
-    comprobante_pago_url: '',
-  });
+  const [currentEstado, setCurrentEstado] = useState<EstadoFilter>('todas');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  
+  // Table view specific
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedUser, setSelectedUser] = useState<string>('todos');
+  const [selectedPlan, setSelectedPlan] = useState<string>('todos');
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const newForm = { ...form, [key]: e.target.value };
-    setForm(newForm);
-    if (key === 'telefono' && e.target.value) {
-      handleSearchObligaciones(e.target.value);
-      setForm({ ...newForm, obligacion_id: '' });
-    }
-  };
-
-  const handleSearchObligaciones = async (telefono: string) => {
-    if (!telefono.trim()) return;
-    setSearchLoading(true);
-    const res = await getObligaciones(telefono.trim());
-    setSearchLoading(false);
-    if (res.ok && res.data) setObligaciones(res.data);
-    else setObligaciones([]);
-  };
-
-  const handleSubmit = async () => {
+  const loadFacturas = async (page = 1, estado?: string) => {
     setLoading(true);
-    const res = await capturaFactura({
-      ...form,
-      monto: Number(form.monto),
+    const res = await getAllFacturas({
+      page,
+      limit: 50,
+      estado: estado || (currentEstado !== 'todas' ? currentEstado : undefined),
     });
     setLoading(false);
+    
     if (res.ok && res.data) {
-      setResult(res.data);
-      setOpen(false);
-      setForm(initialForm);
-      setCurrentStep(1);
-      showToast('Factura capturada correctamente', 'success');
-      addNotification(notifFromAction('factura_nueva', { servicio: res.data.servicio, monto: formatCurrency(res.data.monto), telefono: form.telefono }));
+      setFacturas(res.data.facturas);
+      setTotalPages(res.data.pagination.total_pages);
+      setTotal(res.data.pagination.total);
     } else {
-      showToast(getErrorMsg(res, 'Error al capturar factura'), 'error');
+      showToast(getErrorMsg(res, 'Error al cargar facturas'), 'error');
     }
   };
 
-  const handleValidarFactura = async () => {
-    if (!facturaSeleccionada) return;
-    setLoading(true);
-    const res = await validarFactura(facturaSeleccionada.factura_id, {
-      monto: Number(validarForm.monto),
-      fecha_vencimiento: validarForm.fecha_vencimiento || undefined,
-      fecha_emision: validarForm.fecha_emision || undefined,
-      referencia_pago: validarForm.referencia_pago || undefined,
-      etiqueta: validarForm.etiqueta || undefined,
-      observaciones_admin: validarForm.observaciones_admin || undefined,
-    });
-    setLoading(false);
-    if (res.ok && res.data) {
-      setResult((prev) => prev ? { ...prev, estado: res.data!.estado } : prev);
-      setCurrentStep(2);
-      showToast('Factura validada correctamente', 'success');
-      setOpenValidar(false);
-      setValidarForm({ monto: '', fecha_vencimiento: '', fecha_emision: '', referencia_pago: '', etiqueta: '', observaciones_admin: '' });
-    } else {
-      showToast(getErrorMsg(res, 'Error al validar factura'), 'error');
-    }
-  };
+  useEffect(() => {
+    loadFacturas(1, currentEstado !== 'todas' ? currentEstado : undefined);
+  }, [currentEstado]);
 
-  const handleCrearPago = async () => {
-    if (!facturaSeleccionada) return;
-    const telefono = form.telefono || '';
-    if (!telefono) { showToast('Debe especificar el teléfono', 'error'); return; }
-    setLoading(true);
-    const res = await crearPago({ telefono, factura_id: facturaSeleccionada.factura_id });
-    setLoading(false);
-    if (res.ok && res.data) {
-      setPagoActual(res.data);
-      setCurrentStep(3);
-      showToast('Pago creado correctamente', 'success');
-      setOpenCrearPago(false);
-    } else {
-      showToast(getErrorMsg(res, 'Error al crear pago'), 'error');
-    }
-  };
+  // Filter and search facturas for table view
+  const filteredFacturas = facturas.filter(f => {
+    const matchSearch = 
+      !searchTerm || 
+      f.servicio.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      f.usuario_nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      f.referencia_pago?.includes(searchTerm);
+    
+    const matchUser = selectedUser === 'todos' || f.usuario_id === selectedUser;
+    
+    return matchSearch && matchUser;
+  });
 
-  const handleConfirmarPago = async () => {
-    if (!pagoActual) return;
-    setLoading(true);
-    const res = await confirmarPago(pagoActual.pago_id, confirmarForm);
-    setLoading(false);
-    if (res.ok) {
-      setCurrentStep(4);
-      showToast('Pago confirmado correctamente', 'success');
-      addNotification(notifFromAction('pago_confirmado', {
-        servicio: facturaSeleccionada?.servicio ?? '',
-        monto: pagoActual ? formatCurrency(pagoActual.monto) : '',
-        telefono: form.telefono,
-      }));
-      setOpenConfirmarPago(false);
-      setConfirmarForm({ proveedor_pago: '', referencia_pago: '', comprobante_pago_url: '' });
-      setPagoActual(null);
-    } else {
-      showToast(getErrorMsg(res, 'Error al confirmar pago'), 'error');
-    }
-  };
+  // Get unique users for filter
+  const uniqueUsers = Array.from(new Set(facturas.map(f => f.usuario_id)))
+    .map(userId => facturas.find(f => f.usuario_id === userId))
+    .filter(Boolean) as FacturaEnriquecida[];
 
   return (
     <div className="space-y-6 animate-fade-in">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div className="flex gap-3">
-        <Button onClick={() => setOpen(true)}>
-          <PlusIcon className="h-4 w-4" /> Capturar Factura
-        </Button>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Facturas</h1>
+          <p className="text-sm text-gray-500 mt-1">Descripción</p>
+        </div>
+        
+        {/* View Toggle */}
+        <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-1">
+          <button
+            onClick={() => setCurrentView('table')}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
+              currentView === 'table'
+                ? 'bg-orange-500 text-white'
+                : 'text-gray-600 hover:text-gray-900'
+            } flex items-center gap-2`}
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h12a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6z" />
+            </svg>
+            Tabla
+          </button>
+          <button
+            onClick={() => setCurrentView('timeline')}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
+              currentView === 'timeline'
+                ? 'bg-orange-500 text-white'
+                : 'text-gray-600 hover:text-gray-900'
+            } flex items-center gap-2`}
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+              <path fillRule="evenodd" d="M4 5a2 2 0 012-2 1 1 0 000 2H3a1 1 0 000 2h3a2 2 0 01-2-2V5zm0 4a1 1 0 100 2h10a1 1 0 100-2H4zm0 4a1 1 0 100 2h10a1 1 0 100-2H4z" clipRule="evenodd" />
+            </svg>
+            Timeline
+          </button>
+        </div>
       </div>
 
-      {/* Workflow Stepper */}
-      <Card>
-        <CardHeader title="📋 Flujo de facturación" subtitle="Proceso completo de captura a pago confirmado" />
-        <div className="flex items-center gap-2">
-          {steps.map(({ n, label, desc, color }, i) => (
-            <div key={n} className="flex items-center flex-1">
-              <div className={`flex-1 rounded-xl p-3 transition-all ${n <= currentStep ? 'bg-white shadow-sm ring-1 ring-[#e5e7eb]' : 'bg-[#f9f9f9] opacity-60'}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${n <= currentStep ? color : 'bg-gray-300'}`}>
-                    {n <= currentStep && n < currentStep ? '✓' : n}
-                  </div>
-                  <span className="text-xs font-bold text-[#1d212b]">{label}</span>
-                </div>
-                <p className="text-[10px] text-[#6d7382] leading-tight">{desc}</p>
-              </div>
-              {i < steps.length - 1 && <ArrowRightIcon className="h-3.5 w-3.5 text-gray-300 mx-1 shrink-0" />}
-            </div>
-          ))}
+      {/* Estado Filter Tabs */}
+      <div className="bg-white rounded-lg border border-gray-200 p-3 flex gap-3 flex-wrap">
+        {(['todas', 'pagada', 'pendiente', 'sin_factura'] as const).map((estado) => (
+          <button
+            key={estado}
+            onClick={() => {
+              setCurrentEstado(estado);
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              currentEstado === estado
+                ? 'bg-orange-500 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            } flex items-center gap-2`}
+          >
+            <span>{estado.charAt(0).toUpperCase() + estado.slice(1)}</span>
+            {currentEstado === estado && total > 0 && (
+              <span className="bg-white text-orange-500 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
+                {total}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Content */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+            <p className="text-gray-500 mt-2">Cargando facturas...</p>
+          </div>
         </div>
-      </Card>
-
-      {/* Result card */}
-      {result && (
-        <Card className="animate-fade-in-up relative overflow-hidden">
-          <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500" />
-          <CardHeader
-            title="Última factura procesada"
-            action={<Badge label={result.estado} variant={variantFromEstado(result.estado)} />}
-          />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <InfoItem label="Servicio" value={result.servicio} />
-            <InfoItem label="Monto" value={formatCurrency(result.monto)} />
-            <InfoItem label="Req. revisión" value={result.requiere_revision ? 'Sí' : 'No'} />
-            <InfoItem label="ID Factura" value={<span className="font-mono text-xs break-all">{result.factura_id.slice(0, 16)}…</span>} />
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {result.estado === 'extraida' && (
-              <Button size="sm" onClick={() => {
-                setFacturaSeleccionada(result);
-                setValidarForm({ monto: result.monto.toString(), fecha_vencimiento: '', fecha_emision: '', referencia_pago: '', etiqueta: '', observaciones_admin: '' });
-                setOpenValidar(true);
-              }}>
-                <CheckCircleIcon className="h-4 w-4" /> Validar Factura
-              </Button>
-            )}
-            {result.estado === 'validada' && (
-              <Button size="sm" onClick={() => { setFacturaSeleccionada(result); setOpenCrearPago(true); }}>
-                <CheckCircleIcon className="h-4 w-4" /> Crear Pago
-              </Button>
-            )}
-            {pagoActual && pagoActual.estado === 'en_proceso' && (
-              <Button size="sm" onClick={() => setOpenConfirmarPago(true)}>
-                <CheckCircleIcon className="h-4 w-4" /> Confirmar Pago
-              </Button>
-            )}
-          </div>
-        </Card>
+      ) : currentView === 'timeline' ? (
+        <TimelineView facturas={facturas} />
+      ) : (
+        <TableView
+          facturas={filteredFacturas}
+          total={total}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          selectedUser={selectedUser}
+          onUserChange={setSelectedUser}
+          users={uniqueUsers}
+          onPageChange={(page: number) => {
+            setCurrentPage(page);
+            loadFacturas(page, currentEstado !== 'todas' ? currentEstado : undefined);
+          }}
+        />
       )}
-
-      {/* Modal: Capturar */}
-      <Modal open={open} onClose={() => setOpen(false)} title="Capturar Factura" maxWidth="lg">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Teléfono" required value={form.telefono} onChange={set('telefono')} placeholder="3001234567" />
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-gray-700">Obligación</label>
-              {searchLoading ? (
-                <div className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#6d7382]">Cargando...</div>
-              ) : obligaciones.length > 0 ? (
-                <select
-                  className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]"
-                  value={form.obligacion_id}
-                  onChange={(e) => setForm((f) => ({ ...f, obligacion_id: e.target.value }))}
-                  required
-                >
-                  <option value="">Selecciona una obligación</option>
-                  {obligaciones.map((o) => (
-                    <option key={o.id} value={o.id}>{o.servicio} - {o.descripcion} ({o.estado})</option>
-                  ))}
-                </select>
-              ) : form.telefono ? (
-                <div className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#6d7382]">No hay obligaciones</div>
-              ) : (
-                <div className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#6d7382]">Ingresa un teléfono</div>
-              )}
-            </div>
-          </div>
-          <Input label="Servicio" required value={form.servicio} onChange={set('servicio')} placeholder="EPM Energía" />
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Monto (COP)" required type="number" value={form.monto} onChange={set('monto')} placeholder="150000" />
-            <Input label="Periodo" required value={form.periodo} onChange={set('periodo')} placeholder="2026-02" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Referencia de pago (opcional)" value={form.referencia_pago} onChange={set('referencia_pago')} placeholder="TX-PSE-123456" />
-            <Input label="Etiqueta (opcional)" value={form.etiqueta} onChange={set('etiqueta')} placeholder="Ej: Factura Marzo" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Fecha emisión" required type="date" value={form.fecha_emision} onChange={set('fecha_emision')} />
-            <Input label="Fecha vencimiento" required type="date" value={form.fecha_vencimiento} onChange={set('fecha_vencimiento')} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-gray-700">Origen</label>
-              <select className="rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]" value={form.origen} onChange={set('origen')}>
-                <option value="manual">Manual</option>
-                <option value="bot_whatsapp">Bot WhatsApp</option>
-                <option value="api">API</option>
-              </select>
-            </div>
-            <Input label="Estado extracción" value={form.extraccion_estado} onChange={set('extraccion_estado')} placeholder="ok / dudosa" />
-          </div>
-          <Input label="URL Archivo (opcional)" type="url" value={form.archivo_url} onChange={set('archivo_url')} placeholder="https://example.com/factura.pdf" />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button loading={loading} onClick={handleSubmit}>
-              <CheckCircleIcon className="h-4 w-4" /> Capturar
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Modal: Validar */}
-      <Modal open={openValidar} onClose={() => setOpenValidar(false)} title="Validar Factura">
-        <div className="space-y-4">
-          <Input label="Monto (COP)" required type="number" value={validarForm.monto} onChange={(e) => setValidarForm((f) => ({ ...f, monto: e.target.value }))} placeholder="150000" />
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Fecha emisión" type="date" value={validarForm.fecha_emision} onChange={(e) => setValidarForm((f) => ({ ...f, fecha_emision: e.target.value }))} />
-            <Input label="Fecha vencimiento" type="date" value={validarForm.fecha_vencimiento} onChange={(e) => setValidarForm((f) => ({ ...f, fecha_vencimiento: e.target.value }))} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Referencia de pago (opcional)" value={validarForm.referencia_pago} onChange={(e) => setValidarForm((f) => ({ ...f, referencia_pago: e.target.value }))} placeholder="TX-PSE-123456" />
-            <Input label="Etiqueta (opcional)" value={validarForm.etiqueta} onChange={(e) => setValidarForm((f) => ({ ...f, etiqueta: e.target.value }))} placeholder="Ej: Factura Marzo" />
-          </div>
-          <Input label="Observaciones (opcional)" value={validarForm.observaciones_admin} onChange={(e) => setValidarForm((f) => ({ ...f, observaciones_admin: e.target.value }))} placeholder="Notas sobre la validación..." />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setOpenValidar(false)}>Cancelar</Button>
-            <Button loading={loading} onClick={handleValidarFactura}>
-              <CheckCircleIcon className="h-4 w-4" /> Validar
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Modal: Crear Pago */}
-      <Modal open={openCrearPago} onClose={() => setOpenCrearPago(false)} title="Crear Pago">
-        <div className="space-y-4">
-          <Input label="Teléfono del cliente" required value={form.telefono} onChange={set('telefono')} placeholder="3001234567" hint="Teléfono del cliente dueño de la factura" />
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <p className="text-sm text-blue-800"><strong>Factura:</strong> {facturaSeleccionada?.servicio}</p>
-            <p className="text-sm text-blue-800"><strong>Monto:</strong> {facturaSeleccionada ? formatCurrency(facturaSeleccionada.monto) : ''}</p>
-            <p className="text-sm text-blue-800 break-all"><strong>ID:</strong> {facturaSeleccionada?.factura_id}</p>
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setOpenCrearPago(false)}>Cancelar</Button>
-            <Button loading={loading} onClick={handleCrearPago}>
-              <CheckCircleIcon className="h-4 w-4" /> Crear Pago
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Modal: Confirmar Pago */}
-      <Modal open={openConfirmarPago} onClose={() => setOpenConfirmarPago(false)} title="Confirmar Pago">
-        <div className="space-y-4">
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-            <p className="text-sm text-emerald-800"><strong>ID Pago:</strong> {pagoActual?.pago_id}</p>
-            <p className="text-sm text-emerald-800"><strong>Monto:</strong> {pagoActual ? formatCurrency(pagoActual.monto) : ''}</p>
-          </div>
-          <Input label="Proveedor de pago" required value={confirmarForm.proveedor_pago} onChange={(e) => setConfirmarForm((f) => ({ ...f, proveedor_pago: e.target.value }))} placeholder="PSE, Nequi, Daviplata, etc." />
-          <Input label="Referencia de pago" required value={confirmarForm.referencia_pago} onChange={(e) => setConfirmarForm((f) => ({ ...f, referencia_pago: e.target.value }))} placeholder="TX-PSE-123456" />
-          <Input label="URL del comprobante" required type="url" value={confirmarForm.comprobante_pago_url} onChange={(e) => setConfirmarForm((f) => ({ ...f, comprobante_pago_url: e.target.value }))} placeholder="https://example.com/comprobante.jpg" />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setOpenConfirmarPago(false)}>Cancelar</Button>
-            <Button loading={loading} onClick={handleConfirmarPago}>
-              <CheckCircleIcon className="h-4 w-4" /> Confirmar Pago
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }
 
-function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs text-[#6d7382]">{label}</p>
-      <div className="text-sm font-medium text-[#1d212b] mt-0.5">{value}</div>
-    </div>
-  );
-}
