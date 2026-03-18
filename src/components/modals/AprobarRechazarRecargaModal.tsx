@@ -12,6 +12,7 @@ import {
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import NotificationDisplay from '@/components/NotificationDisplay';
 import Toast, { ToastType } from '@/components/ui/Toast';
 import { obtenerRecargasPendientes, aprobarRecarga, rechazarRecarga } from '@/lib/api';
 import { formatCurrency, getErrorMsg, formatDate, formatPeriodo } from '@/lib/utils';
@@ -26,7 +27,7 @@ interface AprobarRechazarRecargaModalProps {
   recargaId?: string | null; // Pre-seleccionar recarga (opcional)
 }
 
-type Step = 'buscar' | 'detalles' | 'confirmar_aprobacion' | 'confirmar_rechazo';
+type Step = 'buscar' | 'detalles' | 'confirmar_aprobacion' | 'confirmar_rechazo' | 'success';
 type Accion = 'aprobar' | 'rechazar' | null;
 
 export default function AprobarRechazarRecargaModal({
@@ -56,6 +57,10 @@ export default function AprobarRechazarRecargaModal({
   // Formulario de confirmación
   const [observacionesAprobar, setObservacionesAprobar] = useState('');
   const [motivoRechazo, setMotivoRechazo] = useState('');
+
+  // Notificación de éxito
+  const [successData, setSuccessData] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Reset cuando se cierra el modal
   useEffect(() => {
@@ -191,6 +196,8 @@ export default function AprobarRechazarRecargaModal({
     setSearching(false);
     setSearchError(null);
     setIsPreSelected(false);
+    setSuccessData(null);
+    setErrorMessage(null);
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -250,11 +257,15 @@ export default function AprobarRechazarRecargaModal({
     setLoading(false);
 
     if (res.ok) {
+      const data = res.data as any;
+      setSuccessData(data);
       showToast('Recarga aprobada correctamente', 'success');
-      onClose();
+      setStep('success');
       await onSuccess();
     } else {
-      showToast(getErrorMsg(res, 'Error al aprobar recarga'), 'error');
+      const error = getErrorMsg(res, 'Error al aprobar recarga');
+      setErrorMessage(error);
+      showToast(error, 'error');
     }
   };
 
@@ -279,11 +290,15 @@ export default function AprobarRechazarRecargaModal({
     setLoading(false);
 
     if (res.ok) {
+      const data = res.data as any;
+      setSuccessData(data);
       showToast('Recarga rechazada correctamente', 'success');
-      onClose();
+      setStep('success');
       await onSuccess();
     } else {
-      showToast(getErrorMsg(res, 'Error al rechazar recarga'), 'error');
+      const error = getErrorMsg(res, 'Error al rechazar recarga');
+      setErrorMessage(error);
+      showToast(error, 'error');
     }
   };
 
@@ -562,6 +577,43 @@ export default function AprobarRechazarRecargaModal({
     </div>
   );
 
+  // Mostrar notificación de éxito
+  const renderSuccess = () => (
+    <div className="space-y-4">
+      {errorMessage ? (
+        <>
+          <NotificationDisplay
+            notification={null}
+            status="error"
+            errorMessage={errorMessage}
+            onClose={() => {
+              resetModal();
+              onClose();
+            }}
+          />
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={() => { setErrorMessage(null); setStep('detalles'); }} className="flex-1">
+              Volver
+            </Button>
+            <Button onClick={() => { resetModal(); onClose(); }} className="flex-1">
+              Cerrar
+            </Button>
+          </div>
+        </>
+      ) : (
+        <NotificationDisplay
+          notification={successData?.notificacion}
+          status="success"
+          onClose={() => {
+            resetModal();
+            onClose();
+          }}
+          title={accion === 'aprobar' ? 'Recarga aprobada exitosamente' : 'Recarga rechazada exitosamente'}
+        />
+      )}
+    </div>
+  );
+
   //═══════════════════════════════════════════════════════════════════════════════
   // Render principal
   //═══════════════════════════════════════════════════════════════════════════════
@@ -576,6 +628,8 @@ export default function AprobarRechazarRecargaModal({
         return 'Aprobar recarga';
       case 'confirmar_rechazo':
         return 'Rechazar recarga';
+      case 'success':
+        return accion === 'aprobar' ? 'Recarga Aprobada' : 'Recarga Rechazada';
       default:
         return 'Análisis y Aprobación de Recargas';
     }
@@ -591,6 +645,8 @@ export default function AprobarRechazarRecargaModal({
         return renderConfirmarAprobacion();
       case 'confirmar_rechazo':
         return renderConfirmarRechazo();
+      case 'success':
+        return renderSuccess();
       default:
         return null;
     }
