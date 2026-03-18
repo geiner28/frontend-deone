@@ -22,6 +22,8 @@ interface AprobarRechazarRecargaModalProps {
   onClose: () => void;
   onSuccess: () => Promise<void>;
   showToast: (msg: string, type: ToastType) => void;
+  telefono?: string;        // Pre-llenar teléfono (opcional)
+  recargaId?: string | null; // Pre-seleccionar recarga (opcional)
 }
 
 type Step = 'buscar' | 'detalles' | 'confirmar_aprobacion' | 'confirmar_rechazo';
@@ -32,6 +34,8 @@ export default function AprobarRechazarRecargaModal({
   onClose,
   onSuccess,
   showToast,
+  telefono = '',
+  recargaId = null,
 }: AprobarRechazarRecargaModalProps) {
   // Estado principal
   const [telefonoInput, setTelefonoInput] = useState('');
@@ -40,6 +44,7 @@ export default function AprobarRechazarRecargaModal({
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [isPreSelected, setIsPreSelected] = useState(false); // Saber si viene pre-seleccionada
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Datos obtenidos
@@ -58,6 +63,53 @@ export default function AprobarRechazarRecargaModal({
       resetModal();
     }
   }, [open]);
+
+  // Pre-seleccionar si viene con teléfono y recargaId (desde AccionesView)
+  useEffect(() => {
+    if (open && telefono && recargaId) {
+      const autoLoadRecarga = async () => {
+        setTelefonoInput(telefono);
+        setIsPreSelected(true);
+        setSearching(true);
+        
+        try {
+          const res = await obtenerRecargasPendientes(telefono);
+          
+          if (res.ok && res.data) {
+            const { usuario: usuarioData, recargas_pendientes } = res.data;
+            setUsuario(usuarioData);
+            setRecargas(recargas_pendientes || []);
+            setSearchError(null);
+
+            // Auto-seleccionar la recarga específica
+            const recargaEncontrada = (recargas_pendientes || []).find((r) => r.id === recargaId);
+            if (recargaEncontrada) {
+              setSelectedRecargaId(recargaId);
+              setSelectedRecarga(recargaEncontrada);
+              // NO cambiar step a 'detalles', quedarse en 'buscar' con la recarga pre-seleccionada
+            } else {
+              setSearchError('Recarga no encontrada. Intenta buscar manualmente.');
+              setIsPreSelected(false);
+            }
+          } else {
+            setSearchError('No se encontró el usuario. Intenta buscar manualmente.');
+            setStep('buscar');
+            setIsPreSelected(false);
+            setTelefonoInput('');
+          }
+        } catch (error) {
+          setSearchError('Error cargando recarga. Intenta nuevamente.');
+          setStep('buscar');
+          setIsPreSelected(false);
+          setTelefonoInput('');
+        } finally {
+          setSearching(false);
+        }
+      };
+
+      autoLoadRecarga();
+    }
+  }, [open, telefono, recargaId]);
 
   // Auto-búsqueda mientras digita
   useEffect(() => {
@@ -138,6 +190,7 @@ export default function AprobarRechazarRecargaModal({
     setLoading(false);
     setSearching(false);
     setSearchError(null);
+    setIsPreSelected(false);
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -253,7 +306,7 @@ export default function AprobarRechazarRecargaModal({
           value={telefonoInput}
           onChange={(e) => setTelefonoInput(e.target.value)}
           placeholder="3001234567"
-          disabled={false}
+          disabled={isPreSelected}
         />
         {searching && (
           <div className="absolute right-3 top-10 text-indigo-600">
@@ -281,7 +334,8 @@ export default function AprobarRechazarRecargaModal({
             <select
               value={selectedRecargaId}
               onChange={(e) => setSelectedRecargaId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+              disabled={isPreSelected}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="">-- Selecciona una recarga --</option>
               {recargas.map((r) => (
@@ -403,8 +457,12 @@ export default function AprobarRechazarRecargaModal({
       <button
         onClick={() => {
           setStep('buscar');
-          setSelectedRecargaId('');
-          setSelectedRecarga(null);
+          // Si fue pre-seleccionada, NO limpiar la selección (el user puede revisar de nuevo)
+          // Solo limpiar si fue seleccionada manualmente
+          if (!isPreSelected) {
+            setSelectedRecargaId('');
+            setSelectedRecarga(null);
+          }
         }}
         className="w-full text-sm text-gray-500 hover:text-gray-700 transition-colors py-2"
       >

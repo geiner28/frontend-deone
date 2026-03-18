@@ -11,6 +11,8 @@ import { FullPageSpinner } from '@/components/ui/Spinner';
 import EmptyState from '@/components/ui/EmptyState';
 import { useNotifications } from '@/contexts/NotificationContext';
 import ValidarFacturaModal from '@/components/modals/ValidarFacturaModal';
+import RechazarFacturaModal from '@/components/modals/RechazarFacturaModal';
+import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import AprobarRechazarRecargaModal from '@/components/modals/AprobarRechazarRecargaModal';
 import {
   getAdminNotificaciones,
@@ -129,9 +131,12 @@ export default function NotificacionesPage() {
 
   // Modales para acciones (Facturas y Recargas)
   const [showValidarFacturaModal, setShowValidarFacturaModal] = useState(false);
+  const [showRechazarFacturaModal, setShowRechazarFacturaModal] = useState(false);
+  const [showAproximarValorModal, setShowAproximarValorModal] = useState(false);
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null);
   const [showAprobarRechazarModal, setShowAprobarRechazarModal] = useState(false);
   const [selectedRecargaUsuarioTelefono, setSelectedRecargaUsuarioTelefono] = useState<string>('');
+  const [selectedRecargaId, setSelectedRecargaId] = useState<string | null>(null);
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
@@ -172,14 +177,16 @@ export default function NotificacionesPage() {
     return { desde: desdeStr, hasta: hastaStr };
   };
 
-  // Cargar datos admin
+  // Cargar datos admin - SIN searchUsuario (es solo búsqueda local)
   useEffect(() => {
     setPage(1);
   }, [activeTab]);
 
+  // IMPORTANTE: searchUsuario NO está aquí porque el filtrado es 100% local en AccionesView
+  // Solo recargamos cuando cambian filtros reales o tab
   useEffect(() => {
     loadData();
-  }, [filterTipo, filterEstado, dateFilter, searchUsuario, page, activeTab]);
+  }, [filterTipo, filterEstado, dateFilter, page, activeTab]);
 
   const loadData = async () => {
     setLoading(true);
@@ -244,8 +251,9 @@ export default function NotificacionesPage() {
   };
 
   const loadAcciones = async () => {
+    // NO pasar searchUsuario como usuario_id (es solo para búsqueda local)
+    // El filtrado por usuario se hace en el frontend dentro de AccionesView
     const res = await getAdminNotificacionesAcciones({
-      usuario_id: searchUsuario || undefined,
       page,
       limit,
     });
@@ -614,9 +622,18 @@ export default function NotificacionesPage() {
             setSelectedFactura(factura);
             setShowValidarFacturaModal(true);
           }}
-          onOpenAprobarRecarga={(usuarioTelefono) => {
+          onOpenAprobarRecarga={(usuarioTelefono, recargaId) => {
             setSelectedRecargaUsuarioTelefono(usuarioTelefono);
+            setSelectedRecargaId(recargaId || null);
             setShowAprobarRechazarModal(true);
+          }}
+          onOpenRechazarFactura={(factura) => {
+            setSelectedFactura(factura);
+            setShowRechazarFacturaModal(true);
+          }}
+          onOpenAproximarValor={(factura) => {
+            setSelectedFactura(factura);
+            setShowAproximarValorModal(true);
           }}
         />
       ) : currentNotifications.length === 0 ? (
@@ -1035,12 +1052,57 @@ export default function NotificacionesPage() {
         showToast={showToast}
       />
 
+      {/* Modal: Validar Factura */}
+      <ValidarFacturaModal
+        open={showValidarFacturaModal}
+        factura={selectedFactura}
+        onClose={() => {
+          setShowValidarFacturaModal(false);
+          setSelectedFactura(null);
+        }}
+        onSuccess={async () => {
+          await loadData();
+        }}
+        showToast={showToast}
+      />
+
+      {/* Modal: Rechazar Factura */}
+      <RechazarFacturaModal
+        open={showRechazarFacturaModal}
+        factura={selectedFactura}
+        onClose={() => {
+          setShowRechazarFacturaModal(false);
+          setSelectedFactura(null);
+        }}
+        onSuccess={async () => {
+          await loadData();
+        }}
+        showToast={showToast}
+      />
+
+      {/* Modal: Aproximar Valor */}
+      <AproximarValorModal
+        open={showAproximarValorModal}
+        factura={selectedFactura}
+        onClose={() => {
+          setShowAproximarValorModal(false);
+          setSelectedFactura(null);
+        }}
+        onSuccess={async () => {
+          await loadData();
+        }}
+        showToast={showToast}
+      />
+
       {/* Modal: Aprobar/Rechazar Recarga - para Tab ACCIONES */}
       <AprobarRechazarRecargaModal
         open={showAprobarRechazarModal}
+        telefono={selectedRecargaUsuarioTelefono}
+        recargaId={selectedRecargaId}
         onClose={() => {
           setShowAprobarRechazarModal(false);
           setSelectedRecargaUsuarioTelefono('');
+          setSelectedRecargaId(null);
         }}
         onSuccess={async () => {
           await loadData();
@@ -1065,7 +1127,9 @@ interface AccionesViewProps {
   page: number;
   onPageChange: (page: number) => void;
   onOpenValidarFactura: (factura: Factura) => void;
-  onOpenAprobarRecarga: (usuarioTelefono: string) => void;
+  onOpenRechazarFactura: (factura: Factura) => void;
+  onOpenAproximarValor: (factura: Factura) => void;
+  onOpenAprobarRecarga: (usuarioTelefono: string, recargaId?: string) => void;
 }
 
 function AccionesView({
@@ -1078,8 +1142,11 @@ function AccionesView({
   page,
   onPageChange,
   onOpenValidarFactura,
+  onOpenRechazarFactura,
+  onOpenAproximarValor,
   onOpenAprobarRecarga,
 }: AccionesViewProps) {
+  // AccionesView no necesita estado local ahora, los parámetros se pasan directamente
   if (!accionesData || !accionesData.acciones_por_usuario) {
     return (
       <EmptyState
@@ -1132,16 +1199,29 @@ function AccionesView({
         </p>
       </div>
 
-      {/* Acciones por usuario */}
-      {acciones_por_usuario.length === 0 ? (
-        <EmptyState
-          icon={<CheckIcon className="h-6 w-6 text-green-600" />}
-          title="¡Todo al día!"
-          description="No hay validaciones pendientes. Todas las facturas y recargas han sido revisadas."
-        />
-      ) : (
-        <div className="space-y-4">
-          {acciones_por_usuario.map((item: any) => (
+      {/* Acciones por usuario - CON FILTRADO */}
+      {(() => {
+        // Filtrar por búsqueda de usuario si existe
+        const filteredAcciones = searchUsuario
+          ? acciones_por_usuario.filter((item: any) => {
+              const nombre = `${item.usuario.nombre || ''} ${item.usuario.apellido || ''}`.toLowerCase();
+              const telefono = (item.usuario.telefono || '').toLowerCase();
+              const search = searchUsuario.toLowerCase();
+              return nombre.includes(search) || telefono.includes(search);
+            })
+          : acciones_por_usuario;
+
+        return filteredAcciones.length === 0 ? (
+          <EmptyState
+            icon={<CheckIcon className="h-6 w-6 text-green-600" />}
+            title={searchUsuario ? "Sin resultados" : "¡Todo al día!"}
+            description={searchUsuario 
+              ? `No se encontraron usuarios que coincidan con "${searchUsuario}"` 
+              : "No hay validaciones pendientes. Todas las facturas y recargas han sido revisadas."}
+          />
+        ) : (
+          <div className="space-y-4">
+            {filteredAcciones.map((item: any) => (
             <div
               key={item.usuario_id}
               className="border border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-md transition-all"
@@ -1167,7 +1247,7 @@ function AccionesView({
               {/* Acciones del usuario */}
               <div className="divide-y">
                 {item.acciones.map((accion: any) => (
-                  <div key={accion.revision_id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                  <div key={accion.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
                     <div className="flex items-start justify-between gap-4">
                       {/* Info de la acción */}
                       <div className="flex-1">
@@ -1214,44 +1294,114 @@ function AccionesView({
                       {/* Botones de acción */}
                       <div className="flex flex-col gap-2">
                         {accion.tipo === 'factura' ? (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => {
-                              if (accion.factura_id) {
-                                const facturaPartial: Factura = {
-                                  id: accion.factura_id,
-                                  usuario_id: item.usuario_id,
-                                  obligacion_id: '',
-                                  monto: accion.monto || 0,
-                                  servicio: accion.servicio || '',
-                                  periodo: accion.periodo || '',
-                                  estado: accion.factura_estado || 'pendiente',
-                                  referencia_pago: undefined,
-                                  etiqueta: undefined,
-                                  fecha_emision: undefined,
-                                  fecha_vencimiento: undefined,
-                                  origen: 'admin_panel',
-                                  extraccion_estado: 'manual',
-                                  archivo_url: undefined,
-                                  creado_en: new Date().toISOString(),
-                                  actualizado_en: new Date().toISOString(),
-                                } as Factura;
-                                onOpenValidarFactura(facturaPartial);
-                              } else {
-                                onShowToast('No se puede identificar la factura', 'error');
-                              }
-                            }}
-                            title="Validar factura y generar notificación"
-                          >
-                            📄 Validar
-                          </Button>
+                          <div className="flex gap-2 flex-wrap">
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => {
+                                if (accion.factura_id) {
+                                  const facturaPartial: Factura = {
+                                    id: accion.factura_id,
+                                    usuario_id: item.usuario_id,
+                                    obligacion_id: '',
+                                    monto: accion.monto || 0,
+                                    servicio: accion.servicio || '',
+                                    periodo: accion.periodo || '',
+                                    estado: accion.factura_estado || 'pendiente',
+                                    referencia_pago: undefined,
+                                    etiqueta: undefined,
+                                    fecha_emision: undefined,
+                                    fecha_vencimiento: undefined,
+                                    origen: 'admin_panel',
+                                    extraccion_estado: 'manual',
+                                    archivo_url: undefined,
+                                    creado_en: new Date().toISOString(),
+                                    actualizado_en: new Date().toISOString(),
+                                  } as Factura;
+                                  onOpenValidarFactura(facturaPartial);
+                                } else {
+                                  onShowToast('No se puede identificar la factura', 'error');
+                                }
+                              }}
+                              title="Validar factura y generar notificación"
+                            >
+                              ✓ Validar
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                if (accion.factura_id) {
+                                  const facturaPartial: Factura = {
+                                    id: accion.factura_id,
+                                    usuario_id: item.usuario_id,
+                                    obligacion_id: '',
+                                    monto: accion.monto || 0,
+                                    servicio: accion.servicio || '',
+                                    periodo: accion.periodo || '',
+                                    estado: accion.factura_estado || 'pendiente',
+                                    referencia_pago: undefined,
+                                    etiqueta: undefined,
+                                    fecha_emision: undefined,
+                                    fecha_vencimiento: undefined,
+                                    origen: 'admin_panel',
+                                    extraccion_estado: 'manual',
+                                    archivo_url: undefined,
+                                    creado_en: new Date().toISOString(),
+                                    actualizado_en: new Date().toISOString(),
+                                  } as Factura;
+                                  onOpenRechazarFactura(facturaPartial);
+                                } else {
+                                  onShowToast('No se puede identificar la factura', 'error');
+                                }
+                              }}
+                              title="Rechazar factura y notificar al usuario"
+                            >
+                              ✗ Rechazar
+                            </Button>
+
+                            {accion.extraccion_estado && ['dudosa', 'fallida'].includes(accion.extraccion_estado) && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  if (accion.factura_id) {
+                                    const facturaPartial: Factura = {
+                                      id: accion.factura_id,
+                                      usuario_id: item.usuario_id,
+                                      obligacion_id: '',
+                                      monto: accion.monto || 0,
+                                      servicio: accion.servicio || '',
+                                      periodo: accion.periodo || '',
+                                      estado: accion.factura_estado || 'pendiente',
+                                      referencia_pago: undefined,
+                                      etiqueta: undefined,
+                                      fecha_emision: undefined,
+                                      fecha_vencimiento: undefined,
+                                      origen: 'admin_panel',
+                                      extraccion_estado: 'manual',
+                                      archivo_url: undefined,
+                                      creado_en: new Date().toISOString(),
+                                      actualizado_en: new Date().toISOString(),
+                                    } as Factura;
+                                    onOpenAproximarValor(facturaPartial);
+                                  } else {
+                                    onShowToast('No se puede identificar la factura', 'error');
+                                  }
+                                }}
+                                title="Aproximar valor de factura dudosa/fallida"
+                              >
+                                ↻ Aproximar
+                              </Button>
+                            )}
+                          </div>
                         ) : (
                           <Button
                             size="sm"
                             variant="primary"
                             onClick={() => {
-                              onOpenAprobarRecarga(item.usuario.telefono);
+                              onOpenAprobarRecarga(item.usuario.telefono, accion.recarga_id);
                             }}
                             title="Aprobar o rechazar recarga"
                           >
@@ -1264,9 +1414,10 @@ function AccionesView({
                 ))}
               </div>
             </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        );
+        })()}
 
       {/* Paginación */}
       {totalPages > 1 && (
