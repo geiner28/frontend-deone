@@ -53,6 +53,7 @@ import type {
   AdminClientePerfilData,
   ListAdminPagosData,
   ListHistorialData,
+  ListTransaccionesData,
   ProgramacionRecargas,
 } from '@/types';
 
@@ -606,7 +607,25 @@ export const getAdminNotificacionesAcciones = (filters?: {
   }>(`/admin/notificaciones/acciones?${sp.toString()}`);
 };
 
-// ─── 12. Historial (Audit Log) ───────────────────────────────────────────────
+// ─── 12. Transacciones (Pagos + Recargas unificados) ─────────────────────────
+// GET /api/admin/transacciones?page=&limit=&tipo=&usuario_id=&search=
+export const getAdminTransacciones = (params?: {
+  page?: number;
+  limit?: number;
+  tipo?: string;
+  usuario_id?: string;
+  search?: string;
+}) => {
+  const sp = new URLSearchParams();
+  if (params?.page) sp.set('page', String(params.page));
+  if (params?.limit) sp.set('limit', String(params.limit));
+  if (params?.tipo) sp.set('tipo', params.tipo);
+  if (params?.usuario_id) sp.set('usuario_id', params.usuario_id);
+  if (params?.search) sp.set('search', params.search);
+  return request<ListTransaccionesData>(`/admin/transacciones?${sp.toString()}`);
+};
+
+// ─── 13. Historial (Audit Log) ───────────────────────────────────────────────
 // GET /api/admin/historial?page=&limit=&tipo=&usuario_id=&search=
 export const getAdminHistorial = (params?: {
   page?: number;

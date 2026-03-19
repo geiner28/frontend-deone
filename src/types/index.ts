@@ -588,6 +588,30 @@ export interface ListAdminPagosData {
   total_pages: number;
 }
 
+// ─── Transacciones (Pagos + Recargas unificados) ─────────────────────────────
+export type TransaccionTipo = 'pago' | 'recarga';
+
+export interface Transaccion {
+  id: string;
+  tipo: TransaccionTipo;
+  nombre: string;
+  tipo_referencia: string;
+  numero_referencia: string;
+  fecha: string;
+  usuario_nombre: string;
+  usuario_id: string;
+  pagador: string;
+  monto: number;
+}
+
+export interface ListTransaccionesData {
+  transacciones: Transaccion[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
 // ─── Historial (Audit Log) ────────────────────────────────────────────────────
 export type HistorialTipo = 'recarga' | 'obligacion_agregada' | 'pago_factura' | 'usuario_creado';
 
