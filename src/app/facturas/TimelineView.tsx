@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { FacturaEnriquecida } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 
@@ -9,15 +9,15 @@ interface TimelineViewProps {
 }
 
 export default function TimelineView({ facturas }: TimelineViewProps) {
-  const timelineData = useMemo(() => {
-    if (!facturas.length) return { usuarios: [], dias: [], hoy: 0, mesActual: '', mesAño: '' };
+  const ahora = new Date();
+  const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  
+  const [mesSeleccionado, setMesSeleccionado] = useState(ahora.getMonth());
+  const [añoSeleccionado, setAñoSeleccionado] = useState(ahora.getFullYear());
 
-    // Get current month and year
-    const ahora = new Date();
-    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
-                   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const mesActual = meses[ahora.getMonth()];
-    const mesAño = `${mesActual} ${ahora.getFullYear()}`;
+  const timelineData = useMemo(() => {
+    if (!facturas.length) return { usuarios: [], dias: [], hoy: 0, mesActual: '', mesAño: '', esHoy: false };
 
     // Get unique users
     const usuarios = Array.from(new Set(facturas.map(f => f.usuario_id)))
@@ -28,26 +28,37 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
         apellido: f.usuario?.apellido || '',
       }));
 
-    // Get day range
+    // Get day range for selected month
     const fechas = facturas
       .filter(f => f.fecha_vencimiento)
-      .map(f => new Date(f.fecha_vencimiento || new Date()).getDate());
+      .filter(f => {
+        const fecha = new Date(f.fecha_vencimiento!);
+        return fecha.getMonth() === mesSeleccionado && fecha.getFullYear() === añoSeleccionado;
+      })
+      .map(f => new Date(f.fecha_vencimiento!).getDate());
 
     const dias = Array.from(new Set(fechas))
       .sort((a, b) => a - b);
 
-    // Get today's day
+    // Check if today is in the selected month
     const hoy = ahora.getDate();
+    const esHoy = ahora.getMonth() === mesSeleccionado && ahora.getFullYear() === añoSeleccionado;
 
-    return { usuarios, dias, hoy, mesActual, mesAño };
-  }, [facturas]);
+    const mesActual = meses[mesSeleccionado];
+    const mesAño = `${mesActual} ${añoSeleccionado}`;
+
+    return { usuarios, dias, hoy, mesActual, mesAño, esHoy };
+  }, [facturas, mesSeleccionado, añoSeleccionado]);
 
   const getFacturasByUserAndDay = (usuarioId: string, dia: number) => {
     return facturas.filter(f => {
       if (f.usuario_id !== usuarioId) return false;
       if (!f.fecha_vencimiento) return false;
-      const facturaDay = new Date(f.fecha_vencimiento).getDate();
-      return facturaDay === dia;
+      const fecha = new Date(f.fecha_vencimiento);
+      const facturaMonth = fecha.getMonth();
+      const facturaYear = fecha.getFullYear();
+      const facturaDay = fecha.getDate();
+      return facturaDay === dia && facturaMonth === mesSeleccionado && facturaYear === añoSeleccionado;
     });
   };
 
@@ -94,7 +105,26 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-xl font-bold text-gray-900">Cronograma de Vencimientos</h2>
-        <span className="text-sm font-medium text-gray-600">{timelineData.mesAño}</span>
+        <div className="flex items-center gap-3">
+          <select
+            value={mesSeleccionado}
+            onChange={(e) => setMesSeleccionado(parseInt(e.target.value))}
+            className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            {meses.map((mes, idx) => (
+              <option key={idx} value={idx}>{mes}</option>
+            ))}
+          </select>
+          <select
+            value={añoSeleccionado}
+            onChange={(e) => setAñoSeleccionado(parseInt(e.target.value))}
+            className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            {[2024, 2025, 2026, 2027].map((año) => (
+              <option key={año} value={año}>{año}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="flex gap-6">
@@ -151,7 +181,7 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
                       className="flex-1 min-w-32 border-r border-gray-200 last:border-r-0 p-2 relative"
                     >
                       {/* Today indicator line */}
-                      {timelineData.hoy === dia && (
+                      {timelineData.esHoy && timelineData.hoy === dia && (
                         <div className="absolute inset-0 border-l-4 border-orange-500 bg-orange-50 bg-opacity-30">
                           <div className="absolute -top-2 left-0 px-1 py-0.5 bg-orange-500 text-white text-xs font-bold rounded">HOY</div>
                         </div>
