@@ -10,7 +10,14 @@ interface TimelineViewProps {
 
 export default function TimelineView({ facturas }: TimelineViewProps) {
   const timelineData = useMemo(() => {
-    if (!facturas.length) return { usuarios: [], dias: [] };
+    if (!facturas.length) return { usuarios: [], dias: [], hoy: 0, mesActual: '', mesAño: '' };
+
+    // Get current month and year
+    const ahora = new Date();
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const mesActual = meses[ahora.getMonth()];
+    const mesAño = `${mesActual} ${ahora.getFullYear()}`;
 
     // Get unique users
     const usuarios = Array.from(new Set(facturas.map(f => f.usuario_id)))
@@ -30,9 +37,9 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
       .sort((a, b) => a - b);
 
     // Get today's day
-    const hoy = new Date().getDate();
+    const hoy = ahora.getDate();
 
-    return { usuarios, dias, hoy };
+    return { usuarios, dias, hoy, mesActual, mesAño };
   }, [facturas]);
 
   const getFacturasByUserAndDay = (usuarioId: string, dia: number) => {
@@ -50,6 +57,8 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
         return 'bg-green-500';
       case 'validada':
         return 'bg-blue-500';
+      case 'extraida':
+        return 'bg-yellow-500';
       case 'rechazada':
         return 'bg-red-500';
       default:
@@ -81,7 +90,14 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
   }
 
   return (
-    <div className="flex gap-6">
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xl font-bold text-gray-900">Cronograma de Vencimientos</h2>
+        <span className="text-sm font-medium text-gray-600">{timelineData.mesAño}</span>
+      </div>
+
+      <div className="flex gap-6">
       {/* Main Timeline */}
       <div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-x-auto">
         <div className="inline-block min-w-full">
@@ -97,9 +113,12 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
                 <>
                   {/* Day columns */}
                   {timelineData.dias.map((dia, idx) => (
-                    <div key={dia} className="flex-1 min-w-32 border-r border-gray-200  last:border-r-0">
-                      <div className="p-4 h-20 flex items-end pb-4 border-b border-gray-200">
-                        <span className="text-sm font-medium text-gray-700">{dia}</span>
+                    <div key={dia} className="flex-1 min-w-40 border-r border-gray-200 last:border-r-0">
+                      <div className="p-3 border-b border-gray-200">
+                        <div className="flex flex-col items-center">
+                          <span className="text-lg font-bold text-gray-900">{dia}</span>
+                          <span className="text-xs text-gray-500 mt-0.5">{timelineData.mesActual}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -127,15 +146,14 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
                 {timelineData.dias.map((dia) => {
                   const facturasDelDia = getFacturasByUserAndDay(usuario.id, dia);
                   return (
-                    <div
+             <div
                       key={`${usuario.id}-${dia}`}
                       className="flex-1 min-w-32 border-r border-gray-200 last:border-r-0 p-2 relative"
                     >
                       {/* Today indicator line */}
                       {timelineData.hoy === dia && (
-                        <div className="absolute inset-0 border-l-2 border-blue-500">
-                          <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-blue-500 rounded-full"></div>
-                          <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-blue-500 rounded-full"></div>
+                        <div className="absolute inset-0 border-l-4 border-orange-500 bg-orange-50 bg-opacity-30">
+                          <div className="absolute -top-2 left-0 px-1 py-0.5 bg-orange-500 text-white text-xs font-bold rounded">HOY</div>
                         </div>
                       )}
 
@@ -163,30 +181,31 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
       {/* Legend */}
       <div className="w-48">
         <div className="bg-white rounded-lg border border-gray-200 p-4 sticky top-0">
-          <h3 className="font-bold text-gray-900 mb-4">Facturas</h3>
+          <h3 className="font-bold text-gray-900 mb-4">Estados</h3>
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              <span className="text-sm text-gray-700">Pagadas</span>
+              <span className="text-sm text-gray-700">Pagada</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-              <span className="text-sm text-gray-700">Validadas</span>
+              <span className="text-sm text-gray-700">Validada</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <span className="text-sm text-gray-700">Pendientes</span>
+              <span className="text-sm text-gray-700">Por validar</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span className="text-sm text-gray-700">Vencidas</span>
+              <span className="text-sm text-gray-700">Rechazada</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-              <span className="text-sm text-gray-700">Sin factura</span>
+              <span className="text-sm text-gray-700">Sin estado</span>
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

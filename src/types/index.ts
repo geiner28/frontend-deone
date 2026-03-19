@@ -225,7 +225,7 @@ export interface AproximarFacturaData {
 export interface FacturaEnriquecida extends Factura {
   factura_id: string;
   usuario_id: string;
-  usuario?: { id: string; nombre: string; apellido: string; telefono: string };
+  usuario?: { id: string; nombre: string; apellido: string; telefono: string; plan?: string };
   obligacion?: { id: string; descripcion: string; numero_referencia?: string; tipo_referencia?: string; pagina_pago?: string };
   usuario_nombre: string;
   badge_color: string;
