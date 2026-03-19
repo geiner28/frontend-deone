@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import {
+  ChevronDownIcon,
+  UserIcon,
+  DevicePhoneMobileIcon,
+  DocumentTextIcon,
+  BuildingLibraryIcon,
+  PaperClipIcon,
+} from '@heroicons/react/24/outline';
 import Button from '@/components/ui/Button';
 import type { Factura } from '@/types';
 import type { ToastType } from '@/components/ui/Toast';
@@ -22,7 +29,7 @@ interface UserAccionesCardProps {
 }
 
 interface AccionGroupProps {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   count: number;
   children: React.ReactNode;
@@ -40,9 +47,9 @@ function AccionGroup({ icon, title, count, children, defaultOpen = true }: Accio
         className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-100 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-lg">{icon}</span>
+          <span className="text-gray-600">{icon}</span>
           <div className="text-left">
-            <p className="font-semibold text-[#1d212b] text-sm">{title}</p>
+            <p className="font-semibold text-gray-900 text-sm">{title}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -98,12 +105,12 @@ export default function UserAccionesCard({
         className="w-full px-6 py-4 bg-gradient-to-r from-blue-50 to-blue-25 border-b border-blue-100 flex items-center justify-between hover:bg-blue-50 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <span className="text-xl">👤</span>
+          <UserIcon className="h-5 w-5 text-gray-600" />
           <div className="text-left">
-            <p className="font-bold text-[#1d212b]">
+            <p className="font-bold text-gray-900">
               {usuario.nombre} {usuario.apellido}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5">📞 {usuario.telefono}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{usuario.telefono}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -123,12 +130,12 @@ export default function UserAccionesCard({
         <div className="px-6 py-4 space-y-3">
           {/* RECARGAS */}
           {recargasUsuario.length > 0 && (
-            <AccionGroup icon="📱" title="Recargas Reportadas" count={recargasUsuario.length} defaultOpen={true}>
+            <AccionGroup icon={<DevicePhoneMobileIcon className="h-5 w-5" />} title="Recargas Reportadas" count={recargasUsuario.length} defaultOpen={true}>
               <div className="space-y-2">
                 {recargasUsuario.map((accion: any) => (
                   <div key={accion.id} className="flex items-center justify-between gap-3 p-3 bg-white rounded border border-gray-200 hover:bg-gray-50">
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[#1d212b]">+${accion.monto}</p>
+                      <p className="font-semibold text-gray-900">+${accion.monto}</p>
                       <p className="text-xs text-gray-500 mt-0.5">{formatDateTime(accion.creado_en)}</p>
                       {accion.comprobante_url && (
                         <p className="text-xs mt-1">
@@ -138,7 +145,8 @@ export default function UserAccionesCard({
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:underline"
                           >
-                            📎 Ver comprobante
+                          <PaperClipIcon className="h-3 w-3 inline mr-1" />
+                            Ver comprobante
                           </a>
                         </p>
                       )}
@@ -162,12 +170,12 @@ export default function UserAccionesCard({
 
           {/* FACTURAS */}
           {facturasUsuario.length > 0 && (
-            <AccionGroup icon="📄" title="Facturas en Revisión" count={facturasUsuario.length} defaultOpen={true}>
+            <AccionGroup icon={<DocumentTextIcon className="h-5 w-5" />} title="Facturas en Revisión" count={facturasUsuario.length} defaultOpen={true}>
               <div className="space-y-2">
                 {facturasUsuario.map((accion: any) => (
                   <div key={accion.id} className="flex items-center justify-between gap-2 p-3 bg-white rounded border border-gray-200 hover:bg-gray-50">
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[#1d212b] text-sm">{accion.servicio}</p>
+                      <p className="font-semibold text-gray-900 text-sm">{accion.servicio}</p>
                       <p className="text-xs text-gray-600 mt-0.5">
                         Período: {accion.periodo} | ${accion.monto}
                       </p>
@@ -249,12 +257,12 @@ export default function UserAccionesCard({
 
           {/* FACTURAS HEREDADAS */}
           {facturasHeredadasUsuario.length > 0 && (
-            <AccionGroup icon="🏛️" title="Facturas Heredadas" count={facturasHeredadasUsuario.length} defaultOpen={false}>
+            <AccionGroup icon={<BuildingLibraryIcon className="h-5 w-5" />} title="Facturas Heredadas" count={facturasHeredadasUsuario.length} defaultOpen={false}>
               <div className="space-y-2">
                 {facturasHeredadasUsuario.map((accion: any) => (
                   <div key={accion.id} className="flex items-center justify-between gap-2 p-3 bg-white rounded border border-gray-200 hover:bg-gray-50">
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[#1d212b] text-sm">{accion.servicio}</p>
+                      <p className="font-semibold text-gray-900 text-sm">{accion.servicio}</p>
                       <p className="text-xs text-gray-600 mt-0.5">
                         Período: {accion.periodo} | ${accion.monto}
                       </p>

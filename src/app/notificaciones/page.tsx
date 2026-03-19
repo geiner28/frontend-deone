@@ -37,9 +37,11 @@ import {
   ShieldCheckIcon,
   XMarkIcon,
   FunnelIcon,
-  ArrowRightIcon,
-  TrashIcon,
   QuestionMarkCircleIcon,
+  MagnifyingGlassIcon,
+  ExclamationTriangleIcon,
+  ArrowPathIcon,
+  BoltIcon,
 } from '@heroicons/react/24/outline';
 
 type Tab = 'todas' | 'alertas' | 'acciones';
@@ -64,19 +66,8 @@ interface DateFilter {
   customHasta?: string;
 }
 
-const TIPO_ICONS: Record<string, string> = {
-  'solicitud_recarga_inicio_mes': '📱',
-  'solicitud_recarga': '💳',
-  'recarga_aprobada': '✅',
-  'recarga_rechazada': '❌',
-  'recarga_confirmada': '🎉',
-  'factura_validada': '📄',
-  'factura_rechazada': '⚠️',
-  'pago_confirmado': '💰',
-  'obligacion_completada': '🏁',
-  'recordatorio_recarga': '🔔',
-  'alerta_admin': '🚨',
-};
+const formatTipo = (tipo: string) =>
+  tipo.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 export default function NotificacionesPage() {
   const [activeTab, setActiveTab] = useState<Tab>('todas');
@@ -192,7 +183,7 @@ export default function NotificacionesPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      console.log(`📊 LOADING ${activeTab.toUpperCase()}:`, { page, limit });
+      console.log(`LOADING ${activeTab.toUpperCase()}:`, { page, limit });
 
       if (activeTab === 'todas') {
         const { desde, hasta } = getDateRange(dateFilter);
@@ -204,7 +195,7 @@ export default function NotificacionesPage() {
         await loadAcciones();
       }
     } catch (err) {
-      console.error('❌ Error catch:', err);
+      console.error('Error catch:', err);
       showToast('Error al cargar datos: ' + (err as any).message, 'error');
     } finally {
       setLoading(false);
@@ -221,14 +212,14 @@ export default function NotificacionesPage() {
       limit,
     });
 
-    console.log('📨 API RESPUESTA (Todas):', resNotifs);
+    console.log('API RESPUESTA (Todas):', resNotifs);
 
     if (resNotifs.ok && resNotifs.data) {
-      console.log('✅ Notificaciones recibidas:', resNotifs.data.notificaciones?.length || 0);
+      console.log('Notificaciones recibidas:', resNotifs.data.notificaciones?.length || 0);
       setNotificacionesTodas(resNotifs.data.notificaciones || []);
       setTotalPages(resNotifs.data.total_pages || 1);
     } else {
-      console.log('❌ Error en API:', resNotifs);
+      console.log('Error en API:', resNotifs);
       showToast(getErrorMsg(resNotifs, 'Error cargando notificaciones'), 'error');
       setNotificacionesTodas([]);
     }
@@ -239,7 +230,7 @@ export default function NotificacionesPage() {
       hasta,
     });
 
-    console.log('📈 Estadísticas:', resStats);
+    console.log('Estadísticas:', resStats);
 
     if (resStats.ok && resStats.data) {
       setEstadisticas(resStats.data.estadisticas);
@@ -259,14 +250,14 @@ export default function NotificacionesPage() {
       limit,
     });
 
-    console.log('📨 API RESPUESTA (Acciones):', res);
+    console.log('API RESPUESTA (Acciones):', res);
 
     if (res.ok && res.data) {
-      console.log('✅ Acciones recibidas:', res.data.total_acciones);
+      console.log('Acciones recibidas:', res.data.total_acciones);
       setAccionesData(res.data);
       setTotalPages(res.data.total_pages || 1);
     } else {
-      console.log('❌ Error en API:', res);
+      console.log('Error en API:', res);
       showToast(getErrorMsg(res, 'Error cargando acciones'), 'error');
       setAccionesData(null);
     }
@@ -280,14 +271,14 @@ export default function NotificacionesPage() {
       limit,
     });
 
-    console.log('📨 API RESPUESTA (Alertas):', resNotifs);
+    console.log('API RESPUESTA (Alertas):', resNotifs);
 
     if (resNotifs.ok && resNotifs.data) {
-      console.log('✅ Alertas recibidas:', resNotifs.data.alertas?.length || 0);
+      console.log('Alertas recibidas:', resNotifs.data.alertas?.length || 0);
       setAlertas(resNotifs.data.alertas || []);
       setTotalPages(resNotifs.data.total_pages || 1);
     } else {
-      console.log('❌ Error en API:', resNotifs);
+      console.log('Error en API:', resNotifs);
       showToast(getErrorMsg(resNotifs, 'Error cargando alertas'), 'error');
       setAlertas([]);
     }
@@ -297,7 +288,7 @@ export default function NotificacionesPage() {
     const payload = notif.payload as any;
     const mensaje = (payload?.mensaje || payload?.mensaje_cobro || `Notificación: ${notif.tipo}`).toString();
     navigator.clipboard.writeText(mensaje);
-    showToast('✓ Mensaje copiado al portapapeles', 'success');
+    showToast('�S Mensaje copiado al portapapeles', 'success');
     setCopyNotifId(notif.id);
     setTimeout(() => setCopyNotifId(null), 2000);
   };
@@ -338,7 +329,7 @@ export default function NotificacionesPage() {
       setLoading(true);
       const res = await generarNotificacionesMock();
       if (res.ok) {
-        showToast(`✅ ${res.data?.mensaje}`, 'success');
+        showToast(`${res.data?.mensaje}`, 'success');
         setPage(1); // Volver a página 1
         await new Promise(r => setTimeout(r, 500)); // Pequeña pausa
         loadData();
@@ -379,33 +370,67 @@ export default function NotificacionesPage() {
     <div className="space-y-6 animate-fade-in">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* Tabs con indicadores visuales */}
+      {/* Header */}
+      <div className="mb-2">
+        <h1 className="text-2xl font-bold text-gray-900">Notificaciones</h1>
+        <p className="text-sm text-gray-500 mt-1">Gestiona alertas y notificaciones del sistema</p>
+        <div className="h-px bg-gray-200 w-full mt-4" />
+      </div>
+
+      {/* Tabs */}
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex bg-white rounded-xl border border-[#e5e7eb] p-1 shadow-sm overflow-x-auto">
-          <TabButton
-            active={activeTab === 'todas'}
+        <div className="bg-white rounded-lg border border-gray-200 p-1 inline-flex gap-1">
+          <button
             onClick={() => { setActiveTab('todas'); setPage(1); setSearchUsuario(''); setFilterTipo(''); setFilterEstado(''); }}
-            icon={<ShieldCheckIcon className="h-4 w-4" />}
-            label="👨‍💼 Todas"
-            count={notificacionesTodas.length}
-            description="Todas las notificaciones"
-          />
-          <TabButton
-            active={activeTab === 'alertas'}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+              activeTab === 'todas'
+                ? 'bg-white text-orange-500 border border-orange-500'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            Todas
+            {notificacionesTodas.length > 0 && (
+              <span className={`text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 ${
+                activeTab === 'todas' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
+              }`}>
+                {notificacionesTodas.length > 99 ? '99+' : notificacionesTodas.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => { setActiveTab('alertas'); setPage(1); }}
-            icon={<ShieldCheckIcon className="h-4 w-4" />}
-            label="🚨 ALERTAS"
-            count={alertas.length}
-            description="Alertas críticas"
-          />
-          <TabButton
-            active={activeTab === 'acciones'}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+              activeTab === 'alertas'
+                ? 'bg-white text-orange-500 border border-orange-500'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            Alertas
+            {alertas.length > 0 && (
+              <span className={`text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 ${
+                activeTab === 'alertas' ? 'bg-orange-500 text-white' : 'bg-red-100 text-red-600'
+              }`}>
+                {alertas.length > 99 ? '99+' : alertas.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => { setActiveTab('acciones'); setPage(1); setSearchUsuario(''); }}
-            icon={<ShieldCheckIcon className="h-4 w-4" />}
-            label="⚡ ACCIONES"
-            count={accionesData?.total_acciones || 0}
-            description="Validaciones pendientes"
-          />
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+              activeTab === 'acciones'
+                ? 'bg-white text-orange-500 border border-orange-500'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            Acciones
+            {(accionesData?.total_acciones || 0) > 0 && (
+              <span className={`text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 ${
+                activeTab === 'acciones' ? 'bg-orange-500 text-white' : 'bg-red-100 text-red-600'
+              }`}>
+                {accionesData?.total_acciones > 99 ? '99+' : accionesData?.total_acciones}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Indicador de modo y acciones rápidas */}
@@ -419,12 +444,12 @@ export default function NotificacionesPage() {
                   setDateFilter({ type: e.target.value as DateFilterType });
                   setPage(1);
                 }}
-                className="px-2 py-1 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 hover:border-[#ff8d2d] transition"
+                className="px-2 py-1 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 hover:border-orange-400 transition"
                 title="Filtrar notificaciones por rango de fechas"
               >
-                <option value="hoy">📅 Últimas 24h</option>
-                <option value="semana">📆 Última semana</option>
-                <option value="mes">📋 Último mes</option>
+                <option value="hoy">�altimas 24h</option>
+                <option value="semana">�altima semana</option>
+                <option value="mes">�altimo mes</option>
               </select>
               {dateFilter.type === 'custom' && (
                 <>
@@ -470,7 +495,7 @@ export default function NotificacionesPage() {
       {/* Info banner */}
       {activeTab === 'alertas' && alertas.length === 0 && (
         <div className="rounded-xl bg-green-50 border border-green-100 px-4 py-3 text-sm text-green-700">
-          ✅ No hay alertas activas. El sistema funciona correctamente.
+          No hay alertas activas. El sistema funciona correctamente.
         </div>
       )}
 
@@ -478,8 +503,8 @@ export default function NotificacionesPage() {
       {activeTab === 'todas' && estadisticas && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 mb-2">
-            <h3 className="text-sm font-semibold text-[#1d212b]">Resumen del Período</h3>
-            <button title="Las estadísticas se calculan por el período seleccionado" className="text-gray-400 hover:text-[#ff8d2d]">
+            <h3 className="text-sm font-semibold text-gray-900">Resumen del Período</h3>
+            <button title="Las estadísticas se calculan por el período seleccionado" className="text-gray-400 hover:text-orange-500">
               <QuestionMarkCircleIcon className="h-4 w-4" />
             </button>
           </div>
@@ -488,121 +513,91 @@ export default function NotificacionesPage() {
               label="Total"
               value={estadisticas.total}
               highlight={estadisticas.total > 0}
-              icon="📊"
             />
             <StatCard
               label="No Enviadas"
               value={estadisticas.no_enviadas}
               highlight={estadisticas.no_enviadas > 0}
               color="red"
-              icon="📤"
             />
             <StatCard
               label="Enviadas"
               value={estadisticas.enviadas}
               color="green"
-              icon="✅"
             />
             <StatCard
               label="Leídas"
               value={estadisticas.leidas}
               color="blue"
-              icon="👁️"
             />
           </div>
         </div>
       )}
 
-      {/* Panel de Filtros mejorado */}
+      {/* Filtros */}
       {activeTab === 'todas' && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-2">
-            <FunnelIcon className="h-4 w-4 text-[#6d7382]" />
-            <h3 className="text-sm font-semibold text-[#1d212b]">Filtros Avanzados</h3>
-            <span className="text-xs text-gray-500">
-              ({notificaciones.length} resultados)
-            </span>
-          </div>
+        <div className="bg-gray-100 rounded-lg p-3">
+          <div className="flex flex-wrap items-center gap-3 justify-between">
+            {/* Tipo filter */}
+            <select
+              id="filterTipo"
+              value={filterTipo}
+              onChange={(e) => { setFilterTipo(e.target.value); setPage(1); }}
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              aria-label="Filtrar por tipo de notificación"
+            >
+              <option value="">Tipo: Todos</option>
+              <option value="solicitud_recarga_inicio_mes">Inicio mes</option>
+              <option value="solicitud_recarga">Solicitud recarga</option>
+              <option value="recarga_aprobada">Recarga aprobada</option>
+              <option value="recarga_rechazada">Recarga rechazada</option>
+              <option value="factura_validada">Factura validada</option>
+              <option value="pago_confirmado">Pago confirmado</option>
+              <option value="alerta_admin">Alerta admin</option>
+            </select>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 bg-white p-4 rounded-xl border border-[#e5e7eb]">
-            {/* Filtro: Tipo */}
-            <div className="flex flex-col gap-1">
-              <label htmlFor="filterTipo" className="text-xs font-semibold text-gray-700">
-                Tipo de Notificación
-              </label>
-              <select
-                id="filterTipo"
-                value={filterTipo}
-                onChange={(e) => { setFilterTipo(e.target.value); setPage(1); }}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 hover:border-[#ff8d2d] transition"
-                aria-label="Filtrar por tipo de notificación"
-              >
-                <option value="">Todos los tipos</option>
-                <option value="solicitud_recarga_inicio_mes">📱 Inicio mes</option>
-                <option value="solicitud_recarga">💳 Solicitud recarga</option>
-                <option value="recarga_aprobada">✅ Recarga aprobada</option>
-                <option value="recarga_rechazada">❌ Recarga rechazada</option>
-                <option value="factura_validada">📄 Factura validada</option>
-                <option value="pago_confirmado">💰 Pago confirmado</option>
-                <option value="alerta_admin">🚨 Alerta admin</option>
-              </select>
-            </div>
+            {/* Estado filter */}
+            <select
+              id="filterEstado"
+              value={filterEstado}
+              onChange={(e) => { setFilterEstado(e.target.value); setPage(1); }}
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              aria-label="Filtrar por estado"
+            >
+              <option value="">Estado: Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="enviada">Enviada</option>
+              <option value="leida">Leída</option>
+            </select>
 
-            {/* Filtro: Estado */}
-            <div className="flex flex-col gap-1">
-              <label htmlFor="filterEstado" className="text-xs font-semibold text-gray-700">
-                Estado
-              </label>
-              <select
-                id="filterEstado"
-                value={filterEstado}
-                onChange={(e) => { setFilterEstado(e.target.value); setPage(1); }}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 hover:border-[#ff8d2d] transition"
-                aria-label="Filtrar por estado"
-              >
-                <option value="">Todos los estados</option>
-                <option value="pendiente">📤 Pendiente (no enviada)</option>
-                <option value="enviada">✉️ Enviada</option>
-                <option value="leida">👁️ Leída</option>
-              </select>
-            </div>
-
-            {/* Búsqueda */}
-            <div className="flex flex-col gap-1 lg:col-span-2">
-              <label htmlFor="searchUsuario" className="text-xs font-semibold text-gray-700">
-                Buscar Usuario
-              </label>
-              <Input
-                id="searchUsuario"
-                placeholder="Nombre, teléfono..."
-                value={searchUsuario}
-                onChange={(e) => { setSearchUsuario(e.target.value); setPage(1); }}
-                className="w-full"
-              />
-            </div>
-          </div>
-
-          {/* Botón limpiar filtros solo si hay activos */}
-          {(filterTipo || filterEstado || searchUsuario) && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-600">
-                {(filterTipo ? 1 : 0) + (filterEstado ? 1 : 0) + (searchUsuario ? 1 : 0)} filtro(s) activo(s)
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
+            {/* Clear filters */}
+            {(filterTipo || filterEstado || searchUsuario) && (
+              <button
                 onClick={() => {
                   setFilterTipo('');
                   setFilterEstado('');
                   setSearchUsuario('');
                   setPage(1);
                 }}
+                className="px-4 py-2 bg-white border border-orange-500 text-orange-500 rounded-lg text-sm font-medium hover:bg-orange-50 flex items-center gap-2"
                 title="Restablecer todos los filtros"
               >
                 <XMarkIcon className="h-4 w-4" /> Limpiar filtros
-              </Button>
+              </button>
+            )}
+
+            {/* Search */}
+            <div className="relative ml-auto w-[300px] flex-shrink-0">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, teléfono..."
+                value={searchUsuario}
+                onChange={(e) => { setSearchUsuario(e.target.value); setPage(1); }}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pl-10"
+              />
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -647,7 +642,7 @@ export default function NotificacionesPage() {
           {activeTab === 'todas' && estadisticas && estadisticas.total > 0 && !searchUsuario && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <p className="text-sm text-amber-900 mb-3">
-                <strong>ℹ️ Tienes {estadisticas.total} notificaciones en la BD</strong>, pero no aparecen en la tabla. Esto sugiere:
+                <strong>Tienes {estadisticas.total} notificaciones en la BD</strong>, pero no aparecen en la tabla. Esto sugiere:
               </p>
               <ul className="text-xs text-amber-800 space-y-1 list-disc list-inside">
                 <li>Verifca que los filtros sean correctos (actualmente: {filterTipo || 'sin tipo'}, {filterEstado || 'sin estado'})</li>
@@ -658,11 +653,12 @@ export default function NotificacionesPage() {
           )}
         </div>
       ) : (
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-[#1d212b] text-white sticky top-0 z-10">
-              <tr>
-                <th className="p-4 text-left w-12">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-900 text-white">
+                <th className="px-4 py-3 text-left w-12">
                   <input
                     type="checkbox"
                     checked={selectedIds.size === currentNotifications.length && currentNotifications.length > 0}
@@ -677,35 +673,52 @@ export default function NotificacionesPage() {
                     title="Seleccionar todas las notificaciones de esta página"
                   />
                 </th>
-                <th className="p-4 text-left font-medium">Usuario</th>
-                <th className="p-4 text-left font-medium">Tipo</th>
-                <th className="p-4 text-left font-medium">Estado</th>
-                <th className="p-4 text-left font-medium">Creada</th>
-                <th className="p-4 text-right font-medium">Acciones</th>
+                <th className="px-4 py-3 text-left font-medium">
+                  <span className="flex items-center gap-1">Usuario <span className="text-xs">� "</span></span>
+                </th>
+                <th className="px-4 py-3 text-left font-medium">
+                  <span className="flex items-center gap-1">Tipo <span className="text-xs">� "</span></span>
+                </th>
+                <th className="px-4 py-3 text-left font-medium">
+                  <span className="flex items-center gap-1">Estado <span className="text-xs">� "</span></span>
+                </th>
+                <th className="px-4 py-3 text-left font-medium">
+                  <span className="flex items-center gap-1">Creada <span className="text-xs">� "</span></span>
+                </th>
+                <th className="px-4 py-3 text-right font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {currentNotifications.map((notif: any) => {
+              {currentNotifications.map((notif: any, idx: number) => {
                 const notifTyped = notif as NotificacionConUsuario;
                 return (
-                  <tr key={notif.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="p-4"><input type="checkbox" checked={selectedIds.has(notif.id)} onChange={() => toggleSelect(notif.id)} /></td>
-                    <td className="p-4">
-                      <p className="text-sm font-medium">{notifTyped.usuarios?.nombre} {notifTyped.usuarios?.apellido}</p>
-                      <p className="text-xs text-gray-500">{notifTyped.usuarios?.telefono}</p>
+                  <tr key={notif.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                    <td className="px-4 py-4"><input type="checkbox" checked={selectedIds.has(notif.id)} onChange={() => toggleSelect(notif.id)} /></td>
+                    <td className="px-4 py-4">
+                      {notifTyped.usuarios?.nombre ? (
+                        <>
+                          <p className="text-sm font-medium text-gray-900">{notifTyped.usuarios.nombre} {notifTyped.usuarios.apellido}</p>
+                          <p className="text-xs text-gray-500">{notifTyped.usuarios.telefono}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-gray-900">Administrador</p>
+                          <p className="text-xs text-gray-400">Sistema</p>
+                        </>
+                      )}
                     </td>
-                    <td className="p-4">
-                      <Badge label={`${TIPO_ICONS[notifTyped.tipo] || '📋'} ${notifTyped.tipo}`} variant="neutral" dot={false} />
+                    <td className="px-4 py-4">
+                      <Badge label={formatTipo(notifTyped.tipo)} variant="neutral" dot={false} />
                     </td>
-                    <td className="p-4">
+                    <td className="px-4 py-4">
                       <Badge
                         label={notifTyped.estado}
                         variant={notifTyped.estado === 'pendiente' ? 'error' : notifTyped.estado === 'enviada' ? 'warning' : 'success'}
                         dot={false}
                       />
                     </td>
-                    <td className="p-4 text-sm text-gray-600">{formatDateTime(notifTyped.creado_en)}</td>
-                    <td className="p-4 text-right">
+                    <td className="px-4 py-4 text-sm text-gray-600">{formatDateTime(notifTyped.creado_en)}</td>
+                    <td className="px-4 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
                       {activeTab === 'alertas' ? (
                         // Acciones para alertas
@@ -741,7 +754,7 @@ export default function NotificacionesPage() {
                                 if (res.ok && res.data && res.data.solicitud_original) {
                                   const mensaje = (res.data.solicitud_original.payload as any)?.mensaje || `Notificación: ${res.data.solicitud_original.tipo}`;
                                   navigator.clipboard.writeText(mensaje);
-                                  showToast('✓ Mensaje copiado al portapapeles', 'success');
+                                  showToast('Mensaje copiado al portapapeles', 'success');
                                   setCopyNotifId(notif.id);
                                   setTimeout(() => setCopyNotifId(null), 2000);
                                 }
@@ -749,7 +762,7 @@ export default function NotificacionesPage() {
                                 showToast('Error al copiar mensaje', 'error');
                               }
                             }}
-                            className={`p-2 rounded transition-all ${copyNotifId === notif.id ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-[#ff8d2d] hover:bg-gray-100'}`}
+                            className={`p-2 rounded transition-all ${copyNotifId === notif.id ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-orange-500 hover:bg-gray-100'}`}
                             title="Copiar mensaje original para reenviar"
                           >
                             <ClipboardDocumentIcon className="h-4 w-4" />
@@ -757,7 +770,7 @@ export default function NotificacionesPage() {
                           {notifTyped.estado === 'pendiente' && (
                             <button
                               onClick={() => { setSelectedNotif(notifTyped); setShowMarkModal(true); }}
-                              className="p-2 text-gray-400 hover:text-[#ff8d2d] rounded hover:bg-gray-100 transition-all"
+                              className="p-2 text-gray-400 hover:text-orange-500 rounded hover:bg-gray-100 transition-all"
                               title="Registra que ya enviaste esta alerta"
                             >
                               <CheckIcon className="h-4 w-4" />
@@ -769,7 +782,7 @@ export default function NotificacionesPage() {
                         <>
                           <button
                             onClick={() => { setSelectedNotif(notifTyped); setShowDetailsModal(true); }}
-                            className="p-2 text-gray-400 hover:text-[#ff8d2d] rounded hover:bg-gray-100 transition-all"
+                            className="p-2 text-gray-400 hover:text-orange-500 rounded hover:bg-gray-100 transition-all"
                             aria-label={`Ver detalles de ${notifTyped.tipo} para ${notifTyped.usuarios?.nombre}`}
                             title="Ver contenido completo de la notificación"
                           >
@@ -779,7 +792,7 @@ export default function NotificacionesPage() {
                             <>
                               <button
                                 onClick={() => handleCopyMessage(notifTyped)}
-                                className={`p-2 rounded transition-all ${copyNotifId === notif.id ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-[#ff8d2d] hover:bg-gray-100'}`}
+                                className={`p-2 rounded transition-all ${copyNotifId === notif.id ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-orange-500 hover:bg-gray-100'}`}
                                 aria-label={`Copiar contenido de ${notifTyped.tipo}`}
                                 title="Copia el contenido para enviarlo manualmente (Ctrl+C)"
                               >
@@ -787,7 +800,7 @@ export default function NotificacionesPage() {
                               </button>
                               <button
                                 onClick={() => { setSelectedNotif(notifTyped); setShowMarkModal(true); }}
-                                className="p-2 text-gray-400 hover:text-[#ff8d2d] rounded hover:bg-gray-100 transition-all"
+                                className="p-2 text-gray-400 hover:text-orange-500 rounded hover:bg-gray-100 transition-all"
                                 aria-label={`Marcar como enviada ${notifTyped.tipo}`}
                                 title="Registra que ya enviaste esta notificación"
                               >
@@ -804,16 +817,29 @@ export default function NotificacionesPage() {
               })}
             </tbody>
           </table>
+          </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 p-4 border-t">
-              <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>
-                Anterior
-              </Button>
-              <span className="text-sm text-gray-600">Página {page} de {totalPages}</span>
-              <Button size="sm" variant="secondary" disabled={page >= totalPages} onClick={() => setPage(Math.min(totalPages, page + 1))}>
-                Siguiente
-              </Button>
+            <div className="bg-white border-t border-gray-200 px-4 py-4 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Página {page} de {totalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(Math.max(1, page - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ⬹ Anterior
+                </button>
+                <button
+                  onClick={() => setPage(Math.min(totalPages, page + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Siguiente ⬺
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -830,16 +856,22 @@ export default function NotificacionesPage() {
           <div className="space-y-4 p-5">
             <div>
               <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide mb-1.5">Tipo</p>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{TIPO_ICONS[selectedNotif.tipo] || '📋'}</span>
-                <p className="font-medium text-[#1d212b]">{selectedNotif.tipo.replace(/_/g, ' ')}</p>
-              </div>
+              <p className="font-medium text-gray-900">{formatTipo(selectedNotif.tipo)}</p>
             </div>
 
             <div>
               <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide mb-1.5">Usuario</p>
-              <p className="font-medium text-[#1d212b]">{selectedNotif.usuarios?.nombre} {selectedNotif.usuarios?.apellido}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{selectedNotif.usuarios?.telefono}</p>
+              {selectedNotif.usuarios?.nombre ? (
+                <>
+                  <p className="font-medium text-gray-900">{selectedNotif.usuarios.nombre} {selectedNotif.usuarios.apellido}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{selectedNotif.usuarios.telefono}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium text-gray-900">Administrador</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Sistema</p>
+                </>
+              )}
             </div>
 
             <div>
@@ -853,7 +885,7 @@ export default function NotificacionesPage() {
 
             <div>
               <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide mb-1.5">Creada</p>
-              <p className="text-xs text-[#1d212b]">{formatDateTime(selectedNotif.creado_en)}</p>
+              <p className="text-xs text-gray-900">{formatDateTime(selectedNotif.creado_en)}</p>
             </div>
 
             {selectedNotif.payload && (
@@ -901,24 +933,21 @@ export default function NotificacionesPage() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-900 font-medium">
                 Confirma que <strong>ya enviaste</strong> esta notificación a {' '}
-                <strong>{selectedNotif.usuarios?.nombre} {selectedNotif.usuarios?.apellido}</strong>
+                <strong>{selectedNotif.usuarios?.nombre ? `${selectedNotif.usuarios.nombre} ${selectedNotif.usuarios.apellido}` : 'Administrador'}</strong>
               </p>
             </div>
 
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
               <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Notificación</p>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{TIPO_ICONS[selectedNotif.tipo]}</span>
-                <div>
-                  <p className="text-sm font-medium text-[#1d212b]">{selectedNotif.tipo.replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{formatDateTime(selectedNotif.creado_en)}</p>
-                </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">{formatTipo(selectedNotif.tipo)}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{formatDateTime(selectedNotif.creado_en)}</p>
               </div>
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
               <p className="text-xs text-amber-900">
-                ⚠️ Este registro es <strong>auditable</strong> y quedará documentado en el sistema.
+                Este registro es <strong>auditable</strong> y quedará documentado en el sistema.
               </p>
             </div>
 
@@ -954,9 +983,9 @@ export default function NotificacionesPage() {
             {/* Alert Info */}
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <span className="text-2xl">🚨</span>
+                <ExclamationTriangleIcon className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-bold text-red-900">ALERTA CRÍTICA</p>
+                  <p className="text-sm font-bold text-red-900">Alerta crítica</p>
                   <p className="text-xs text-red-800 mt-1">
                     {(selectedAlerta.payload as any)?.tipo_alerta || 'Usuario no respondió a solicitud'}
                   </p>
@@ -992,7 +1021,7 @@ export default function NotificacionesPage() {
             {/* Original Solicitud */}
             {loadingOriginal && (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin h-5 w-5 text-[#ff8d2d]" />
+                <div className="animate-spin h-5 w-5 text-orange-500" />
               </div>
             )}
 
@@ -1000,10 +1029,7 @@ export default function NotificacionesPage() {
               <div className="space-y-2">
                 <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Solicitud Original que desencadenó esta alerta</p>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{TIPO_ICONS[originalSolicitud.tipo] || '📋'}</span>
-                    <p className="font-medium text-blue-900">{originalSolicitud.tipo.replace(/_/g, ' ')}</p>
-                  </div>
+                  <p className="font-medium text-blue-900">{formatTipo(originalSolicitud.tipo)}</p>
                   <p className="text-sm text-blue-800">{(originalSolicitud.payload as any)?.mensaje || 'Ver contenido de la solicitud'}</p>
                 </div>
               </div>
@@ -1027,31 +1053,17 @@ export default function NotificacionesPage() {
                   onClick={() => {
                     const mensaje = (originalSolicitud.payload as any)?.mensaje || `Notificación: ${originalSolicitud.tipo}`;
                     navigator.clipboard.writeText(mensaje);
-                    showToast('✓ Mensaje original copiado', 'success');
+                    showToast('Mensaje original copiado', 'success');
                   }}
                   title="Copia el mensaje original para reenviar"
                 >
-                  📋 Copiar Original
+                  <ClipboardDocumentIcon className="h-4 w-4" /> Copiar Original
                 </Button>
               )}
             </div>
           </div>
         )}
       </Modal>
-
-      {/* Modal: Validar Factura - para Tab ACCIONES */}
-      <ValidarFacturaModal
-        open={showValidarFacturaModal}
-        factura={selectedFactura}
-        onClose={() => {
-          setShowValidarFacturaModal(false);
-          setSelectedFactura(null);
-        }}
-        onSuccess={async () => {
-          await loadData();
-        }}
-        showToast={showToast}
-      />
 
       {/* Modal: Validar Factura */}
       <ValidarFacturaModal
@@ -1165,14 +1177,14 @@ function AccionesView({
       {/* Resumen y controles */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <h3 className="text-lg font-bold text-[#1d212b]">
-            ⚡ {total_acciones} {total_acciones === 1 ? 'acción' : 'acciones'} pendiente{total_acciones !== 1 ? 's' : ''}
+          <h3 className="text-lg font-bold text-gray-900">
+            {total_acciones} {total_acciones === 1 ? 'acción' : 'acciones'} pendiente{total_acciones !== 1 ? 's' : ''}
           </h3>
           <span className="text-sm text-gray-500">en {total_usuarios} {total_usuarios === 1 ? 'usuario' : 'usuarios'}</span>
         </div>
         <div className="flex items-center gap-2">
           <Input
-            placeholder="🔍 Buscar usuario..."
+            placeholder="Buscar usuario..."
             value={searchUsuario}
             onChange={(e) => onSearchChange(e.target.value)}
             className="w-48"
@@ -1182,20 +1194,20 @@ function AccionesView({
             onClick={onRefresh}
             title="Actualizar acciones (no usa auto-refresh)"
           >
-            🔄 Actualizar
+            <ArrowPathIcon className="h-4 w-4" /> Actualizar
           </Button>
         </div>
       </div>
 
       {/* Info banner */}
-      <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-700 space-y-2">
+      <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-700 space-y-2">
         <p>
-          <strong>ℹ️ Cómo funciona:</strong> Las acciones muestran facturas y recargas pendientes de validación. 
+          <strong>Cómo funciona:</strong> Las acciones muestran facturas y recargas pendientes de validación. 
           Haz click en "Validar" o "Revisar" para abrir el modal correspondiente. No hay auto-refresh; 
-          usa el botón "🔄 Actualizar" cuando necesites refrescar los datos.
+          usa el botón "Actualizar" cuando necesites refrescar los datos.
         </p>
         <p className="text-xs text-blue-600">
-          💡 Tip: Busca por usuario para filtrar, pero recuerda que el búsqueda es temporal. 
+          Busca por usuario para filtrar, pero recuerda que la búsqueda es temporal. 
           Después de validar/aprobar, refresca manualmente para ver cambios.
         </p>
       </div>
@@ -1256,7 +1268,7 @@ function AccionesView({
             disabled={page <= 1}
             onClick={() => onPageChange(Math.max(1, page - 1))}
           >
-            ← Anterior
+            � � Anterior
           </Button>
           <span className="text-sm text-gray-600">Página {page} de {totalPages}</span>
           <Button
@@ -1265,58 +1277,11 @@ function AccionesView({
             disabled={page >= totalPages}
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
           >
-            Siguiente →
+            Siguiente � 
           </Button>
         </div>
       )}
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-  count,
-  description,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-  description?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-start gap-1 rounded-lg px-4 py-2 text-left transition-all ${
-        active
-          ? 'bg-[#ff8d2d] text-white shadow-sm'
-          : 'text-[#6d7382] hover:text-[#1d212b] hover:bg-[#f9f9f9]'
-      }`}
-      title={description}
-    >
-      <div className="flex items-center gap-2">
-        {icon}
-        <span className="text-sm font-medium">{label}</span>
-        {count > 0 && (
-          <span
-            className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
-              active ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
-            }`}
-          >
-            {count}
-          </span>
-        )}
-      </div>
-      {description && (
-        <span className={`text-[10px] leading-tight ${active ? 'text-white/70' : 'text-[#6d7382]'}`}>
-          {description}
-        </span>
-      )}
-    </button>
   );
 }
 
@@ -1325,13 +1290,11 @@ function StatCard({
   value,
   highlight = false,
   color = 'gray',
-  icon = '',
 }: {
   label: string;
   value: number;
   highlight?: boolean;
   color?: 'red' | 'green' | 'blue' | 'gray';
-  icon?: string;
 }) {
   const colorClass = {
     red: 'text-red-600',
@@ -1341,13 +1304,10 @@ function StatCard({
   }[color];
 
   return (
-    <Card className={`!p-4 ${highlight ? 'border-2 border-[#ff8d2d]' : ''}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-xs font-semibold text-[#6d7382] uppercase mb-1">{label}</p>
-          <p className={`text-2xl font-bold ${colorClass}`}>{value}</p>
-        </div>
-        {icon && <span className="text-2xl opacity-50">{icon}</span>}
+    <Card className={`!p-4 ${highlight ? 'border-2 border-orange-500' : ''}`}>
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase mb-1">{label}</p>
+        <p className={`text-2xl font-bold ${colorClass}`}>{value}</p>
       </div>
     </Card>
   );

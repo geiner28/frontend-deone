@@ -15,7 +15,7 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   '/facturas': { title: 'Facturas', subtitle: 'Captura y gestión de facturas' },
   '/recargas': { title: 'Recargas', subtitle: 'Registro y aprobación de recargas' },
   '/disponible': { title: 'Disponibilidad', subtitle: 'Consulta de saldo disponible por periodo' },
-  '/notificaciones': { title: 'Notificaciones', subtitle: 'Centro de notificaciones admin y usuario' },
+  '/notificaciones': { title: '', subtitle: '' },
 };
 
 export default function Header() {
