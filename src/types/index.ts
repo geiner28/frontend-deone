@@ -588,6 +588,28 @@ export interface ListAdminPagosData {
   total_pages: number;
 }
 
+// ─── Historial (Audit Log) ────────────────────────────────────────────────────
+export type HistorialTipo = 'recarga' | 'obligacion_agregada' | 'pago_factura' | 'usuario_creado';
+
+export interface HistorialEntry {
+  id: string;
+  tipo: HistorialTipo;
+  usuario_id: string;
+  usuario_nombre: string;
+  numero_referencia: string;
+  fecha: string;
+  monto: number;
+  descripcion?: string;
+}
+
+export interface ListHistorialData {
+  historial: HistorialEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
 // ─── Notificaciones (frontend-only, para panel UI) ───────────────────────────
 export type NotificationType =
   | 'recarga_pendiente'

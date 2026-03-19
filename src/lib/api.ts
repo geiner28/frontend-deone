@@ -52,6 +52,7 @@ import type {
   ListAdminClientesData,
   AdminClientePerfilData,
   ListAdminPagosData,
+  ListHistorialData,
   ProgramacionRecargas,
 } from '@/types';
 
@@ -369,6 +370,13 @@ export const getAdminClientePerfil = (telefono: string, periodo?: string) => {
   return request<AdminClientePerfilData>(path);
 };
 
+// PUT /api/admin/users/:id — Actualizar datos de usuario (nombre, apellido, telefono, correo, etc.)
+export const updateAdminUser = (userId: string, payload: Record<string, unknown>) =>
+  request<Usuario>(`/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+
 // GET /api/admin/pagos?page=&limit=&telefono=&estado=&periodo=
 export const getAdminPagos = (params?: {
   page?: number;
@@ -596,4 +604,22 @@ export const getAdminNotificacionesAcciones = (filters?: {
     limit: number;
     total_pages: number;
   }>(`/admin/notificaciones/acciones?${sp.toString()}`);
+};
+
+// ─── 12. Historial (Audit Log) ───────────────────────────────────────────────
+// GET /api/admin/historial?page=&limit=&tipo=&usuario_id=&search=
+export const getAdminHistorial = (params?: {
+  page?: number;
+  limit?: number;
+  tipo?: string;
+  usuario_id?: string;
+  search?: string;
+}) => {
+  const sp = new URLSearchParams();
+  if (params?.page) sp.set('page', String(params.page));
+  if (params?.limit) sp.set('limit', String(params.limit));
+  if (params?.tipo) sp.set('tipo', params.tipo);
+  if (params?.usuario_id) sp.set('usuario_id', params.usuario_id);
+  if (params?.search) sp.set('search', params.search);
+  return request<ListHistorialData>(`/admin/historial?${sp.toString()}`);
 };
