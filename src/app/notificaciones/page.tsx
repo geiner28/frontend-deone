@@ -288,7 +288,7 @@ export default function NotificacionesPage() {
     const payload = notif.payload as any;
     const mensaje = (payload?.mensaje || payload?.mensaje_cobro || `Notificación: ${notif.tipo}`).toString();
     navigator.clipboard.writeText(mensaje);
-    showToast('�S Mensaje copiado al portapapeles', 'success');
+    showToast('Mensaje copiado al portapapeles', 'success');
     setCopyNotifId(notif.id);
     setTimeout(() => setCopyNotifId(null), 2000);
   };
@@ -447,9 +447,9 @@ export default function NotificacionesPage() {
                 className="px-2 py-1 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 hover:border-orange-400 transition"
                 title="Filtrar notificaciones por rango de fechas"
               >
-                <option value="hoy">�altimas 24h</option>
-                <option value="semana">�altima semana</option>
-                <option value="mes">�altimo mes</option>
+                <option value="hoy">Últimas 24h</option>
+                <option value="semana">Última semana</option>
+                <option value="mes">Último mes</option>
               </select>
               {dateFilter.type === 'custom' && (
                 <>
@@ -674,16 +674,16 @@ export default function NotificacionesPage() {
                   />
                 </th>
                 <th className="px-4 py-3 text-left font-medium">
-                  <span className="flex items-center gap-1">Usuario <span className="text-xs">� "</span></span>
+                  <span className="flex items-center gap-1">Usuario <span className="text-xs">↕</span></span>
                 </th>
                 <th className="px-4 py-3 text-left font-medium">
-                  <span className="flex items-center gap-1">Tipo <span className="text-xs">� "</span></span>
+                  <span className="flex items-center gap-1">Tipo <span className="text-xs">↕</span></span>
                 </th>
                 <th className="px-4 py-3 text-left font-medium">
-                  <span className="flex items-center gap-1">Estado <span className="text-xs">� "</span></span>
+                  <span className="flex items-center gap-1">Estado <span className="text-xs">↕</span></span>
                 </th>
                 <th className="px-4 py-3 text-left font-medium">
-                  <span className="flex items-center gap-1">Creada <span className="text-xs">� "</span></span>
+                  <span className="flex items-center gap-1">Creada <span className="text-xs">↕</span></span>
                 </th>
                 <th className="px-4 py-3 text-right font-medium">Acciones</th>
               </tr>
@@ -830,14 +830,14 @@ export default function NotificacionesPage() {
                   disabled={page <= 1}
                   className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  ⬹ Anterior
+                  Anterior
                 </button>
                 <button
                   onClick={() => setPage(Math.min(totalPages, page + 1))}
                   disabled={page >= totalPages}
                   className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Siguiente ⬺
+                  Siguiente
                 </button>
               </div>
             </div>
@@ -1268,7 +1268,7 @@ function AccionesView({
             disabled={page <= 1}
             onClick={() => onPageChange(Math.max(1, page - 1))}
           >
-            � � Anterior
+            Anterior
           </Button>
           <span className="text-sm text-gray-600">Página {page} de {totalPages}</span>
           <Button
@@ -1277,7 +1277,7 @@ function AccionesView({
             disabled={page >= totalPages}
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
           >
-            Siguiente � 
+            Siguiente
           </Button>
         </div>
       )}
