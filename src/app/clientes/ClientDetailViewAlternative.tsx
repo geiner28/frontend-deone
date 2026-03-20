@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { ChevronLeftIcon, PencilIcon } from '@heroicons/react/24/outline';
+import {
+  ChevronLeftIcon,
+  PencilIcon,
+  PhoneIcon,
+  EnvelopeIcon,
+  MapPinIcon,
+  PlusIcon,
+  DocumentTextIcon,
+} from '@heroicons/react/24/outline';
 import Badge from '@/components/ui/Badge';
 import UpdatePlanModal from '@/components/modals/UpdatePlanModal';
 import EditarFechasRecargasModal from '@/components/modals/EditarFechasRecargasModal';
@@ -114,7 +122,7 @@ const generateMonthOptions = () => {
   const today_y = today.getFullYear();
   const today_m = String(today.getMonth() + 1).padStart(2, '0');
   const todayName = today.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-  options.push({ value: `${today_y}-${today_m}-01`, label: `📌 ${todayName.charAt(0).toUpperCase() + todayName.slice(1)} (Actual)` });
+  options.push({ value: `${today_y}-${today_m}-01`, label: `${todayName.charAt(0).toUpperCase() + todayName.slice(1)} (Actual)` });
   
   // 12 meses hacia el PASADO
   for (let i = 1; i <= 12; i++) {
@@ -155,7 +163,7 @@ export default function ClientDetailViewAlternative({
   const [openReportarRecargaModal, setOpenReportarRecargaModal] = useState(false);
 
   // ─── FACTURA ACTION STATES ────────────────────────────────────────────────────
-  const [expandedFacturaId, setExpandedFacturaId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -197,7 +205,7 @@ export default function ClientDetailViewAlternative({
   // ─── HANDLER: Validar Factura ───────────────────────────────────────────────────
   const handleValidarSuccess = useCallback(async () => {
     setOpenValidarModal(false);
-    setExpandedFacturaId(null);
+    setOpenMenuId(null);
     setSelectedFactura(null);
     showToast('Factura validada correctamente', 'success');
     await refreshFacturas();
@@ -206,7 +214,7 @@ export default function ClientDetailViewAlternative({
   // ─── HANDLER: Rechazar Factura ──────────────────────────────────────────────────
   const handleRechazarSuccess = useCallback(async () => {
     setOpenRechazarModal(false);
-    setExpandedFacturaId(null);
+    setOpenMenuId(null);
     setSelectedFactura(null);
     showToast('Factura rechazada correctamente', 'success');
     await refreshFacturas();
@@ -215,7 +223,7 @@ export default function ClientDetailViewAlternative({
   // ─── HANDLER: Pagar Factura ────────────────────────────────────────────────────
   const handlePagarSuccess = useCallback(async () => {
     setOpenPagarModal(false);
-    setExpandedFacturaId(null);
+    setOpenMenuId(null);
     setSelectedFactura(null);
     showToast('Pago realizado correctamente', 'success');
     await refreshFacturas();
@@ -223,7 +231,7 @@ export default function ClientDetailViewAlternative({
   // ─── HANDLER: Aproximar Valor ──────────────────────────────────────────────
   const handleAproximarSuccess = useCallback(async () => {
     setOpenAproximarModal(false);
-    setExpandedFacturaId(null);
+    setOpenMenuId(null);
     setSelectedFactura(null);
     showToast('Valor aproximado correctamente', 'success');
     await refreshFacturas();
@@ -274,45 +282,21 @@ export default function ClientDetailViewAlternative({
   const filteredFacturas = filterFacturasByTab(allFacturasMes, activeTab);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: "'Inter', sans-serif" }}>
-      {/* MAIN CONTENT - Sin sidebar, solo padding */}
-      <main style={{ padding: '32px' }}>
+    <div className="min-h-screen bg-gray-50">
+      <main className="p-8 space-y-6">
         {/* BACK BUTTON + HEADER */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #e5e7eb', paddingBottom: '16px', marginBottom: '24px' }}>
-          {/* Back Button- Esquina Superior Izquierda */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-4 flex-1">
             <button
               onClick={onBack}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '32px',
-                height: '32px',
-                borderRadius: '6px',
-                border: '1px solid #e5e7eb',
-                backgroundColor: '#ffffff',
-                cursor: 'pointer',
-                color: '#6b7280',
-                fontSize: '16px',
-                transition: 'all 0.2s',
-                padding: 0,
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = '#f3f4f6';
-                e.currentTarget.style.borderColor = '#d1d5db';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = '#ffffff';
-                e.currentTarget.style.borderColor = '#e5e7eb';
-              }}
+              className="flex items-center justify-center w-8 h-8 rounded-md border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 hover:border-gray-300 transition-all"
               title="Volver"
             >
-              ←
+              <ChevronLeftIcon className="h-4 w-4" />
             </button>
             <div>
-              <h1 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '4px' }}>Usuario</h1>
-              <p style={{ color: '#6b7280', fontSize: '14px' }}>Detalles y gestión del cliente</p>
+              <h1 className="text-2xl font-semibold text-gray-900">Usuario</h1>
+              <p className="text-sm text-gray-500 mt-1">Detalles y gestión del cliente</p>
             </div>
           </div>
 
@@ -321,248 +305,182 @@ export default function ClientDetailViewAlternative({
             value={selectedMonth}
             onChange={(e) => handleMonthChange(e.target.value)}
             disabled={isLoadingMonth}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #e5e7eb',
-              padding: '8px 12px',
-              borderRadius: '20px',
-              fontSize: '14px',
-              cursor: isLoadingMonth ? 'not-allowed' : 'pointer',
-              color: '#111827',
-              fontWeight: '500',
-              transition: 'all 0.2s',
-              opacity: isLoadingMonth ? 0.6 : 1,
-            }}
+            className={`bg-white border border-gray-200 px-3 py-2 rounded-full text-sm font-medium text-gray-900 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 ${isLoadingMonth ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
           >
             {monthOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
-                📅 {opt.label}
+                {opt.label}
               </option>
             ))}
           </select>
         </div>
 
-        {/* USER CARD - 5 Secciones */}
-        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', display: 'flex', overflow: 'hidden', marginBottom: '24px' }}>
-          {/* Section 1: Name & Balance */}
-          <div style={{ padding: '20px', borderRight: '1px solid #e5e7eb', flex: 1, position: 'relative' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#111827' }}>
-              {u.nombre} {u.apellido}
-            </h2>
-            <div style={{ fontSize: '24px', fontWeight: '500', display: 'flex', alignItems: 'baseline', gap: '4px', color: '#f58220' }}>
-              {formatCurrency(r.saldo_disponible)}
-              <span style={{ fontSize: '14px', color: '#6b7280', fontWeight: '400' }}>/ Saldo</span>
-            </div>
-          </div>
+        <div className="h-px bg-gray-200 w-full" />
 
-          {/* Section 2: Contact */}
-          <div style={{ padding: '20px', borderRight: '1px solid #e5e7eb', flex: 1, position: 'relative' }}>
-            <div 
-              style={{ position: 'absolute', top: '16px', right: '16px', color: '#9ca3af', cursor: 'pointer', fontSize: '16px', opacity: 0.5, transition: 'opacity 0.2s' }}
-              onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseOut={(e) => e.currentTarget.style.opacity = '0.5'}
-              onClick={() => setOpenEditUserModal(true)}
-            >
-              <PencilIcon className="h-5 w-5" style={{ cursor: 'pointer' }} />
+        {/* USER CARD - Sections + Quick Actions */}
+        <div className="flex gap-4">
+          <div className="bg-white border border-gray-200 rounded-xl flex overflow-hidden flex-1">
+            {/* Section 1: Name & Balance */}
+            <div className="p-5 flex-1 flex flex-col justify-center">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                {u.nombre} {u.apellido}
+              </h2>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-medium text-orange-500">{formatCurrency(r.saldo_disponible)}</span>
+                <span className="text-sm text-gray-500">/ Saldo</span>
+              </div>
             </div>
-            <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>📱 {u.telefono}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>✉️ {u.correo || 'No registrado'}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>📍 {u.direccion || 'No registrada'}</div>
-            </div>
-          </div>
 
-          {/* Section 3: Plan */}
-          <div style={{ padding: '20px', borderRight: '1px solid #e5e7eb', flex: 1, position: 'relative' }}>
-            <div 
-              style={{ position: 'absolute', top: '16px', right: '16px', color: '#9ca3af', cursor: 'pointer', fontSize: '16px', opacity: 0.5, transition: 'opacity 0.2s' }}
-              onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseOut={(e) => e.currentTarget.style.opacity = '0.5'}
-              onClick={() => setOpenPlanModal(true)}
-            >
-              <PencilIcon className="h-5 w-5" style={{ cursor: 'pointer' }} />
-            </div>
-            <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px', fontWeight: '600' }}>Plan</div>
-            <div style={{ fontSize: '18px', color: getPlanColor(u.plan), marginBottom: '4px', fontWeight: '600' }}>
-              {u.plan.charAt(0).toUpperCase() + u.plan.slice(1)}
-            </div>
-            <div style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
-              {r.facturas_validadas_count_mes} Factura{r.facturas_validadas_count_mes !== 1 ? 's' : ''}
-            </div>
-          </div>
+            <div className="w-px bg-gray-200 my-4" />
 
-          {/* Section 4: Fechas de Recarga/Grupos */}
-          <div style={{ padding: '20px', borderRight: '1px solid #e5e7eb', flex: 1, position: 'relative' }}>
-            <div 
-              style={{ position: 'absolute', top: '16px', right: '16px', color: '#9ca3af', cursor: 'pointer', fontSize: '16px', opacity: 0.5, transition: 'opacity 0.2s' }}
-              onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseOut={(e) => e.currentTarget.style.opacity = '0.5'}
-              onClick={() => setOpenFechasRecargasModal(true)}
-            >
-              <PencilIcon className="h-5 w-5" style={{ cursor: 'pointer' }} />
-            </div>
-            <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px', display: 'block', fontWeight: '600' }}>Fechas de recarga</div>
-            
-            {/* Grupo 1 */}
-            <div style={{ fontSize: '14px', marginBottom: '8px', color: '#111827' }}>
-              <span style={{ color: '#3b82f6', fontWeight: '600' }}>Grupo 1</span>
-              {perfil?.programacion_recargas?.dia_1 ? 
-                ` - Día ${perfil.programacion_recargas.dia_1}` 
-                : ' - —'
-              }
-            </div>
-            <div style={{ fontSize: '14px', marginBottom: '8px', color: '#111827', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              {formatCurrency(perfil?.cuotas_mes?.grupo1?.monto || 0)} 
-              <span style={{ color: '#10b981', fontSize: '16px' }}>✓</span>
-            </div>
-            <div style={{ height: '12px' }} />
-            
-            {/* Grupo 2 - Mostrar solo si existe según programacion_recargas */}
-            {perfil?.programacion_recargas?.cantidad_recargas === 2 && (
-              <>
-                <div style={{ fontSize: '14px', marginBottom: '8px', color: '#111827' }}>
-                  <span style={{ color: '#3b82f6', fontWeight: '600' }}>Grupo 2</span>
-                  {perfil?.programacion_recargas?.dia_2 ? ` - Día ${perfil.programacion_recargas.dia_2}` : ' - —'}
+            {/* Section 2: Contact */}
+            <div className="p-5 flex-1 relative">
+              <button
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                onClick={() => setOpenEditUserModal(true)}
+              >
+                <PencilIcon className="h-5 w-5" />
+              </button>
+              <div className="text-sm text-gray-500 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <PhoneIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                  {u.telefono}
                 </div>
-                <div style={{ fontSize: '14px', marginBottom: '8px', color: '#111827', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  {formatCurrency(perfil?.cuotas_mes?.grupo2?.monto || 0)} 
-                  <span style={{ color: '#f59e0b', fontSize: '16px' }}>⚠</span>
+                <div className="flex items-center gap-2">
+                  <EnvelopeIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                  {u.correo || 'No registrado'}
                 </div>
-              </>
-            )}
+                <div className="flex items-center gap-2">
+                  <MapPinIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                  {u.direccion || 'No registrada'}
+                </div>
+              </div>
+            </div>
+
+            <div className="w-px bg-gray-200 my-4" />
+
+            {/* Section 3: Plan */}
+            <div className="p-5 flex-1 relative">
+              <button
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                onClick={() => setOpenPlanModal(true)}
+              >
+                <PencilIcon className="h-5 w-5" />
+              </button>
+              <div className="text-xs text-gray-500 font-semibold mb-1">Plan</div>
+              <div className="text-lg font-semibold mb-1" style={{ color: getPlanColor(u.plan) }}>
+                {u.plan.charAt(0).toUpperCase() + u.plan.slice(1)}
+              </div>
+              <div className="text-sm font-medium text-gray-900">
+                {r.facturas_validadas_count_mes} Factura{r.facturas_validadas_count_mes !== 1 ? 's' : ''}
+              </div>
+            </div>
+
+            <div className="w-px bg-gray-200 my-4" />
+
+            {/* Section 4: Fechas de Recarga */}
+            <div className="p-5 flex-1 relative">
+              <button
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                onClick={() => setOpenFechasRecargasModal(true)}
+              >
+                <PencilIcon className="h-5 w-5" />
+              </button>
+              <div className="text-xs text-gray-500 font-semibold mb-3">Fechas de recarga</div>
+              <div className="text-sm mb-2 text-gray-900">
+                <span className="text-blue-500 font-semibold">Grupo 1</span>
+                {perfil?.programacion_recargas?.dia_1 ? 
+                  ` - Día ${perfil.programacion_recargas.dia_1}` 
+                  : ' - —'
+                }
+              </div>
+              <div className="text-sm mb-2 text-gray-900 font-semibold flex items-center gap-1">
+                {formatCurrency(perfil?.cuotas_mes?.grupo1?.monto || 0)} 
+                <span className="text-green-500 text-base">✓</span>
+              </div>
+              <div className="h-3" />
+              {perfil?.programacion_recargas?.cantidad_recargas === 2 && (
+                <>
+                  <div className="text-sm mb-2 text-gray-900">
+                    <span className="text-blue-500 font-semibold">Grupo 2</span>
+                    {perfil?.programacion_recargas?.dia_2 ? ` - Día ${perfil.programacion_recargas.dia_2}` : ' - —'}
+                  </div>
+                  <div className="text-sm mb-2 text-gray-900 font-semibold flex items-center gap-1">
+                    {formatCurrency(perfil?.cuotas_mes?.grupo2?.monto || 0)} 
+                    <span className="text-amber-500 text-base">⚠</span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Section 5: Quick Actions */}
-          <div style={{ backgroundColor: '#1f222a', color: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'center', width: '220px', flex: '0 0 220px', padding: '20px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '16px' }}>Acciones rápidas</h3>
+          {/* Section 5: Quick Actions - Separate card */}
+          <div className="bg-gray-900 text-white flex flex-col justify-center w-[220px] flex-shrink-0 p-5 rounded-xl">
+            <h3 className="text-sm font-medium mb-4">Acciones rápidas</h3>
             <button
               onClick={() => setOpenObligacionModal(true)}
-              style={{
-                background: 'transparent',
-                border: '1px solid #4b5563',
-                color: '#d1d5db',
-                padding: '8px',
-                borderRadius: '6px',
-                marginBottom: '8px',
-                fontSize: '13px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s',
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.borderColor = '#6b7280';
-                e.currentTarget.style.color = 'white';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.borderColor = '#4b5563';
-                e.currentTarget.style.color = '#d1d5db';
-              }}
+              className="bg-transparent border border-gray-600 text-gray-300 hover:border-gray-500 hover:text-white px-3 py-2 rounded-md mb-2 text-sm text-left transition-all flex items-center gap-2"
             >
-              ➕ Agregar obligación
+              <PlusIcon className="h-4 w-4" />
+              Agregar obligación
             </button>
             <button
               onClick={() => setOpenReportarRecargaModal(true)}
-              style={{
-                background: 'transparent',
-                border: '1px solid #4b5563',
-                color: '#d1d5db',
-                padding: '8px',
-                borderRadius: '6px',
-                marginBottom: '0',
-                fontSize: '13px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s',
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.borderColor = '#6b7280';
-                e.currentTarget.style.color = 'white';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.borderColor = '#4b5563';
-                e.currentTarget.style.color = '#d1d5db';
-              }}
+              className="bg-transparent border border-gray-600 text-gray-300 hover:border-gray-500 hover:text-white px-3 py-2 rounded-md text-sm text-left transition-all flex items-center gap-2"
             >
-              📝 Registrar recarga
+              <DocumentTextIcon className="h-4 w-4" />
+              Registrar recarga
             </button>
           </div>
         </div>
 
-        {/* STATS GRID - 5 Cards (Mes actual) */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px', marginBottom: '24px' }}>
-          <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>Total recargas</div>
-            <div style={{ fontSize: '28px', fontWeight: '400', color: '#111827' }}>{formatCurrency(r.total_recargas_aprobadas_mes)}</div>
+        {/* STATS GRID */}
+        <div className="grid grid-cols-5 gap-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-sm font-semibold mb-4 text-gray-900">Total recargas</div>
+            <div className="text-[28px] font-normal text-gray-900">{formatCurrency(r.total_recargas_aprobadas_mes)}</div>
           </div>
-
-          <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>Total pagado</div>
-            <div style={{ fontSize: '28px', fontWeight: '400', color: '#111827' }}>{formatCurrency(r.total_pagos_realizados_mes)}</div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-sm font-semibold mb-4 text-gray-900">Total pagado</div>
+            <div className="text-[28px] font-normal text-gray-900">{formatCurrency(r.total_pagos_realizados_mes)}</div>
           </div>
-
-          <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>Total pendiente</div>
-            <div style={{ fontSize: '28px', fontWeight: '400', color: '#111827' }}>{formatCurrency(r.total_pendiente_mes)}</div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-sm font-semibold mb-4 text-gray-900">Total pendiente</div>
+            <div className="text-[28px] font-normal text-gray-900">{formatCurrency(r.total_pendiente_mes)}</div>
           </div>
-
-          <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>Saldo disponible</div>
-            <div style={{ fontSize: '28px', fontWeight: '400', color: '#111827' }}>{formatCurrency(r.saldo_disponible)}</div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-sm font-semibold mb-4 text-gray-900">Saldo disponible</div>
+            <div className="text-[28px] font-normal text-gray-900">{formatCurrency(r.saldo_disponible)}</div>
           </div>
-
-          <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>Transacciones realizadas</div>
-            <div style={{ fontSize: '28px', fontWeight: '400', color: '#111827' }}>{r.recargas_aprobadas_count_mes}</div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-sm font-semibold mb-4 text-gray-900">Transacciones realizadas</div>
+            <div className="text-[28px] font-normal text-gray-900">{r.recargas_aprobadas_count_mes}</div>
           </div>
         </div>
 
-        {/* TABS */}
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px 8px 0 0', background: 'white', borderBottom: 'none', display: 'flex', padding: '8px', alignItems: 'center', gap: '8px', overflowX: 'auto' }}>
+        {/* TABS - Matching facturas/historial style */}
+        <div className="bg-white rounded-lg border border-gray-200 p-1 inline-flex gap-1">
           {(['todas', 'pagadas', 'pendientes', 'sin-validar'] as FacturaFilterTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              style={{
-                padding: '8px 16px',
-                fontSize: '14px',
-                fontWeight: '500',
-                color: activeTab === tab ? 'white' : '#6b7280',
-                cursor: 'pointer',
-                borderRadius: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                backgroundColor: activeTab === tab ? '#f58220' : 'transparent',
-                whiteSpace: 'nowrap',
-                border: 'none',
-                transition: 'all 0.2s',
-              }}
-              onMouseOver={(e) => {
-                if (activeTab !== tab) {
-                  e.currentTarget.style.backgroundColor = 'rgba(245, 130, 32, 0.1)';
-                }
-              }}
-              onMouseOut={(e) => {
-                if (activeTab !== tab) {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                activeTab === tab
+                  ? 'bg-white text-orange-500 border border-orange-500'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
             >
-              {tab === 'todas' && '📋'}
-              {tab === 'pagadas' && '✓'}
-              {tab === 'pendientes' && '⏳'}
-              {tab === 'sin-validar' && '❓'}
-              <span>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
-              <span
-                style={{
-                  backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.3)' : '#e5e7eb',
-                  padding: '2px 6px',
-                  borderRadius: '12px',
-                  fontSize: '12px',
-                  color: activeTab === tab ? 'white' : '#6b7280',
-                  fontWeight: '500',
-                }}
-              >
+              {tab === 'todas' && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+              )}
+              {tab.charAt(0).toUpperCase() + tab.slice(1).replace('-', ' ')}
+              <span className={`text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 ${
+                activeTab === tab
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-200 text-gray-600'
+              }`}>
                 {getFacturaCountByTab(allFacturasMes, tab)}
               </span>
             </button>
@@ -570,358 +488,235 @@ export default function ClientDetailViewAlternative({
         </div>
 
         {/* TABLE */}
-        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '0 0 8px 8px', overflowX: 'auto', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#1f222a', color: 'white' }}>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', width: '40px', textAlign: 'center' }}>
-                  <input type="checkbox" style={{ cursor: 'pointer' }} />
-                </th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>Etiqueta</th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>Tipo de ref</th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>Número de ref</th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>Portal</th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>F. Emisión</th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>F. Vencimiento</th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>Monto</th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>Grupo</th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>Estado</th>
-                <th style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', textAlign: 'center' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody key={`tbody-${perfil?.programacion_recargas?.cantidad_recargas}-${selectedMonth}`}>
-              {filteredFacturas.length > 0 ? (
-                filteredFacturas.map((factura, idx) => {
-                  const isExpanded = expandedFacturaId === factura.id;
-                  // ✅ Detectar si es heredada y mostrar estado especial
-                  let displayEstado = getEstadoBadgeContent(factura.estado);
-                  if (factura.origen === 'auto' && factura.estado === 'extraida') {
-                    displayEstado = 'Heredada (Sin validar)';
-                  }
-                  
-                  return (
-                    <tr
-                      key={factura.id || `factura-${idx}`}
-                      style={{
-                        borderBottom: '1px solid #e5e7eb',
-                        transition: 'background-color 0.2s',
-                        cursor: 'pointer',
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f9f9fa';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      <td style={{ padding: '16px', fontSize: '13px', color: '#111827', textAlign: 'center' }}>
-                        <input type="checkbox" style={{ cursor: 'pointer' }} />
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '13px', color: '#111827', fontWeight: '500' }}>
-                        {factura.etiqueta || '@—'}
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '13px', color: '#111827' }}>
-                        {factura.referencia_pago ? 'N. de contrato' : '—'}
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '13px', color: '#111827' }}>
-                        {factura.referencia_pago || '—'}
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '13px' }}>
-                        {factura.archivo_url ? (
-                          <a href={factura.archivo_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: '500' }}>
-                            Link →
-                          </a>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '13px', color: '#111827' }}>
-                        {factura.fecha_emision ? formatDate(factura.fecha_emision) : '—'}
-                      </td>
-                      <td style={{
-                        padding: '16px',
-                        fontSize: '13px',
-                        color: factura.fecha_vencimiento && new Date(factura.fecha_vencimiento) < new Date() ? '#f87171' : '#111827',
-                        fontWeight: factura.fecha_vencimiento && new Date(factura.fecha_vencimiento) < new Date() ? '600' : '400',
-                      }}>
-                        {factura.fecha_vencimiento ? formatDate(factura.fecha_vencimiento) : '—'}
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '13px', color: '#111827', fontWeight: '500' }}>
-                        {formatCurrency(factura.monto)}
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '13px', color: '#111827' }}>
-                        {(() => {
-                          // SIEMPRE calcular localmente basándose en cantidad_recargas
-                          // NO confiar en factura.grupo del backend
-                          const grupo = calcularGrupoFactura(
-                            factura,
-                            perfil?.cuotasCalculadas,
-                            perfil?.programacion_recargas?.cantidad_recargas
-                          );
-                          
-                          if (!grupo) {
-                            return (
-                              <span style={{ border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: '12px', fontSize: '12px' }}>
-                                —
-                              </span>
-                            );
-                          }
-                          
-                          return (
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '28px',
-                              height: '28px',
-                              borderRadius: '6px',
-                              fontSize: '14px',
-                              fontWeight: '700',
-                              color: grupo === 1 ? '#6b7280' : '#ff8d2d',
-                              backgroundColor: 'white',
-                              border: `1px solid ${grupo === 1 ? '#d1d5db' : '#ff8d2d'}`,
-                            }}>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-900 text-white">
+                  <th className="px-4 py-3 text-left font-medium">
+                    <span className="flex items-center gap-1">Etiqueta <span className="text-xs">↕</span></span>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">
+                    <span className="flex items-center gap-1">Número de ref <span className="text-xs">↕</span></span>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">
+                    <span className="flex items-center gap-1">Portal <span className="text-xs">↕</span></span>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">
+                    <span className="flex items-center gap-1">F. emisión <span className="text-xs">↕</span></span>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">
+                    <span className="flex items-center gap-1">F. vencimiento <span className="text-xs">↕</span></span>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">
+                    <span className="flex items-center gap-1">Monto <span className="text-xs">↕</span></span>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">
+                    <span className="flex items-center gap-1">Grupo <span className="text-xs">↕</span></span>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">
+                    <span className="flex items-center gap-1">Estado <span className="text-xs">↕</span></span>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody key={`tbody-${perfil?.programacion_recargas?.cantidad_recargas}-${selectedMonth}`}>
+                {filteredFacturas.length > 0 ? (
+                  filteredFacturas.map((factura, idx) => {
+                    let displayEstado = getEstadoBadgeContent(factura.estado);
+                    if (factura.origen === 'auto' && factura.estado === 'extraida') {
+                      displayEstado = 'Heredada (Sin validar)';
+                    }
+
+                    const grupo = calcularGrupoFactura(
+                      factura,
+                      perfil?.cuotasCalculadas,
+                      perfil?.programacion_recargas?.cantidad_recargas
+                    );
+
+                    const hasActions = factura.estado === 'extraida' || factura.estado === 'validada' || factura.estado === 'pendiente';
+
+                    let actionCount = 0;
+                    if (factura.estado === 'extraida') {
+                      actionCount = 2;
+                      if (factura.origen === 'auto') actionCount++;
+                    } else if (factura.estado === 'validada' || factura.estado === 'pendiente') {
+                      actionCount = 1;
+                    }
+
+                    const getEstadoClasses = (estado: string) => {
+                      switch (estado) {
+                        case 'pagada': return 'text-green-600 border-green-200 bg-green-50';
+                        case 'pendiente': return 'text-amber-600 border-amber-200 bg-amber-50';
+                        case 'extraida': return 'text-gray-500 border-gray-200 bg-gray-50';
+                        case 'validada': return 'text-indigo-600 border-indigo-200 bg-indigo-50';
+                        case 'rechazada': return 'text-red-600 border-red-200 bg-red-50';
+                        default: return 'text-gray-500 border-gray-200 bg-gray-50';
+                      }
+                    };
+
+                    return (
+                      <tr
+                        key={factura.id || `factura-${idx}`}
+                        className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                      >
+                        <td className="px-4 py-4 text-gray-900 font-medium text-sm">
+                          {factura.etiqueta || '@\u2014'}
+                        </td>
+                        <td className="px-4 py-4 text-gray-600 font-mono text-xs">
+                          {factura.referencia_pago || '\u2014'}
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          {factura.archivo_url ? (
+                            <a
+                              href={factura.archivo_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                            >
+                              Link
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                              </svg>
+                            </a>
+                          ) : (
+                            <span className="text-gray-400">\u2014</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-gray-600 text-sm">
+                          {factura.fecha_emision ? formatDate(factura.fecha_emision) : '\u2014'}
+                        </td>
+                        <td className={`px-4 py-4 text-sm font-medium ${
+                          factura.fecha_vencimiento && new Date(factura.fecha_vencimiento) < new Date()
+                            ? 'text-red-500'
+                            : 'text-gray-600'
+                        }`}>
+                          {factura.fecha_vencimiento ? formatDate(factura.fecha_vencimiento) : '\u2014'}
+                        </td>
+                        <td className="px-4 py-4 text-gray-900 font-medium text-sm">
+                          {formatCurrency(factura.monto)}
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          {grupo ? (
+                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-sm font-bold border ${
+                              grupo === 1 ? 'text-gray-500 border-gray-300' : 'text-orange-500 border-orange-400'
+                            }`}>
                               {grupo}
                             </span>
-                          );
-                        })()}
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '13px' }}>
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '4px 8px',
-                            borderRadius: '12px',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            minWidth: '90px',
-                            border: '1px solid',
-                            backgroundColor: 'transparent',
-                            whiteSpace: 'nowrap',
-                            ...(factura.estado === 'pagada' && {
-                              color: '#10b981',
-                              borderColor: '#a7f3d0',
-                              backgroundColor: '#ecfdf5',
-                            }),
-                            ...(factura.estado === 'pendiente' && {
-                              color: '#f59e0b',
-                              borderColor: '#fde68a',
-                              backgroundColor: '#fffbeb',
-                            }),
-                            ...(factura.estado === 'extraida' && {
-                              color: '#9ca3af',
-                              borderColor: '#e5e7eb',
-                              backgroundColor: '#f9fafb',
-                            }),
-                            ...(factura.estado === 'validada' && {
-                              color: '#6366f1',
-                              borderColor: '#c7d2fe',
-                              backgroundColor: '#eef2ff',
-                            }),
-                            ...(factura.estado === 'rechazada' && {
-                              color: '#ef4444',
-                              borderColor: '#fecaca',
-                              backgroundColor: '#fee2e2',
-                            }),
-                          }}
-                        >
-                          {displayEstado}
-                        </span>
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '14px', color: '#111827', textAlign: 'center' }}>
-                        {isExpanded ? (
-                          // ─── EXPANDED: Show Action Buttons ─────────────────────────────
-                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
-                            {factura.estado === 'extraida' && (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    setSelectedFactura(factura);
-                                    setOpenValidarModal(true);
-                                  }}
-                                  disabled={actionLoading}
-                                  style={{
-                                    padding: '6px 12px',
-                                    fontSize: '12px',
-                                    fontWeight: '600',
-                                    backgroundColor: '#ff8d2d',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    cursor: actionLoading ? 'not-allowed' : 'pointer',
-                                    opacity: actionLoading ? 0.6 : 1,
-                                    transition: 'all 0.2s ease',
-                                  }}
-                                  onMouseOver={(e) => {
-                                    if (!actionLoading) {
-                                      e.currentTarget.style.backgroundColor = '#ff7a0d';
-                                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(255, 141, 45, 0.3)';
-                                    }
-                                  }}
-                                  onMouseOut={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#ff8d2d';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                  }}
-                                  title="Validar esta factura"
-                                >
-                                  ✓ Validar
-                                </button>
-                                {/* Botón "Aproximar Valor" - Solo para heredadas */}
-                                {factura.origen === 'auto' && (
-                                  <button
-                                    onClick={() => {
-                                      setSelectedFactura(factura);
-                                      setOpenAproximarModal(true);
-                                    }}
-                                    disabled={actionLoading}
-                                    style={{
-                                      padding: '6px 12px',
-                                      fontSize: '12px',
-                                      fontWeight: '600',
-                                      backgroundColor: '#8b5cf6',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '6px',
-                                      cursor: actionLoading ? 'not-allowed' : 'pointer',
-                                      opacity: actionLoading ? 0.6 : 1,
-                                      transition: 'all 0.2s ease',
-                                    }}
-                                    onMouseOver={(e) => {
-                                      if (!actionLoading) {
-                                        e.currentTarget.style.backgroundColor = '#7c3aed';
-                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(139, 92, 246, 0.3)';
-                                      }
-                                    }}
-                                    onMouseOut={(e) => {
-                                      e.currentTarget.style.backgroundColor = '#8b5cf6';
-                                      e.currentTarget.style.boxShadow = 'none';
-                                    }}
-                                    title="Aproximar valor de factura heredada"
-                                  >
-                                    ↻ Aproximar
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    setSelectedFactura(factura);
-                                    setOpenRechazarModal(true);
-                                  }}
-                                  disabled={actionLoading}
-                                  style={{
-                                    padding: '6px 12px',
-                                    fontSize: '12px',
-                                    fontWeight: '600',
-                                    backgroundColor: '#ef4444',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    cursor: actionLoading ? 'not-allowed' : 'pointer',
-                                    opacity: actionLoading ? 0.6 : 1,
-                                    transition: 'all 0.2s ease',
-                                  }}
-                                  onMouseOver={(e) => {
-                                    if (!actionLoading) {
-                                      e.currentTarget.style.backgroundColor = '#dc2626';
-                                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.3)';
-                                    }
-                                  }}
-                                  onMouseOut={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#ef4444';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                  }}
-                                  title="Rechazar esta factura"
-                                >
-                                  ✗ Rechazar
-                                </button>
-                              </>
-                            )}
-                            {(factura.estado === 'validada' || factura.estado === 'pendiente') && (
+                          ) : (
+                            <span className="border border-gray-200 px-2 py-0.5 rounded-full text-xs text-gray-400">\u2014</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getEstadoClasses(factura.estado)}`}>
+                            {displayEstado}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          {hasActions ? (
+                            <div className="relative">
                               <button
                                 onClick={() => {
+                                  setOpenMenuId(openMenuId === factura.id ? null : (factura.id || null));
                                   setSelectedFactura(factura);
-                                  setOpenPagarModal(true);
                                 }}
-                                disabled={actionLoading}
-                                style={{
-                                  padding: '6px 12px',
-                                  fontSize: '12px',
-                                  fontWeight: '600',
-                                  backgroundColor: '#ff8d2d',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  cursor: actionLoading ? 'not-allowed' : 'pointer',
-                                  opacity: actionLoading ? 0.6 : 1,
-                                  transition: 'all 0.2s ease',
-                                }}
-                                onMouseOver={(e) => {
-                                  if (!actionLoading) {
-                                    e.currentTarget.style.backgroundColor = '#ff7a0d';
-                                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(255, 141, 45, 0.3)';
-                                  }
-                                }}
-                                onMouseOut={(e) => {
-                                  e.currentTarget.style.backgroundColor = '#ff8d2d';
-                                  e.currentTarget.style.boxShadow = 'none';
-                                }}
-                                title="Pagar esta factura"
+                                className="px-3 py-2 hover:bg-gray-200 text-gray-700 hover:text-gray-900 rounded-lg transition-all duration-200 border border-gray-300 hover:border-gray-400 flex items-center justify-center gap-1.5 shadow-sm font-medium text-sm"
+                                title={`${actionCount} acci\u00F3n(es) disponible(s)`}
                               >
-                                💰 Pagar
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                                </svg>
+                                <span className="bg-gray-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
+                                  {actionCount}
+                                </span>
                               </button>
-                            )}
-                          </div>
-                        ) : (
-                          // ─── COLLAPSED: Show Pencil Icon ONLY if editable ─────────────────────────────
-                          (factura.estado === 'extraida' || factura.estado === 'validada' || factura.estado === 'pendiente') && (
-                            <button
-                              onClick={() => {
-                                if (expandedFacturaId !== factura.id) {
-                                  setExpandedFacturaId(factura.id || null);
-                                  setSelectedFactura(factura);
-                                } else {
-                                  setExpandedFacturaId(null);
-                                  setSelectedFactura(null);
-                                }
-                              }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                fontSize: '16px',
-                                cursor: 'pointer',
-                                color: '#9ca3af',
-                                padding: '6px 8px',
-                                borderRadius: '4px',
-                                transition: 'all 0.2s',
-                              }}
-                              onMouseOver={(e) => {
-                                e.currentTarget.style.color = '#ff8d2d';
-                                e.currentTarget.style.backgroundColor = 'rgba(255, 141, 45, 0.1)';
-                              }}
-                              onMouseOut={(e) => {
-                                e.currentTarget.style.color = '#9ca3af';
-                                e.currentTarget.style.backgroundColor = 'transparent';
-                              }}
-                              title="Editar acciones de factura"
-                            >
-                              ✎
-                            </button>
-                          )
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={11} style={{ padding: '32px 16px', textAlign: 'center', color: '#9ca3af', fontSize: '14px' }}>
-                    No hay facturas en esta categoría
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                              {openMenuId === factura.id && (
+                                <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-max">
+                                  <div className="py-1">
+                                    {factura.estado === 'extraida' && (
+                                      <>
+                                        <button
+                                          onClick={() => {
+                                            setSelectedFactura(factura);
+                                            setOpenValidarModal(true);
+                                            setOpenMenuId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                        >
+                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                          </svg>
+                                          Validar
+                                        </button>
+                                        {factura.origen === 'auto' && (
+                                          <button
+                                            onClick={() => {
+                                              setSelectedFactura(factura);
+                                              setOpenAproximarModal(true);
+                                              setOpenMenuId(null);
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                          >
+                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                              <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                                            </svg>
+                                            Aproximar
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={() => {
+                                            setSelectedFactura(factura);
+                                            setOpenRechazarModal(true);
+                                            setOpenMenuId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                        >
+                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                          </svg>
+                                          Rechazar
+                                        </button>
+                                      </>
+                                    )}
+                                    {(factura.estado === 'validada' || factura.estado === 'pendiente') && (
+                                      <button
+                                        onClick={() => {
+                                          setSelectedFactura(factura);
+                                          setOpenPagarModal(true);
+                                          setOpenMenuId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                      >
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                          <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
+                                        </svg>
+                                        Pagar
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="px-3 py-2 text-gray-400 text-xs italic">
+                              Sin acciones
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-gray-500 text-sm">
+                      No hay facturas en esta categor\u00EDa
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <UpdatePlanModal
