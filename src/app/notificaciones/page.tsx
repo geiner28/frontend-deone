@@ -685,7 +685,7 @@ export default function NotificacionesPage() {
                 <th className="px-4 py-3 text-left font-medium">
                   <span className="flex items-center gap-1">Creada <span className="text-xs">↕</span></span>
                 </th>
-                <th className="px-4 py-3 text-right font-medium">Acciones</th>
+                <th className="px-4 py-3 text-left font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -718,8 +718,8 @@ export default function NotificacionesPage() {
                       />
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-600">{formatDateTime(notifTyped.creado_en)}</td>
-                    <td className="px-4 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
+                    <td className="px-4 py-4 text-left">
+                    <div className="flex items-center justify-start gap-1">
                       {activeTab === 'alertas' ? (
                         // Acciones para alertas
                         <>
