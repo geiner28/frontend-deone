@@ -21,6 +21,7 @@ const notificationIcons: Record<string, React.ReactNode> = {
   factura_rechazada: '⚠️',
   recarga_aprobada: '✅',
   recarga_rechazada: '❌',
+  pago_confirmado: '💰',
 };
 
 export default function NotificationDisplay({

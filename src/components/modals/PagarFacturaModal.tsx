@@ -5,6 +5,7 @@ import { BanknotesIcon } from '@heroicons/react/24/outline';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import NotificationDisplay from '@/components/NotificationDisplay';
 import { crearPago, confirmarPago } from '@/lib/api';
 import { formatCurrency, getErrorMsg } from '@/lib/utils';
 import type { Factura, AdminClientePerfilData } from '@/types';
@@ -33,6 +34,8 @@ const PagarFacturaModal = ({
     comprobante_pago_url: '',
   });
   const [loading, setLoading] = useState(false);
+  const [successData, setSuccessData] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -41,6 +44,8 @@ const PagarFacturaModal = ({
         referencia_pago: '',
         comprobante_pago_url: '',
       });
+      setSuccessData(null);
+      setErrorMessage(null);
     }
   }, [open]);
 
@@ -97,20 +102,55 @@ const PagarFacturaModal = ({
     setLoading(false);
 
     if (confRes.ok) {
+      const data = confRes.data as any;
+      setSuccessData(data);
       showToast('Pago confirmado exitosamente', 'success');
-      onClose();
       await onSuccess();
     } else {
-      showToast(getErrorMsg(confRes, 'Error al confirmar pago'), 'error');
+      const error = getErrorMsg(confRes, 'Error al confirmar pago');
+      setErrorMessage(error);
+      showToast(error, 'error');
     }
   };
 
   const saldoGlobal = perfil?.resumen.saldo_disponible || 0;
   const tieneBalance = factura && saldoGlobal >= factura.monto;
 
+  const handleClose = () => {
+    setSuccessData(null);
+    setErrorMessage(null);
+    onClose();
+  };
+
   return (
-    <Modal open={open} onClose={onClose} title="Pagar Factura">
+    <Modal open={open} onClose={handleClose} title={successData ? "Pago Confirmado" : "Pagar Factura"}>
       <div className="space-y-4">
+        {successData ? (
+          <NotificationDisplay
+            notification={successData.notificacion}
+            status="success"
+            onClose={handleClose}
+            title="Pago confirmado exitosamente"
+          />
+        ) : errorMessage ? (
+          <>
+            <NotificationDisplay
+              notification={null}
+              status="error"
+              errorMessage={errorMessage}
+              onClose={handleClose}
+            />
+            <div className="grid grid-cols-2 gap-3 pt-4">
+              <Button variant="secondary" onClick={handleClose} className="w-full">
+                Cerrar
+              </Button>
+              <Button onClick={() => { setErrorMessage(null); }} className="w-full">
+                Reintentar
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
           <p className="text-sm text-emerald-800">
             <strong>{factura?.servicio}</strong> — {factura ? formatCurrency(factura.monto) : ''}
@@ -197,13 +237,15 @@ const PagarFacturaModal = ({
         />
 
         <div className="grid grid-cols-2 gap-3 pt-4">
-          <Button variant="secondary" onClick={onClose} className="w-full">
+          <Button variant="secondary" onClick={handleClose} className="w-full">
             Cancelar
           </Button>
           <Button loading={loading} onClick={handlePagar} className="w-full">
             <BanknotesIcon className="h-4 w-4" /> Crear y Confirmar Pago
           </Button>
         </div>
+        </>
+        )}
       </div>
     </Modal>
   );
