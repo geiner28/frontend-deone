@@ -76,31 +76,21 @@ export default function FacturasPage() {
   }, []);
 
   // Handlers para éxito de acciones
+  // NO cerrar el modal ni limpiar la factura aquí — el modal muestra NotificationDisplay
+  // y el usuario cierra manualmente con el botón "Cerrar" (onClose)
   const handleValidarSuccess = useCallback(async () => {
-    setOpenValidarModal(false);
-    setSelectedFactura(null);
-    showToast('Factura validada correctamente', 'success');
     await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
   }, [currentEstado]);
 
   const handleRechazarSuccess = useCallback(async () => {
-    setOpenRechazarModal(false);
-    setSelectedFactura(null);
-    showToast('Factura rechazada correctamente', 'success');
     await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
   }, [currentEstado]);
 
   const handlePagarSuccess = useCallback(async () => {
-    setOpenPagarModal(false);
-    setSelectedFactura(null);
-    showToast('Pago registrado correctamente', 'success');
     await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
   }, [currentEstado]);
 
   const handleAproximarSuccess = useCallback(async () => {
-    setOpenAproximarModal(false);
-    setSelectedFactura(null);
-    showToast('Valor aproximado correctamente', 'success');
     await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
   }, [currentEstado]);
 
@@ -276,21 +266,21 @@ export default function FacturasPage() {
         <>
           <ValidarFacturaModal
             open={openValidarModal}
-            onClose={() => setOpenValidarModal(false)}
+            onClose={() => { setOpenValidarModal(false); setSelectedFactura(null); }}
             factura={selectedFactura}
             onSuccess={handleValidarSuccess}
             showToast={showToast}
           />
           <RechazarFacturaModal
             open={openRechazarModal}
-            onClose={() => setOpenRechazarModal(false)}
+            onClose={() => { setOpenRechazarModal(false); setSelectedFactura(null); }}
             factura={selectedFactura}
             onSuccess={handleRechazarSuccess}
             showToast={showToast}
           />
           <PagarFacturaModal
             open={openPagarModal}
-            onClose={() => setOpenPagarModal(false)}
+            onClose={() => { setOpenPagarModal(false); setSelectedFactura(null); }}
             factura={selectedFactura}
             perfil={null}
             onSuccess={handlePagarSuccess}
@@ -298,7 +288,7 @@ export default function FacturasPage() {
           />
           <AproximarValorModal
             open={openAproximarModal}
-            onClose={() => setOpenAproximarModal(false)}
+            onClose={() => { setOpenAproximarModal(false); setSelectedFactura(null); }}
             factura={selectedFactura}
             onSuccess={handleAproximarSuccess}
             showToast={showToast}

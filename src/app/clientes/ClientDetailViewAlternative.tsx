@@ -203,37 +203,23 @@ export default function ClientDetailViewAlternative({
   }, [perfil?.usuario.telefono, selectedMonth]);
 
   // ─── HANDLER: Validar Factura ───────────────────────────────────────────────────
+  // NO cerrar el modal ni limpiar la factura aquí — el modal muestra NotificationDisplay
+  // y el usuario cierra manualmente con el botón "Cerrar" (onClose)
   const handleValidarSuccess = useCallback(async () => {
-    setOpenValidarModal(false);
-    setOpenMenuId(null);
-    setSelectedFactura(null);
-    showToast('Factura validada correctamente', 'success');
     await refreshFacturas();
   }, [refreshFacturas]);
 
   // ─── HANDLER: Rechazar Factura ──────────────────────────────────────────────────
   const handleRechazarSuccess = useCallback(async () => {
-    setOpenRechazarModal(false);
-    setOpenMenuId(null);
-    setSelectedFactura(null);
-    showToast('Factura rechazada correctamente', 'success');
     await refreshFacturas();
   }, [refreshFacturas]);
 
   // ─── HANDLER: Pagar Factura ────────────────────────────────────────────────────
   const handlePagarSuccess = useCallback(async () => {
-    setOpenPagarModal(false);
-    setOpenMenuId(null);
-    setSelectedFactura(null);
-    showToast('Pago realizado correctamente', 'success');
     await refreshFacturas();
   }, [refreshFacturas]);
   // ─── HANDLER: Aproximar Valor ──────────────────────────────────────────────
   const handleAproximarSuccess = useCallback(async () => {
-    setOpenAproximarModal(false);
-    setOpenMenuId(null);
-    setSelectedFactura(null);
-    showToast('Valor aproximado correctamente', 'success');
     await refreshFacturas();
   }, [refreshFacturas]);
   // Manejar cambio de mes
@@ -815,7 +801,7 @@ export default function ClientDetailViewAlternative({
           <>
             <ValidarFacturaModal
               open={openValidarModal}
-              onClose={() => setOpenValidarModal(false)}
+              onClose={() => { setOpenValidarModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
               factura={selectedFactura}
               onSuccess={handleValidarSuccess}
               showToast={showToast}
@@ -823,7 +809,7 @@ export default function ClientDetailViewAlternative({
 
             <RechazarFacturaModal
               open={openRechazarModal}
-              onClose={() => setOpenRechazarModal(false)}
+              onClose={() => { setOpenRechazarModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
               factura={selectedFactura}
               onSuccess={handleRechazarSuccess}
               showToast={showToast}
@@ -831,7 +817,7 @@ export default function ClientDetailViewAlternative({
 
             <AproximarValorModal
               open={openAproximarModal}
-              onClose={() => setOpenAproximarModal(false)}
+              onClose={() => { setOpenAproximarModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
               factura={selectedFactura}
               onSuccess={handleAproximarSuccess}
               showToast={showToast}
@@ -839,7 +825,7 @@ export default function ClientDetailViewAlternative({
 
             <PagarFacturaModal
               open={openPagarModal}
-              onClose={() => setOpenPagarModal(false)}
+              onClose={() => { setOpenPagarModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
               factura={selectedFactura}
               perfil={perfil}
               onSuccess={handlePagarSuccess}
