@@ -115,6 +115,7 @@ export interface Factura {
   motivo_rechazo?: string;
   etiqueta?: string;
   referencia_pago?: string;
+  tipo_referencia?: string;
   grupo?: number;
 }
 
@@ -162,6 +163,7 @@ export interface CapturaFacturaPayload {
   monto: number;
   periodo?: string;
   referencia_pago?: string;
+  tipo_referencia?: string;
   etiqueta?: string;
   fecha_vencimiento?: string;
   fecha_emision?: string;
@@ -186,6 +188,7 @@ export interface ValidarFacturaPayload {
   fecha_vencimiento?: string;
   fecha_emision?: string;
   referencia_pago?: string;
+  tipo_referencia?: string;
   etiqueta?: string;
   observaciones_admin?: string;
 }

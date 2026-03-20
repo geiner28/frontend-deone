@@ -30,6 +30,7 @@ interface Factura {
   servicio: string;
   monto: string;
   referencia_pago: string;
+  tipo_referencia: string;
   etiqueta: string;
   fecha_emision: string;
   fecha_vencimiento: string;
@@ -76,6 +77,7 @@ export default function UpsertObligacionConFacturasModal({
     servicio: '',
     monto: '',
     referencia_pago: '',
+    tipo_referencia: '',
     etiqueta: '',
     fecha_emision: '',
     fecha_vencimiento: '',
@@ -179,6 +181,7 @@ export default function UpsertObligacionConFacturasModal({
       servicio: '',
       monto: '',
       referencia_pago: '',
+      tipo_referencia: '',
       etiqueta: '',
       fecha_emision: '',
       fecha_vencimiento: '',
@@ -243,6 +246,7 @@ export default function UpsertObligacionConFacturasModal({
           servicio: factura.servicio,
           monto: Number(factura.monto),
           referencia_pago: factura.referencia_pago || undefined,
+          tipo_referencia: factura.tipo_referencia || undefined,
           etiqueta: factura.etiqueta || undefined,
           fecha_emision: factura.fecha_emision || undefined,
           fecha_vencimiento: factura.fecha_vencimiento || undefined,
@@ -287,6 +291,7 @@ export default function UpsertObligacionConFacturasModal({
       servicio: '',
       monto: '',
       referencia_pago: '',
+      tipo_referencia: '',
       etiqueta: '',
       fecha_emision: '',
       fecha_vencimiento: '',
@@ -570,6 +575,15 @@ export default function UpsertObligacionConFacturasModal({
                           }
                         />
                       </div>
+
+                      <Input
+                        label="Tipo de Referencia"
+                        placeholder="Ej: PSE, Bancolombia, Nequi..."
+                        value={facturaForm.tipo_referencia}
+                        onChange={(e) =>
+                          setFacturaForm((f) => ({ ...f, tipo_referencia: e.target.value }))
+                        }
+                      />
 
                       <Input
                         label="Etiqueta"

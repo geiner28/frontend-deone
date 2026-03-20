@@ -31,6 +31,7 @@ const ValidarFacturaModal = ({
     servicio: '',
     periodo: '',
     referencia_pago: '',
+    tipo_referencia: '',
     etiqueta: '',
     fecha_emision: '',
     fecha_vencimiento: '',
@@ -50,6 +51,7 @@ const ValidarFacturaModal = ({
         servicio: factura.servicio ?? '',
         periodo: factura.periodo ?? '',
         referencia_pago: factura.referencia_pago ?? '',
+        tipo_referencia: factura.tipo_referencia ?? '',
         etiqueta: factura.etiqueta ?? '',
         fecha_emision: factura.fecha_emision ?? '',
         fecha_vencimiento: factura.fecha_vencimiento ?? '',
@@ -93,6 +95,7 @@ const ValidarFacturaModal = ({
       fecha_vencimiento: form.fecha_vencimiento || undefined,
       fecha_emision: form.fecha_emision || undefined,
       referencia_pago: form.referencia_pago || undefined,
+      tipo_referencia: form.tipo_referencia || undefined,
       etiqueta: form.etiqueta || undefined,
       archivo_url: form.archivo_url || undefined,
       observaciones_admin: form.observaciones_admin || undefined,
@@ -182,6 +185,13 @@ const ValidarFacturaModal = ({
               value={form.referencia_pago}
               onChange={(e) => setForm((f) => ({ ...f, referencia_pago: e.target.value }))}
               placeholder="TX-PSE-123456"
+            />
+
+            <Input
+              label="Tipo de referencia (opcional)"
+              value={form.tipo_referencia}
+              onChange={(e) => setForm((f) => ({ ...f, tipo_referencia: e.target.value }))}
+              placeholder="Ej: PSE, Bancolombia, Nequi..."
             />
 
             <Input

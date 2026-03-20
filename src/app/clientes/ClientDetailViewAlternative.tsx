@@ -486,6 +486,9 @@ export default function ClientDetailViewAlternative({
                     <span className="flex items-center gap-1">Número de ref <span className="text-xs">↕</span></span>
                   </th>
                   <th className="px-4 py-3 text-left font-medium">
+                    <span className="flex items-center gap-1">Tipo de ref <span className="text-xs">↕</span></span>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">
                     <span className="flex items-center gap-1">Portal <span className="text-xs">↕</span></span>
                   </th>
                   <th className="px-4 py-3 text-left font-medium">
@@ -551,8 +554,9 @@ export default function ClientDetailViewAlternative({
                         </td>
                         <td className="px-4 py-4 text-gray-600 font-mono text-xs">
                           {factura.referencia_pago || '\u2014'}
-                        </td>
-                        <td className="px-4 py-4 text-sm">
+                        </td>                        <td className="px-4 py-4 text-gray-600 text-xs">
+                          {factura.tipo_referencia || '—'}
+                        </td>                        <td className="px-4 py-4 text-sm">
                           {factura.archivo_url ? (
                             <a
                               href={factura.archivo_url}
