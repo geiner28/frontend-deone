@@ -12,8 +12,8 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   '/clientes': { title: '', subtitle: '' },
   '/usuarios': { title: 'Usuarios', subtitle: 'Gestión de usuarios y planes' },
   '/obligaciones': { title: 'Obligaciones', subtitle: 'Seguimiento de obligaciones por periodo' },
-  '/facturas': { title: 'Facturas', subtitle: 'Captura y gestión de facturas' },
-  '/recargas': { title: 'Recargas', subtitle: 'Registro y aprobación de recargas' },
+  '/facturas': { title: '', subtitle: '' },
+  '/recargas': { title: '', subtitle: '' },
   '/disponible': { title: 'Disponibilidad', subtitle: 'Consulta de saldo disponible por periodo' },
   '/notificaciones': { title: '', subtitle: '' },
 };

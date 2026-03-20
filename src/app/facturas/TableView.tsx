@@ -3,6 +3,7 @@
 import { useMemo, useState, useRef } from 'react';
 import type { FacturaEnriquecida } from '@/types';
 import { formatCurrency } from '@/lib/utils';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 interface TableViewProps {
   facturas: FacturaEnriquecida[];
@@ -17,6 +18,8 @@ interface TableViewProps {
   selectedPlan: string;
   onPlanChange: (plan: string) => void;
   plans: string[];
+  sortProximos: boolean;
+  onToggleSort: () => void;
   onPageChange: (page: number) => void;
   selectedFactura: FacturaEnriquecida | null;
   onSelectFactura: (factura: FacturaEnriquecida) => void;
@@ -40,6 +43,8 @@ export default function TableView({
   selectedPlan,
   onPlanChange,
   plans,
+  sortProximos,
+  onToggleSort,
   onPageChange,
   selectedFactura,
   onSelectFactura,
@@ -110,13 +115,16 @@ export default function TableView({
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="bg-gray-100 rounded-lg p-4 space-y-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button className="px-4 py-2 bg-white border border-orange-500 text-orange-500 rounded-lg text-sm font-medium hover:bg-orange-50 flex items-center gap-2">
+      <div className="bg-gray-100 rounded-lg p-3">
+        <div className="flex flex-wrap items-center gap-3 justify-between">
+          <button
+            onClick={onToggleSort}
+            className="px-4 py-2 bg-white border border-orange-500 text-orange-500 rounded-lg text-sm font-medium hover:bg-orange-50 flex items-center gap-2"
+          >
+            {sortProximos ? 'Próximos a vencer' : 'Más lejanos'}
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
             </svg>
-            Próximas a vencer
           </button>
 
           <select
@@ -124,15 +132,15 @@ export default function TableView({
             onChange={(e) => onUserChange(e.target.value)}
             className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
-            <option value="todos">Todos</option>
+            <option value="todos">User: Todos</option>
             {users.map((user) => (
               <option key={user.usuario_id} value={user.usuario_id}>
-                {user.usuario?.nombre}
+                User: {user.usuario?.nombre}
               </option>
             ))}
           </select>
 
-          <select 
+          <select
             value={selectedPlan}
             onChange={(e) => onPlanChange(e.target.value)}
             className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -145,7 +153,8 @@ export default function TableView({
             ))}
           </select>
 
-          <div className="flex-1 relative">
+          <div className="relative ml-auto w-[300px] flex-shrink-0">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
               placeholder="Buscar por nombre, celular..."
@@ -153,9 +162,6 @@ export default function TableView({
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pl-10"
             />
-            <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
           </div>
         </div>
       </div>
@@ -173,69 +179,39 @@ export default function TableView({
                 <thead>
                   <tr className="bg-gray-900 text-white">
                     <th className="px-4 py-3 text-left font-medium">
-                      <input type="checkbox" className="rounded" />
+                      <span className="flex items-center gap-1">Etiqueta <span className="text-xs">↕</span></span>
                     </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        Etiqueta <span className="text-xs">↕</span>
-                      </div>
+                    <th className="px-4 py-3 text-left font-medium">
+                      <span className="flex items-center gap-1">Número de ref <span className="text-xs">↕</span></span>
                     </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        Tipo de ref <span className="text-xs">↕</span>
-                      </div>
+                    <th className="px-4 py-3 text-left font-medium">
+                      <span className="flex items-center gap-1">Portal <span className="text-xs">↕</span></span>
                     </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        Número de ref <span className="text-xs">↕</span>
-                      </div>
+                    <th className="px-4 py-3 text-left font-medium">
+                      <span className="flex items-center gap-1">F. emisión <span className="text-xs">↕</span></span>
                     </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        Portal <span className="text-xs">↕</span>
-                      </div>
+                    <th className="px-4 py-3 text-left font-medium">
+                      <span className="flex items-center gap-1">F. vencimiento <span className="text-xs">↕</span></span>
                     </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        F. de emisión <span className="text-xs">↕</span>
-                      </div>
+                    <th className="px-4 py-3 text-left font-medium">
+                      <span className="flex items-center gap-1">Usuario <span className="text-xs">↕</span></span>
                     </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        F. de vencimiento <span className="text-xs">↕</span>
-                      </div>
+                    <th className="px-4 py-3 text-left font-medium">
+                      <span className="flex items-center gap-1">Monto <span className="text-xs">↕</span></span>
                     </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        Usuario <span className="text-xs">↕</span>
-                      </div>
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        Monto <span className="text-xs">↕</span>
-                      </div>
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        Estado <span className="text-xs">↕</span>
-                      </div>
+                    <th className="px-4 py-3 text-left font-medium">
+                      <span className="flex items-center gap-1">Estado <span className="text-xs">↕</span></span>
                     </th>
                     <th className="px-4 py-3 text-left font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {facturas.map((factura, idx) => (
-                    <tr key={factura.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-4 py-3">
-                        <input type="checkbox" className="rounded" />
-                      </td>
-                      <td className="px-4 py-3 text-gray-900 font-medium">
+                    <tr key={factura.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                      <td className="px-4 py-4 text-gray-900 font-medium">
                         @{factura.etiqueta || factura.servicio}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {factura.obligacion?.tipo_referencia || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 font-mono text-xs">
+                      <td className="px-4 py-4 text-gray-600 font-mono text-xs">
                         {factura.referencia_pago || '-'}
                       </td>
                       <td className="px-4 py-3">

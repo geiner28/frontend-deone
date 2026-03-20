@@ -29,6 +29,7 @@ export default function FacturasPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<string>('todos');
   const [selectedPlan, setSelectedPlan] = useState<string>('todos');
+  const [sortProximos, setSortProximos] = useState(true);
 
   // Modal states
   const [selectedFactura, setSelectedFactura] = useState<FacturaEnriquecida | null>(null);
@@ -110,7 +111,7 @@ export default function FacturasPage() {
   // Reset to page 1 when search, user filter, or plan filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedUser, selectedPlan]);
+  }, [searchTerm, selectedUser, selectedPlan, sortProximos]);
 
   // Filter and search facturas for table view
   // Nota: El filtrado por estado ya se hace en el backend
@@ -130,9 +131,16 @@ export default function FacturasPage() {
     return matchSearch && matchUser && matchPlan;
   });
 
-  // Calculate pagination based on filtered results
-  const totalPages = Math.ceil(filteredFacturas.length / itemsPerPage);
-  const paginatedFacturas = filteredFacturas.slice(
+  // Sort by fecha de vencimiento
+  const sortedFacturas = [...filteredFacturas].sort((a, b) => {
+    const dateA = a.fecha_vencimiento ? new Date(a.fecha_vencimiento).getTime() : Infinity;
+    const dateB = b.fecha_vencimiento ? new Date(b.fecha_vencimiento).getTime() : Infinity;
+    return sortProximos ? dateA - dateB : dateB - dateA;
+  });
+
+  // Calculate pagination based on sorted results
+  const totalPages = Math.ceil(sortedFacturas.length / itemsPerPage);
+  const paginatedFacturas = sortedFacturas.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
@@ -155,7 +163,7 @@ export default function FacturasPage() {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Facturas</h1>
-          <p className="text-sm text-gray-500 mt-1">Descripción</p>
+          <p className="text-sm text-gray-500 mt-1">Gestión y seguimiento de facturas</p>
         </div>
         
         {/* View Toggle */}
@@ -190,8 +198,10 @@ export default function FacturasPage() {
         </div>
       </div>
 
+      <div className="h-px bg-gray-200 w-full" />
+
       {/* Estado Filter Tabs */}
-      <div className="bg-white rounded-lg border border-gray-200 p-3 flex gap-3 flex-wrap">
+      <div className="bg-white rounded-lg border border-gray-200 p-1 inline-flex gap-1 flex-wrap">
         {(['todas', 'pagada', 'pendiente', 'sin_factura', 'sin_validar'] as const).map((estado) => (
           <button
             key={estado}
@@ -199,22 +209,25 @@ export default function FacturasPage() {
               setCurrentEstado(estado);
               setCurrentPage(1);
             }}
-            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
               currentEstado === estado
-                ? 'bg-orange-500 text-white'
-                : 'text-gray-600 hover:bg-gray-100'
-            } flex items-center gap-2`}
+                ? 'bg-white text-orange-500 border border-orange-500'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
           >
-            <span>
-              {estado === 'todas' && 'Todas'}
-              {estado === 'pagada' && 'Pagadas'}
-              {estado === 'pendiente' && 'Pendientes'}
-              {estado === 'sin_factura' && 'Sin Factura'}
-              {estado === 'sin_validar' && 'Sin Validar'}
-            </span>
-            {currentEstado === estado && filteredFacturas.length > 0 && (
-              <span className="bg-white text-orange-500 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
-                {filteredFacturas.length}
+            {estado === 'todas' && (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            )}
+            {estado === 'todas' && 'Todas'}
+            {estado === 'pagada' && 'Pagadas'}
+            {estado === 'pendiente' && 'Pendientes'}
+            {estado === 'sin_factura' && 'Sin Factura'}
+            {estado === 'sin_validar' && 'Sin Validar'}
+            {estado === 'todas' && total > 0 && (
+              <span className="bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                {total > 99 ? '99+' : total}
               </span>
             )}
           </button>
@@ -245,6 +258,8 @@ export default function FacturasPage() {
           selectedPlan={selectedPlan}
           onPlanChange={setSelectedPlan}
           plans={uniquePlans}
+          sortProximos={sortProximos}
+          onToggleSort={() => setSortProximos(v => !v)}
           onPageChange={setCurrentPage}
           selectedFactura={selectedFactura}
           onSelectFactura={setSelectedFactura}
