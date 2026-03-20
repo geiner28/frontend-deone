@@ -89,10 +89,12 @@ const ValidarFacturaModal = ({
     setErrorMessage(null);
     const res = await validarFactura(factura.id, {
       monto: Number(form.monto),
+      servicio: form.servicio || undefined,
       fecha_vencimiento: form.fecha_vencimiento || undefined,
       fecha_emision: form.fecha_emision || undefined,
       referencia_pago: form.referencia_pago || undefined,
       etiqueta: form.etiqueta || undefined,
+      archivo_url: form.archivo_url || undefined,
       observaciones_admin: form.observaciones_admin || undefined,
     });
     setLoading(false);
@@ -158,7 +160,7 @@ const ValidarFacturaModal = ({
             <Input
               label="Servicio"
               value={form.servicio}
-              disabled
+              onChange={(e) => setForm((f) => ({ ...f, servicio: e.target.value }))}
             />
 
             <Input
@@ -213,7 +215,7 @@ const ValidarFacturaModal = ({
               label="URL Archivo (opcional)"
               type="url"
               value={form.archivo_url}
-              disabled
+              onChange={(e) => setForm((f) => ({ ...f, archivo_url: e.target.value }))}
             />
 
             <Input
