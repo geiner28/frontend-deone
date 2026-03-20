@@ -247,6 +247,7 @@ function ObligacionesTab({
     servicio: '',
     periodo: '',
     referencia_pago: '',
+    tipo_referencia: '',
     etiqueta: '',
     fecha_emision: '',
     fecha_vencimiento: '',
@@ -285,10 +286,13 @@ function ObligacionesTab({
     setActionLoading(true);
     const res = await validarFactura(selectedFactura.id, {
       monto: Number(validarForm.monto),
-      fecha_vencimiento: validarForm.fecha_vencimiento || undefined,
-      fecha_emision: validarForm.fecha_emision || undefined,
-      referencia_pago: validarForm.referencia_pago || undefined,
-      etiqueta: validarForm.etiqueta || undefined,
+      servicio: validarForm.servicio,
+      fecha_vencimiento: validarForm.fecha_vencimiento,
+      fecha_emision: validarForm.fecha_emision,
+      referencia_pago: validarForm.referencia_pago,
+      tipo_referencia: validarForm.tipo_referencia,
+      etiqueta: validarForm.etiqueta,
+      archivo_url: validarForm.archivo_url || undefined,
       observaciones_admin: validarForm.observaciones_admin || undefined,
     });
     setActionLoading(false);
@@ -452,6 +456,7 @@ function ObligacionesTab({
                                     servicio: f.servicio ?? '',
                                     periodo: f.periodo ?? '',
                                     referencia_pago: f.referencia_pago ?? '',
+                                    tipo_referencia: f.tipo_referencia ?? '',
                                     etiqueta: f.etiqueta ?? '',
                                     fecha_emision: f.fecha_emision ?? '',
                                     fecha_vencimiento: f.fecha_vencimiento ?? '',

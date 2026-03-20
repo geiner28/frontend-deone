@@ -185,13 +185,13 @@ export interface CapturaFacturaData {
 // ─── Factura Validación ───────────────────────────────────────────────────────
 export interface ValidarFacturaPayload {
   monto: number;
-  servicio?: string;
-  fecha_vencimiento?: string;
-  fecha_emision?: string;
-  referencia_pago?: string;
-  tipo_referencia?: string;
+  servicio: string;
+  fecha_vencimiento: string;
+  fecha_emision: string;
+  referencia_pago: string;
+  tipo_referencia: string;
+  etiqueta: string;
   archivo_url?: string;
-  etiqueta?: string;
   observaciones_admin?: string;
 }
 
