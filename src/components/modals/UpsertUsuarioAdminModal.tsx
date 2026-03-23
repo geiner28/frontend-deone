@@ -299,9 +299,9 @@ export default function UpsertUsuarioAdminModal({
                 value={form.plan}
                 onChange={(e) => setForm(f => ({ ...f, plan: e.target.value as Plan }))}
               >
-                <option value="control">Control (Básico)</option>
-                <option value="tranquilidad">Tranquilidad (Intermedio)</option>
-                <option value="respaldo">Respaldo (Premium)</option>
+                <option value="control">Control </option>
+                <option value="tranquilidad">Tranquilidad</option>
+                <option value="respaldo">Respaldo</option>
               </select>
             </div>
           )}
