@@ -14,6 +14,7 @@ interface UpsertUsuarioAdminModalProps {
   onClose: () => void;
   mode?: 'upsert' | 'edit-profile'; // 'upsert' = default, 'edit-profile' = editar info personal
   initialData?: {
+    usuario_id?: string;
     telefono: string;
     nombre: string;
     apellido: string;
@@ -167,6 +168,7 @@ export default function UpsertUsuarioAdminModal({
     setShowConfirmation(false);
 
     const payload: {
+      usuario_id?: string;
       telefono: string;
       nombre: string;
       apellido: string;
@@ -180,6 +182,11 @@ export default function UpsertUsuarioAdminModal({
       correo: form.correo.trim() || undefined,
       direccion: form.direccion.trim() || undefined,
     };
+
+    // Incluir usuario_id si viene de initialData (permite cambiar teléfono)
+    if (initialData?.usuario_id) {
+      payload.usuario_id = initialData.usuario_id;
+    }
 
     // Solo incluir plan en modo 'upsert'
     if (mode === 'upsert') {

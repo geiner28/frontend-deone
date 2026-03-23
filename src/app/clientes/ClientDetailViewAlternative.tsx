@@ -554,9 +554,11 @@ export default function ClientDetailViewAlternative({
                         </td>
                         <td className="px-4 py-4 text-gray-600 font-mono text-xs">
                           {factura.referencia_pago || '\u2014'}
-                        </td>                        <td className="px-4 py-4 text-gray-600 text-xs">
+                        </td>
+                        <td className="px-4 py-4 text-gray-600 text-xs">
                           {factura.tipo_referencia || '—'}
-                        </td>                        <td className="px-4 py-4 text-sm">
+                        </td>
+                        <td className="px-4 py-4 text-sm">
                           {factura.archivo_url ? (
                             <a
                               href={factura.archivo_url}
@@ -745,16 +747,18 @@ export default function ClientDetailViewAlternative({
           onClose={() => setOpenEditUserModal(false)}
           mode="edit-profile"
           initialData={{
+            usuario_id: u.id,
             telefono: u.telefono,
             nombre: u.nombre,
             apellido: u.apellido,
             correo: u.correo,
             direccion: u.direccion,
           }}
-          onSuccess={async () => {
-            // Recargar los datos del perfil para actualizar la información personal
+          onSuccess={async (data) => {
+            // Recargar los datos del perfil (usa teléfono actualizado por si cambió)
             try {
-              const res = await getAdminClientePerfil(u.telefono, selectedMonth);
+              const tel = data?.telefono || u.telefono;
+              const res = await getAdminClientePerfil(tel, selectedMonth);
               if (res.ok && res.data) {
                 setPerfil(res.data);
               }

@@ -80,6 +80,7 @@ export interface ListUsuariosData {
 
 // Admin: Upsert usuario con campos extendidos
 export interface UpsertUsuarioAdminPayload {
+  usuario_id?: string;
   telefono: string;
   nombre?: string;
   apellido?: string;
