@@ -131,15 +131,19 @@ export const listUsuarios = (params?: { page?: number; limit?: number; search?: 
 };
 
 // DELETE /api/users/:id  ó  /api/users?telefono=XXX
-// Por defecto soft delete; pasar { hard: true } para borrado físico.
-// { force: true } ignora restricciones (obligaciones activas / pagos confirmados).
+// Por defecto soft delete CON cascada (force=true) para que el panel admin
+// pueda eliminar clientes con obligaciones/pagos sin pasos previos.
+// { hard: true } → borrado físico irreversible.
+// { force: false } → respeta restricciones del backend (no recomendado en este dashboard).
 export const deleteUsuario = (
   identifier: { id?: string; telefono?: string },
   options?: { hard?: boolean; force?: boolean }
 ) => {
+  const force = options?.force !== false; // default true
+  const hard = !!options?.hard;
   const sp = new URLSearchParams();
-  if (options?.hard) sp.set('hard', 'true');
-  if (options?.force) sp.set('force', 'true');
+  if (hard) sp.set('hard', 'true');
+  if (force) sp.set('force', 'true');
   if (identifier.id) {
     const qs = sp.toString();
     const suffix = qs ? `?${qs}` : '';
@@ -149,8 +153,8 @@ export const deleteUsuario = (
   }
   if (identifier.telefono) {
     const sp2 = new URLSearchParams({ telefono: identifier.telefono });
-    if (options?.hard) sp2.set('hard', 'true');
-    if (options?.force) sp2.set('force', 'true');
+    if (hard) sp2.set('hard', 'true');
+    if (force) sp2.set('force', 'true');
     return request<DeleteUsuarioData>(`/users?${sp2.toString()}`, { method: 'DELETE' });
   }
   return Promise.resolve({
@@ -186,10 +190,12 @@ export const updateObligacion = (id: string, payload: UpdateObligacionPayload) =
     body: JSON.stringify(payload),
   });
 
-// DELETE /api/obligaciones/:id  (?force=true para cascada en facturas)
+// DELETE /api/obligaciones/:id  (?force=true para cascada en facturas).
+// En el dashboard admin enviamos force=true por defecto.
 export const deleteObligacion = (id: string, options?: { force?: boolean }) => {
+  const force = options?.force !== false; // default true
   const sp = new URLSearchParams();
-  if (options?.force) sp.set('force', 'true');
+  if (force) sp.set('force', 'true');
   const qs = sp.toString();
   return request<DeleteObligacionData>(`/obligaciones/${id}${qs ? `?${qs}` : ''}`, {
     method: 'DELETE',
