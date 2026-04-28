@@ -1,163 +1,135 @@
-# 📘 DeOne Backend — Documentación Completa de API
+# 🤖 DeOne Backend — Documentación Completa de Endpoints para el Bot
 
-> **Última actualización:** 19 de febrero de 2026  
-> **Versión:** 2.0  
-> **Base URL local:** `http://localhost:3001/api`  
-> **Base URL producción (Render):** `https://tu-app.onrender.com/api`
-
----
-
-## 📋 Índice
-
-1. [Información General](#-información-general)
-2. [Autenticación](#-autenticación)
-3. [Formato Estándar de Respuesta](#-formato-estándar-de-respuesta)
-4. [Códigos HTTP y Errores](#-códigos-http-y-errores)
-5. **Endpoints:**
-   - [Health Check](#1-health-check)
-   - [Usuarios](#2-usuarios-apiusers) (4 endpoints)
-   - [Obligaciones](#3-obligaciones-apiobligaciones) (4 endpoints)
-   - [Facturas](#4-facturas-apifacturas) (4 endpoints)
-   - [Recargas](#5-recargas-apirecargas) (3 endpoints)
-   - [Disponibilidad (Saldo)](#6-disponibilidad-saldo-apidisponible) (1 endpoint)
-   - [Pagos](#7-pagos-apipagos) (3 endpoints)
-   - [Revisiones Admin](#8-revisiones-admin-apirevisiones) (3 endpoints)
-   - [Notificaciones](#9-notificaciones-apinotificaciones) (6 endpoints)
-   - [Admin Dashboard](#10-admin-dashboard-apiadmin) (4 endpoints)
-6. [Máquinas de Estado](#-máquinas-de-estado)
-7. [Comportamientos Automáticos](#-comportamientos-automáticos)
-8. [Flujo Completo — Caso Real con Datos de Prueba](#-flujo-completo--caso-real-con-datos-de-prueba)
-
----
-
-## 📌 Información General
-
-| Campo | Valor |
-|-------|-------|
-| **Base URL** | `http://localhost:3001/api` |
-| **Formato de datos** | JSON (`Content-Type: application/json`) |
-| **Framework** | Express 5 + Node.js |
-| **Base de datos** | Supabase (PostgreSQL) |
-| **Validación** | Zod (body y query params) |
-| **Total de endpoints** | **34** |
+> **Última actualización:** 12 de marzo de 2026  
+> **Base URL producción:** `https://prueba-supabase.onrender.com/api`  
+> **Total endpoints:** 21 (17 bot + 4 admin)  
+> **⚙️ Jobs automáticos:**  
+> - Cron job diario 9:00 AM → evalúa obligaciones, recalcula solicitudes, genera notificaciones  
+> - Cron job cada 6 horas → detecta usuarios sin respuesta y genera alertas al admin
 
 ---
 
 ## 🔐 Autenticación
 
-Todos los endpoints (excepto `/api/health`) requieren un header de autenticación:
+**Todos los endpoints requieren este header:**
 
-| Header | Valor | Quién lo usa |
-|--------|-------|--------------|
-| `x-bot-api-key` | `TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3` | Bot de WhatsApp |
-| `x-admin-api-key` | `TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3` | Panel Admin / Frontend |
+```
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+```
 
-> **Nota:** Algunos endpoints aceptan **ambos** headers (bot o admin). Se indica en cada endpoint con 🤖 (bot), 👨‍💼 (admin), o 🤖👨‍💼 (ambos).
+> También se puede usar `x-admin-api-key` con el mismo valor. Ambos funcionan para todos los endpoints del bot.
 
-**Si no envías el header correcto:**
+**Si no se envía el header o el valor es incorrecto:**
 ```json
 {
   "ok": false,
   "data": null,
-  "error": { "code": "UNAUTHORIZED", "message": "API Key requerida" }
+  "error": { "code": "UNAUTHORIZED", "message": "API Key inválida o ausente" }
 }
 ```
 
 ---
 
-## 📦 Formato Estándar de Respuesta
+## 📦 Formato de Respuesta (TODAS las respuestas)
 
-**TODAS** las respuestas siguen este formato:
+Todas las respuestas del API siguen exactamente este formato, sin excepciones:
 
 ```json
 {
-  "ok": true,       // true = éxito, false = error
-  "data": { ... },  // Los datos (null cuando hay error)
-  "error": null      // null cuando ok=true, objeto con code+message cuando ok=false
+  "ok": true,        // true = operación exitosa, false = hubo un error
+  "data": { ... },   // datos de respuesta (null cuando hay error)
+  "error": null       // null si ok=true, objeto { code, message, details } si ok=false
 }
 ```
 
-**Ejemplo de éxito:**
-```json
-{ "ok": true, "data": { "usuario_id": "abc-123" }, "error": null }
-```
+**Códigos de error posibles:**
 
-**Ejemplo de error:**
-```json
-{ "ok": false, "data": null, "error": { "code": "NOT_FOUND", "message": "Usuario no encontrado" } }
-```
-
----
-
-## ❌ Códigos HTTP y Errores
-
-| HTTP | Código interno | Cuándo ocurre | Ejemplo |
-|------|---------------|---------------|---------|
-| `200` | — | Operación exitosa | GET, PUT exitosos |
-| `201` | — | Recurso creado | POST exitosos |
-| `400` | `VALIDATION_ERROR` | Body o query inválido (Zod) | Campo faltante, tipo incorrecto |
-| `401` | `UNAUTHORIZED` | API Key faltante o incorrecta | Sin header x-bot-api-key |
-| `404` | `NOT_FOUND` | Recurso no existe | Usuario, factura, obligación no encontrada |
-| `409` | `INVALID_STATE` | Transición de estado no permitida | Validar factura ya pagada |
-| `409` | `INSUFFICIENT_FUNDS` | Saldo insuficiente para pagar | Crear pago sin fondos |
-| `500` | `INTERNAL_ERROR` | Error interno del servidor | Error de base de datos |
-
-**Ejemplo de error de validación (400):**
-```json
-{
-  "ok": false,
-  "data": null,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Datos inválidos",
-    "details": [
-      { "path": "telefono", "message": "Teléfono requerido" },
-      { "path": "nombre", "message": "Expected string, received number" }
-    ]
-  }
-}
-```
+| Código HTTP | `error.code` | Significado |
+|-------------|--------------|-------------|
+| 400 | `VALIDATION_ERROR` | Los datos enviados no cumplen con el formato requerido |
+| 400 | `BAD_REQUEST` | Error lógico en la solicitud (ej: monto 0, sin facturas) |
+| 401 | `UNAUTHORIZED` | API Key inválida, ausente o vencida |
+| 404 | `NOT_FOUND` | Recurso no encontrado (usuario, factura, obligación, etc.) |
+| 409 | `CONFLICT_DUPLICATE` | Ya existe un recurso con esos datos (duplicado) |
+| 409 | `INSUFFICIENT_FUNDS` | No hay saldo suficiente para la operación |
+| 409 | `INVALID_STATE_TRANSITION` | La entidad no está en el estado correcto para esta acción |
+| 500 | `INTERNAL_ERROR` | Error interno del servidor |
 
 ---
 
-# 📡 ENDPOINTS
+## 📋 Índice de Endpoints
+
+### Gestión de Usuarios
+| # | Método | Endpoint | Qué hace |
+|---|--------|----------|----------|
+| 1 | `POST` | `/api/users/upsert` | Registra un usuario nuevo o actualiza uno existente usando su teléfono como clave única |
+| 2 | `PUT` | `/api/users/plan` | Asigna o cambia el plan del usuario (control, tranquilidad, respaldo) |
+| 2a | `DELETE` | `/api/users/:id` o `/api/users?telefono=XXX` | 🆕 Elimina usuario (soft delete por default; `?hard=true` borra físicamente) |
+
+### Obligaciones (Compromisos Mensuales)
+| # | Método | Endpoint | Qué hace |
+|---|--------|----------|----------|
+| 3 | `POST` | `/api/obligaciones` | Crea el compromiso mensual que agrupa todas las facturas de un periodo |
+| 4 | `GET` | `/api/obligaciones?telefono=XXX` | Lista todas las obligaciones del usuario con sus facturas y progreso de pago |
+| 5 | `GET` | `/api/obligaciones/:id` | Muestra el detalle completo de una obligación específica incluyendo datos del usuario |
+| 5a | `DELETE` | `/api/obligaciones/:id` | 🆕 Elimina obligación (bloqueado si hay facturas pagadas/validadas; `?force=true` cascada) |
+
+### Facturas
+| # | Método | Endpoint | Qué hace |
+|---|--------|----------|----------|
+| 6 | `POST` | `/api/facturas/captura` | Registra una factura extraída por el bot (acepta campos null cuando la extracción es incompleta) |
+| 7 | `GET` | `/api/facturas/obligacion/:id` | Lista todas las facturas de una obligación con todos sus campos y estados |
+
+### Recargas (Depósitos de Dinero)
+| # | Método | Endpoint | Qué hace |
+|---|--------|----------|----------|
+| 8 | `POST` | `/api/recargas/reportar` | Reporta una recarga del usuario con comprobante; queda pendiente de aprobación por admin |
+
+### Saldo
+| # | Método | Endpoint | Qué hace |
+|---|--------|----------|----------|
+| 9 | `GET` | `/api/disponible?telefono=X&periodo=X` | Calcula el saldo disponible: recargas aprobadas menos pagos ya realizados |
+
+### Notificaciones
+| # | Método | Endpoint | Qué hace |
+|---|--------|----------|----------|
+| 10 | `GET` | `/api/notificaciones/pendientes/:telefono` | Obtiene todas las notificaciones pendientes de enviar al usuario por WhatsApp |
+| 11 | `PUT` | `/api/notificaciones/:id` | Marca una notificación individual como enviada, fallida o leída |
+| 12 | `POST` | `/api/notificaciones/batch-enviadas` | Marca múltiples notificaciones como enviadas en una sola llamada |
+| 12a | `GET` | `/api/notificaciones/pendientes-hoy` | 🆕 Obtiene TODAS las notificaciones de inicio mes del día actual (global - auto-marca enviadas) |
+
+### Pagos
+| # | Método | Endpoint | Qué hace |
+|---|--------|----------|----------|
+| 13 | `POST` | `/api/pagos/crear` | Crea un pago para una factura validada verificando que haya saldo suficiente |
+
+### 🆕 Solicitudes de Recarga Automáticas
+| # | Método | Endpoint | Qué hace |
+|---|--------|----------|----------|
+| 14 | `POST` | `/api/solicitudes-recarga/generar` | Genera solicitudes de recarga automáticas según el plan del usuario y sus facturas pendientes |
+| 15 | `GET` | `/api/solicitudes-recarga?telefono=X` | Lista las solicitudes de recarga del usuario con filtros opcionales por estado y obligación |
+| 16 | `POST` | `/api/solicitudes-recarga/verificar-recordatorios` | Verifica si hay cuotas próximas a vencer sin saldo y genera notificaciones de recordatorio |
+| 17 | `PUT` | `/api/solicitudes-recarga/:id/fechas` | Permite al usuario personalizar las fechas límite de sus cuotas de recarga |
+
+### 🔧 Endpoints de Administración (Recargas y Alertas)
+| # | Método | Endpoint | Auth | Qué hace |
+|---|--------|----------|------|----------|
+| 18 | `PUT` | `/api/recargas/:id/aprobar` | `x-admin-api-key` | Admin aprueba una recarga + auto-limpieza de notificaciones y solicitudes |
+| 19 | `PUT` | `/api/recargas/:id/rechazar` | `x-admin-api-key` | Admin rechaza una recarga con motivo |
+| 20 | `GET` | `/api/notificaciones/admin/alertas` | `x-admin-api-key` | Obtiene alertas pendientes de usuarios sin respuesta |
+| 21 | `GET` | `/api/notificaciones` | `x-admin-api-key` | Lista todas las notificaciones con filtros y datos del usuario |
 
 ---
 
-## 1. Health Check
+## 1. `POST /api/users/upsert` — Registrar o actualizar usuario
 
-### `GET /api/health`
+### ¿Qué hace?
+Cuando un usuario nuevo llega por WhatsApp, el bot llama este endpoint para registrarlo en el sistema. Si el usuario ya existe (mismo teléfono), actualiza los datos que se envíen (nombre, apellido, correo) sin crear duplicados.
 
-> Verifica que el servidor esté activo. **No requiere autenticación.**
-
-**Request:**
-```
-GET /api/health
-```
-
-**Response (200) — Probado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "service": "DeOne Backend",
-    "status": "running",
-    "timestamp": "2026-02-20T03:58:22.915Z"
-  },
-  "error": null
-}
-```
-
----
-
-## 2. Usuarios (`/api/users`)
-
----
-
-### 2.1 `POST /api/users/upsert` — Crear o actualizar usuario
-
-> 🤖👨‍💼 Crea un usuario nuevo (201) o actualiza si ya existe por teléfono (200).  
-> Al crear, se generan automáticamente los **ajustes del usuario** (tabla `ajustes_usuario`).
+### ¿Cuándo usarlo?
+- Al inicio de cada conversación nueva con un usuario desconocido
+- Cuando el usuario quiere actualizar sus datos personales
+- Es idempotente: llamarlo múltiples veces con el mismo teléfono no causa problemas
 
 **Headers:**
 ```
@@ -169,98 +141,61 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `telefono` | string | ✅ Sí (min 7 chars) | Número de teléfono del usuario |
-| `nombre` | string | ❌ No | Nombre del usuario |
-| `apellido` | string | ❌ No | Apellido del usuario |
-| `correo` | string | ❌ No | Email válido |
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario (mín 7 caracteres). Ej: `"573046757626"`. Es la clave única del usuario |
+| `nombre` | `string` | ❌ No | Nombre del usuario. Si es nuevo y no se envía, se usa el teléfono como nombre |
+| `apellido` | `string` | ❌ No | Apellido del usuario |
+| `correo` | `string` | ❌ No | Email válido del usuario |
 
-**Ejemplo — Crear usuario nuevo:**
+**Ejemplo — Usuario nuevo:**
 ```json
 {
-  "telefono": "3001112233",
-  "nombre": "Carlos",
-  "apellido": "Frontend",
-  "correo": "carlos.test@email.com"
+  "telefono": "573046757626",
+  "nombre": "Laura",
+  "apellido": "Durán",
+  "correo": "laura@email.com"
 }
 ```
 
-**Response (201) — Usuario creado:**
+**Ejemplo — Solo teléfono (mínimo requerido):**
+```json
+{
+  "telefono": "573046757626"
+}
+```
+
+**Respuesta exitosa (201 si es nuevo, 200 si ya existe):**
 ```json
 {
   "ok": true,
   "data": {
-    "usuario": {
-      "id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-      "creado_en": "2026-02-20T03:59:07.226464+00:00",
-      "nombre": "Carlos",
-      "apellido": "Frontend",
-      "correo": "carlos.test@email.com",
-      "telefono": "3001112233",
-      "direccion": null,
-      "plan": "control",
-      "activo": true
-    },
-    "ajustes": {
-      "id": "38a7136d-a1d3-4e60-85e0-fe4af589004d",
-      "usuario_id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-      "tipo_notificacion": "whatsapp",
-      "umbral_monto_alto": 300000,
-      "recordatorios_activos": true,
-      "dias_anticipacion_recordatorio": 5,
-      "requiere_autorizacion_monto_alto": true
-    },
-    "es_nuevo": true
+    "usuario_id": "49f3c602-80c8-4c59-9ee6-a005bbb86f08",
+    "creado": true
   },
   "error": null
 }
 ```
 
-**Ejemplo — Actualizar usuario existente (mismo teléfono):**
-```json
-{
-  "telefono": "3001112233",
-  "nombre": "Carlos Actualizado"
-}
-```
+| Campo respuesta | Significado |
+|-----------------|-------------|
+| `usuario_id` | UUID interno del usuario. Guardar para referencias internas |
+| `creado` | `true` = usuario nuevo fue creado, `false` = usuario existente fue actualizado |
 
-**Response (200) — Usuario actualizado:**
+**Errores posibles:**
 ```json
-{
-  "ok": true,
-  "data": {
-    "usuario": {
-      "id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-      "nombre": "Carlos Actualizado",
-      "apellido": "Frontend",
-      "telefono": "3001112233",
-      "plan": "control",
-      "activo": true
-    },
-    "ajustes": { "..." : "..." },
-    "es_nuevo": false
-  },
-  "error": null
-}
-```
-
-**Response (400) — Validación fallida:**
-```json
-{
-  "ok": false,
-  "data": null,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Datos inválidos",
-    "details": [{ "path": "telefono", "message": "Teléfono requerido" }]
-  }
-}
+{ "code": "VALIDATION_ERROR", "message": "Error de validación en los datos enviados" }
 ```
 
 ---
 
-### 2.2 `PUT /api/users/plan` — Cambiar plan del usuario
+## 2. `PUT /api/users/plan` — Cambiar plan del usuario
 
-> 🤖👨‍💼 Cambia el plan de un usuario. Planes disponibles: `control`, `tranquilidad`, `respaldo`.
+### ¿Qué hace?
+Asigna o cambia el plan de pago del usuario. El plan determina cómo se distribuyen las solicitudes de recarga: en 1 cuota (control) o en 2 cuotas (tranquilidad/respaldo).
+
+### ¿Cuándo usarlo?
+- Cuando el usuario elige su plan por primera vez
+- Cuando quiere cambiar de plan
+- Debe llamarse ANTES de generar solicitudes de recarga (endpoint 14)
 
 **Headers:**
 ```
@@ -272,30 +207,32 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 
 | Campo | Tipo | Requerido | Valores permitidos |
 |-------|------|-----------|-------------------|
-| `telefono` | string | ✅ Sí | Teléfono del usuario |
-| `plan` | string | ✅ Sí | `"control"`, `"tranquilidad"`, `"respaldo"` |
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario |
+| `plan` | `string` | ✅ Sí | `"control"` \| `"tranquilidad"` \| `"respaldo"` |
+
+**Diferencia entre planes:**
+
+| Plan | Recargas/Mes | Distribución | Descripción |
+|------|-------------|--------------|-------------|
+| `control` | 1 | Día 1: pago total | El usuario hace 1 sola recarga por el monto total de todas sus facturas |
+| `tranquilidad` | 2 | Día 1 y 15 | El sistema divide las facturas en 2 cuotas según sus fechas de vencimiento |
+| `respaldo` | 2 | Día 1 y 15 | Igual que tranquilidad, 2 cuotas distribuidas por fecha de vencimiento |
 
 **Ejemplo:**
 ```json
 {
-  "telefono": "3001112233",
+  "telefono": "573046757626",
   "plan": "tranquilidad"
 }
 ```
 
-**Response (200) — Probado:**
+**Respuesta exitosa (200):**
 ```json
 {
   "ok": true,
   "data": {
-    "usuario": {
-      "id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-      "nombre": "Carlos Actualizado",
-      "apellido": "Frontend",
-      "telefono": "3001112233",
-      "plan": "tranquilidad",
-      "activo": true
-    },
+    "usuario_id": "49f3c602-80c8-4c59-9ee6-a005bbb86f08",
+    "telefono": "573046757626",
     "plan_anterior": "control",
     "plan_nuevo": "tranquilidad"
   },
@@ -303,134 +240,28 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 }
 ```
 
----
+| Campo respuesta | Significado |
+|-----------------|-------------|
+| `plan_anterior` | El plan que tenía antes del cambio |
+| `plan_nuevo` | El plan asignado ahora |
 
-### 2.3 `GET /api/users/by-telefono/:telefono` — Buscar usuario por teléfono
-
-> 👨‍💼 Retorna el usuario completo con sus ajustes.
-
-**Headers:**
-```
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Request:**
-```
-GET /api/users/by-telefono/3001112233
-```
-
-**Response (200) — Encontrado:**
+**Errores posibles:**
 ```json
-{
-  "ok": true,
-  "data": {
-    "id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-    "creado_en": "2026-02-20T03:59:07.226464+00:00",
-    "nombre": "Carlos Actualizado",
-    "apellido": "Frontend",
-    "correo": "carlos.test@email.com",
-    "telefono": "3001112233",
-    "direccion": null,
-    "plan": "tranquilidad",
-    "activo": true,
-    "ajustes_usuario": {
-      "id": "38a7136d-a1d3-4e60-85e0-fe4af589004d",
-      "tipo_notificacion": "whatsapp",
-      "umbral_monto_alto": 300000,
-      "recordatorios_activos": true,
-      "dias_anticipacion_recordatorio": 5,
-      "requiere_autorizacion_monto_alto": true
-    }
-  },
-  "error": null
-}
-```
-
-**Response (404) — No encontrado:**
-```json
-{
-  "ok": false,
-  "data": null,
-  "error": "Usuario no encontrado"
-}
+{ "code": "NOT_FOUND", "message": "Usuario no encontrado con ese teléfono" }
+{ "code": "VALIDATION_ERROR", "message": "Error de validación en los datos enviados" }
 ```
 
 ---
 
-### 2.4 `GET /api/users` — Listar usuarios (paginado + búsqueda)
+## 3. `POST /api/obligaciones` — Crear obligación
 
-> 👨‍💼 Lista todos los usuarios con paginación y búsqueda opcional.
+### ¿Qué hace?
+Crea una obligación mensual: un contenedor que agrupa todas las facturas que el usuario debe pagar en un periodo (mes). Es como una "carpeta" donde se guardan las facturas de marzo, abril, etc. Los contadores de monto_total y facturas se actualizan automáticamente cuando se agregan facturas.
 
-**Headers:**
-```
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Query Params:**
-
-| Param | Tipo | Default | Descripción |
-|-------|------|---------|-------------|
-| `page` | number | `1` | Página actual |
-| `limit` | number | `20` | Registros por página (máx 100) |
-| `search` | string | — | Busca en nombre, teléfono o correo |
-
-**Ejemplo:**
-```
-GET /api/users?page=1&limit=10&search=carlos
-```
-
-**Response (200) — Probado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "usuarios": [
-      {
-        "id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-        "nombre": "Carlos Actualizado",
-        "apellido": "Frontend",
-        "correo": "carlos.test@email.com",
-        "telefono": "3001112233",
-        "plan": "tranquilidad",
-        "activo": true,
-        "ajustes_usuario": {
-          "tipo_notificacion": "whatsapp",
-          "umbral_monto_alto": 300000,
-          "recordatorios_activos": true,
-          "dias_anticipacion_recordatorio": 5,
-          "requiere_autorizacion_monto_alto": true
-        }
-      },
-      {
-        "id": "9a1ea3b4-f9a7-4990-a681-18c6447adc73",
-        "nombre": "Carlos",
-        "apellido": "Rodriguez",
-        "telefono": "3005555555",
-        "plan": "control",
-        "activo": true,
-        "ajustes_usuario": { "..." : "..." }
-      }
-    ],
-    "total": 3,
-    "page": 1,
-    "limit": 10,
-    "total_pages": 1
-  },
-  "error": null
-}
-```
-
----
-
-## 3. Obligaciones (`/api/obligaciones`)
-
-> **Concepto:** Una obligación es un **compromiso de pago de un periodo** (ej: "Pagos de Febrero 2026"). Contiene múltiples **facturas** (agua, gas, energía). Se auto-completa cuando todas sus facturas quedan pagadas.
-
----
-
-### 3.1 `POST /api/obligaciones` — Crear obligación
-
-> 🤖👨‍💼 Crea una obligación para un periodo.
+### ¿Cuándo usarlo?
+- Al inicio de cada mes o cuando el usuario quiere organizar sus pagos de un nuevo periodo
+- Se crea UNA obligación por mes
+- Después de crearla, se le asocian facturas con el endpoint 6
 
 **Headers:**
 ```
@@ -442,50 +273,65 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `telefono` | string | ✅ Sí | Teléfono del usuario |
-| `descripcion` | string | ✅ Sí | Descripción (ej: "Servicios Febrero 2026") |
-| `periodo` | string | ✅ Sí | Periodo en formato YYYY-MM-DD (se normaliza al 1er día del mes) |
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario |
+| `descripcion` | `string` | ✅ Sí | Descripción legible. Ej: `"Pagos de Marzo 2026"` |
+| `periodo` | `string` | ✅ Sí | Fecha del periodo en formato `YYYY-MM-DD`. Se normaliza al día 1 del mes |
 
 **Ejemplo:**
 ```json
 {
-  "telefono": "3001112233",
-  "descripcion": "Servicios Febrero 2026",
-  "periodo": "2026-02-01"
+  "telefono": "573046757626",
+  "descripcion": "Pagos de Marzo 2026",
+  "periodo": "2026-03-01"
 }
 ```
 
-**Response (201) — Probado:**
+**Respuesta exitosa (201):**
 ```json
 {
   "ok": true,
   "data": {
-    "id": "81b23515-aa5e-4566-9adf-fa027db91757",
-    "creado_en": "2026-02-20T04:00:06.285+00:00",
-    "usuario_id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-    "descripcion": "Servicios Febrero 2026",
-    "servicio": "Servicios Febrero 2026",
+    "id": "86a0c709-3ca9-41bc-9106-226cac7cf4ba",
+    "usuario_id": "49f3c602-80c8-4c59-9ee6-a005bbb86f08",
+    "descripcion": "Pagos de Marzo 2026",
+    "periodo": "2026-03-01",
+    "servicio": "Pagos de Marzo 2026",
     "tipo_referencia": "periodo",
-    "numero_referencia": "2026-02-01-1740020406283",
-    "periodicidad": null,
-    "pagina_pago": null,
+    "numero_referencia": "2026-03-01-1709900000000",
     "estado": "activa",
-    "periodo": "2026-02-01",
     "total_facturas": 0,
     "facturas_pagadas": 0,
     "monto_total": 0,
     "monto_pagado": 0,
+    "creado_en": "2026-03-08T10:30:00.000Z",
     "completada_en": null
   },
   "error": null
 }
 ```
 
+| Campo respuesta | Significado |
+|-----------------|-------------|
+| `id` | UUID de la obligación. **Guardar este ID** para asociar facturas (endpoint 6) y generar solicitudes de recarga (endpoint 14) |
+| `estado` | `"activa"` = recién creada |
+| `total_facturas` | Empieza en 0, se incrementa al agregar facturas |
+| `monto_total` | Empieza en 0, suma automáticamente los montos de las facturas |
+
+**Errores posibles:**
+```json
+{ "code": "NOT_FOUND", "message": "Usuario no encontrado con ese teléfono" }
+```
+
 ---
 
-### 3.2 `GET /api/obligaciones?telefono=...` — Listar obligaciones de un usuario
+## 4. `GET /api/obligaciones?telefono=XXX` — Listar obligaciones
 
-> 🤖👨‍💼 Lista todas las obligaciones del usuario con sus facturas y progreso calculado.
+### ¿Qué hace?
+Devuelve TODAS las obligaciones del usuario, cada una con su array de facturas, montos totales y porcentaje de progreso. Sirve para que el bot muestre al usuario un resumen de sus compromisos de pago.
+
+### ¿Cuándo usarlo?
+- Cuando el usuario pregunta "¿cómo van mis pagos?" o "¿qué debo?"
+- Para mostrar un resumen general de todas las obligaciones
 
 **Headers:**
 ```
@@ -496,175 +342,128 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 
 | Param | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `telefono` | string | ✅ Sí | Teléfono del usuario |
-| `estado` | string | ❌ No | Filtrar: `activa`, `en_progreso`, `completada`, `cancelada` |
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario |
+| `estado` | `string` | ❌ No | Filtrar por estado: `"activa"`, `"en_progreso"`, `"completada"`, `"cancelada"` |
 
 **Ejemplo:**
 ```
-GET /api/obligaciones?telefono=3001112233
+GET /api/obligaciones?telefono=573046757626
+GET /api/obligaciones?telefono=573046757626&estado=activa
 ```
 
-**Response (200) — Probado:**
+**Respuesta exitosa (200):**
 ```json
 {
   "ok": true,
   "data": [
     {
-      "id": "81b23515-aa5e-4566-9adf-fa027db91757",
-      "descripcion": "Servicios Febrero 2026",
-      "estado": "completada",
-      "periodo": "2026-02-01",
-      "completada_en": "2026-02-20T04:03:56.136+00:00",
+      "id": "86a0c709-3ca9-41bc-9106-226cac7cf4ba",
+      "usuario_id": "49f3c602-...",
+      "descripcion": "Pagos de Marzo 2026",
+      "periodo": "2026-03-01",
+      "estado": "activa",
+      "total_facturas": 3,
+      "facturas_pagadas": 1,
+      "monto_total": 250000,
+      "monto_pagado": 85000,
+      "progreso": 33,
+      "completada_en": null,
+      "creado_en": "2026-03-08T...",
       "facturas": [
         {
-          "id": "92eb26d4-661c-49d7-977a-3a30c05b2792",
-          "servicio": "EPM Energía",
+          "id": "18e6dcfd-...",
+          "servicio": "Internet ETB",
           "monto": 85000,
           "estado": "pagada",
-          "periodo": "2026-02-01"
-        },
-        {
-          "id": "989491ed-9119-433f-b88d-01381b87b0dc",
-          "servicio": "Agua EPM",
-          "monto": 45000,
-          "estado": "pagada",
-          "periodo": "2026-02-01"
-        },
-        {
-          "id": "07a7d72d-a3fd-4f2d-8ba2-b8e72dce3d37",
-          "servicio": "Gas Natural Dudosa",
-          "monto": 32000,
-          "estado": "rechazada",
-          "periodo": "2026-02-01"
+          "referencia_pago": "ETB-2026-001",
+          "etiqueta": "internet",
+          "fecha_vencimiento": "2026-03-10",
+          "fecha_emision": "2026-02-25"
         }
-      ],
-      "total_facturas": 3,
-      "facturas_pagadas": 2,
-      "monto_total": 162000,
-      "monto_pagado": 130000,
-      "progreso": 67
+      ]
     }
   ],
   "error": null
 }
 ```
 
----
-
-### 3.3 `GET /api/obligaciones/:id` — Detalle de una obligación
-
-> 🤖👨‍💼 Retorna el detalle completo de una obligación con facturas e info del usuario.
-
-**Request:**
-```
-GET /api/obligaciones/81b23515-aa5e-4566-9adf-fa027db91757
-```
-
-**Response (200) — Probado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "81b23515-aa5e-4566-9adf-fa027db91757",
-    "descripcion": "Servicios Febrero 2026",
-    "estado": "completada",
-    "periodo": "2026-02-01",
-    "completada_en": "2026-02-20T04:03:56.136+00:00",
-    "usuarios": {
-      "nombre": "Carlos Actualizado",
-      "apellido": "Frontend",
-      "telefono": "3001112233"
-    },
-    "facturas": [
-      {
-        "id": "92eb26d4-661c-49d7-977a-3a30c05b2792",
-        "servicio": "EPM Energía",
-        "monto": 85000,
-        "estado": "pagada"
-      },
-      {
-        "id": "989491ed-9119-433f-b88d-01381b87b0dc",
-        "servicio": "Agua EPM",
-        "monto": 45000,
-        "estado": "pagada"
-      },
-      {
-        "id": "07a7d72d-a3fd-4f2d-8ba2-b8e72dce3d37",
-        "servicio": "Gas Natural Dudosa",
-        "monto": 32000,
-        "estado": "rechazada"
-      }
-    ],
-    "total_facturas": 3,
-    "facturas_pagadas": 2,
-    "monto_total": 162000,
-    "monto_pagado": 130000,
-    "progreso": 67
-  },
-  "error": null
-}
-```
-
-**Response (404):**
-```json
-{ "ok": false, "data": null, "error": "Obligación no encontrada" }
-```
+| Campo respuesta | Significado |
+|-----------------|-------------|
+| `progreso` | Porcentaje de facturas pagadas (0-100). Útil para mostrar una barra de progreso |
+| `facturas` | Array con todas las facturas de esa obligación y sus estados |
+| `monto_total` | Suma de montos de todas las facturas |
+| `monto_pagado` | Suma de montos de facturas ya pagadas |
+| `estado` | `"activa"` → sin pagos, `"en_progreso"` → algunos pagos, `"completada"` → todo pagado |
 
 ---
 
-### 3.4 `PUT /api/obligaciones/:id` — Actualizar obligación
+## 5. `GET /api/obligaciones/:id` — Detalle de una obligación
 
-> 👨‍💼 Actualiza la descripción y/o estado de una obligación.
+### ¿Qué hace?
+Muestra el detalle completo de UNA obligación específica, incluyendo todas sus facturas y los datos del usuario (nombre, teléfono). Más detallado que el listado del endpoint 4.
+
+### ¿Cuándo usarlo?
+- Cuando el usuario quiere ver el detalle de una obligación específica
+- Para obtener la lista completa de facturas de un periodo
 
 **Headers:**
 ```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 ```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Valores |
-|-------|------|-----------|---------|
-| `descripcion` | string | ❌ No | Nueva descripción |
-| `estado` | string | ❌ No | `"activa"`, `"en_progreso"`, `"completada"`, `"cancelada"` |
 
 **Ejemplo:**
-```json
-{
-  "estado": "completada",
-  "descripcion": "Servicios Feb 2026 - Pagados"
-}
+```
+GET /api/obligaciones/86a0c709-3ca9-41bc-9106-226cac7cf4ba
 ```
 
-**Response (200) — Probado:**
+**Respuesta exitosa (200):**
 ```json
 {
   "ok": true,
   "data": {
-    "id": "81b23515-aa5e-4566-9adf-fa027db91757",
-    "descripcion": "Servicios Feb 2026 - Pagados",
-    "estado": "completada",
-    "completada_en": "2026-02-20T04:01:04.397+00:00",
-    "periodo": "2026-02-01"
+    "id": "86a0c709-...",
+    "descripcion": "Pagos de Marzo 2026",
+    "periodo": "2026-03-01",
+    "estado": "activa",
+    "total_facturas": 3,
+    "facturas_pagadas": 0,
+    "monto_total": 250000,
+    "monto_pagado": 0,
+    "progreso": 0,
+    "facturas": [ ... ],
+    "usuarios": {
+      "nombre": "Laura",
+      "apellido": "Durán",
+      "telefono": "573046757626"
+    }
   },
   "error": null
 }
 ```
 
+> Incluye el objeto `usuarios` con nombre, apellido y teléfono del propietario.
+
+**Errores posibles:**
+```json
+{ "code": "NOT_FOUND", "message": "Obligación no encontrada" }
+```
+
 ---
 
-## 4. Facturas (`/api/facturas`)
+## 6. `POST /api/facturas/captura` — Registrar factura/servicio
 
-> **Concepto:** Una factura es un **servicio individual** (EPM Energía, Agua, Gas) que pertenece a una obligación. El bot captura la factura y el admin la valida o rechaza.
+### ¿Qué hace?
+Registra una factura dentro de una obligación. El bot extrae los datos de la factura (foto, PDF, o texto) y los envía aquí. Los campos que no pueda extraer se envían como `null`. Si la extracción es dudosa o el monto es null, la factura queda en estado `"en_revision"` para que el admin la valide manualmente.
 
----
+### ¿Cuándo usarlo?
+- Cuando el usuario envía una foto/PDF de su factura por WhatsApp
+- Cuando el usuario dicta los datos de su factura manualmente
+- Se llama UNA vez por cada factura/servicio diferente
 
-### 4.1 `POST /api/facturas/captura` — Registrar factura
-
-> 🤖 El bot registra una factura extraída de imagen/PDF.  
-> Si `extraccion_estado` es `"ok"` → estado `extraida`.  
-> Si es `"dudosa"` o `"fallida"` → estado `en_revision` + se crea revisión admin automáticamente.
+### Comportamiento automático:
+- Si `monto` es `null` o `extraccion_estado` es `"dudosa"`/`"fallida"` → estado `"en_revision"` (requiere revisión del admin)
+- Si todo está ok → estado `"extraida"` (lista para que el admin la valide)
+- Genera automáticamente una entrada en la tabla de revisiones si necesita revisión
 
 **Headers:**
 ```
@@ -674,45 +473,65 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 
 **Body JSON:**
 
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `telefono` | string | ✅ Sí | Teléfono del usuario |
-| `obligacion_id` | UUID | ✅ Sí | ID de la obligación asociada |
-| `servicio` | string | ✅ Sí | Nombre del servicio (ej: "EPM Energía") |
-| `monto` | number | ✅ Sí | Monto positivo |
-| `periodo` | string | ❌ No | Periodo (se toma de la obligación si no se envía) |
-| `fecha_vencimiento` | string | ❌ No | Fecha límite de pago |
-| `fecha_emision` | string | ❌ No | Fecha de emisión |
-| `origen` | string | ❌ No | `"imagen"`, `"pdf"`, `"audio"`, `"texto"` |
-| `archivo_url` | string | ❌ No | URL del archivo original |
-| `extraccion_estado` | string | ❌ No | `"ok"` (default), `"dudosa"`, `"fallida"` |
-| `extraccion_json` | object | ❌ No | Datos raw de la extracción |
-| `extraccion_confianza` | number | ❌ No | 0.0 a 1.0 |
+| Campo | Tipo | Requerido | Acepta null | Descripción |
+|-------|------|-----------|-------------|-------------|
+| `telefono` | `string` | ✅ Sí | ❌ | Teléfono del usuario |
+| `obligacion_id` | `string (UUID)` | ✅ Sí | ❌ | ID de la obligación (obtenido del endpoint 3) |
+| `servicio` | `string` | ✅ Sí | ❌ | Nombre del servicio. Ej: `"EPM Energía"`, `"Vanti Gas"`, `"ETB Internet"` |
+| `monto` | `number` | ❌ No | ✅ Sí | Valor de la factura en pesos. Si es `null` → queda en revisión |
+| `fecha_vencimiento` | `string` | ❌ No | ✅ Sí | Fecha límite de pago. Formato `"YYYY-MM-DD"`. Importante para distribuir cuotas |
+| `fecha_emision` | `string` | ❌ No | ✅ Sí | Fecha en que se emitió la factura. Formato `"YYYY-MM-DD"` |
+| `referencia_pago` | `string` | ❌ No | ✅ Sí | Número de referencia de la factura (el que usa el usuario para pagar) |
+| `etiqueta` | `string` | ❌ No | ✅ Sí | Etiqueta personalizada. Ej: `"internet"`, `"gas"`, `"energia"` |
+| `periodo` | `string` | ❌ No | ✅ Sí | Periodo `"YYYY-MM-DD"`. Si no se envía, toma el de la obligación |
+| `origen` | `string` | ❌ No | ✅ Sí | Origen de los datos: `"bot_whatsapp"`, `"manual"`, `"ocr"` |
+| `archivo_url` | `string` | ❌ No | ✅ Sí | URL de la imagen/PDF de la factura en Supabase Storage |
+| `extraccion_estado` | `string` | ❌ No | ❌ | Calidad de extracción: `"ok"` (default), `"dudosa"`, `"fallida"` |
+| `extraccion_json` | `object` | ❌ No | ✅ Sí | JSON crudo con los datos brutos que el OCR/IA extrajo |
+| `extraccion_confianza` | `number` | ❌ No | ✅ Sí | Nivel de confianza de la extracción (0.0 a 1.0) |
 
-**Ejemplo — Extracción exitosa:**
+**Ejemplo — Bot envía factura completa:**
 ```json
 {
-  "telefono": "3001112233",
-  "obligacion_id": "81b23515-aa5e-4566-9adf-fa027db91757",
-  "servicio": "EPM Energía",
-  "monto": 85000,
-  "fecha_vencimiento": "2026-03-05",
-  "fecha_emision": "2026-02-01",
-  "origen": "imagen",
-  "archivo_url": "https://storage.example.com/factura_epm.jpg",
+  "telefono": "573046757626",
+  "obligacion_id": "86a0c709-3ca9-41bc-9106-226cac7cf4ba",
+  "servicio": "Vanti S.A. ESP",
+  "monto": 50950,
+  "fecha_vencimiento": "2026-03-24",
+  "fecha_emision": "2026-03-01",
+  "referencia_pago": "7890123456",
+  "etiqueta": "gas",
+  "origen": "bot_whatsapp",
+  "archivo_url": "https://storage.supabase.co/facturas/gas_mar.pdf",
   "extraccion_estado": "ok",
   "extraccion_confianza": 0.95
 }
 ```
 
-**Response (201) — Extracción OK (estado → `extraida`):**
+**Ejemplo — Bot no pudo extraer todos los datos:**
+```json
+{
+  "telefono": "573046757626",
+  "obligacion_id": "86a0c709-3ca9-41bc-9106-226cac7cf4ba",
+  "servicio": "Factura desconocida",
+  "monto": null,
+  "fecha_vencimiento": null,
+  "referencia_pago": null,
+  "origen": "bot_whatsapp",
+  "archivo_url": "https://storage.supabase.co/facturas/borrosa.jpg",
+  "extraccion_estado": "dudosa",
+  "extraccion_confianza": 0.3
+}
+```
+
+**Respuesta exitosa (201):**
 ```json
 {
   "ok": true,
   "data": {
-    "factura_id": "92eb26d4-661c-49d7-977a-3a30c05b2792",
-    "servicio": "EPM Energía",
-    "monto": 85000,
+    "factura_id": "63dd4b3b-9e6c-43b1-a6b6-ff5858554733",
+    "servicio": "Vanti S.A. ESP",
+    "monto": 50950,
     "estado": "extraida",
     "requiere_revision": false
   },
@@ -720,192 +539,102 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 }
 ```
 
-**Ejemplo — Extracción dudosa:**
-```json
-{
-  "telefono": "3001112233",
-  "obligacion_id": "81b23515-aa5e-4566-9adf-fa027db91757",
-  "servicio": "Gas Natural Dudosa",
-  "monto": 32000,
-  "extraccion_estado": "dudosa",
-  "extraccion_confianza": 0.35,
-  "extraccion_json": { "raw": "G4s N4tur4l $32.0?0" }
-}
-```
+| Campo respuesta | Significado |
+|-----------------|-------------|
+| `factura_id` | UUID de la factura. **Guardar** para usarlo en el endpoint de pagos (13) |
+| `estado` | `"extraida"` = capturada correctamente, `"en_revision"` = necesita revisión del admin |
+| `requiere_revision` | `true` = el admin debe revisar esta factura antes de que se pueda pagar |
 
-**Response (201) — Extracción dudosa (estado → `en_revision`):**
+**Errores posibles:**
 ```json
-{
-  "ok": true,
-  "data": {
-    "factura_id": "07a7d72d-a3fd-4f2d-8ba2-b8e72dce3d37",
-    "servicio": "Gas Natural Dudosa",
-    "monto": 32000,
-    "estado": "en_revision",
-    "requiere_revision": true
-  },
-  "error": null
-}
+{ "code": "NOT_FOUND", "message": "Usuario no encontrado con ese teléfono" }
+{ "code": "NOT_FOUND", "message": "Obligación no encontrada o no pertenece al usuario" }
+{ "code": "VALIDATION_ERROR", "message": "Error de validación en los datos enviados" }
 ```
 
 ---
 
-### 4.2 `GET /api/facturas/obligacion/:obligacion_id` — Facturas de una obligación
+## 7. `GET /api/facturas/obligacion/:obligacionId` — Listar facturas
 
-> 🤖👨‍💼 Lista todas las facturas asociadas a una obligación.
+### ¿Qué hace?
+Lista todas las facturas de una obligación específica. Muestra TODOS los campos de cada factura, usando `referencia_pago` como identificador principal y `_id` como UUID interno técnico.
 
-**Request:**
+### ¿Cuándo usarlo?
+- Para mostrar al usuario la lista de facturas de un mes
+- Para verificar el estado de cada factura (extraida, validada, pagada, etc.)
+- Para obtener los `_id` de facturas validadas y poder crear pagos
+
+**Headers:**
 ```
-GET /api/facturas/obligacion/81b23515-aa5e-4566-9adf-fa027db91757
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 ```
 
-**Response (200) — Probado:**
+**Ejemplo:**
+```
+GET /api/facturas/obligacion/86a0c709-3ca9-41bc-9106-226cac7cf4ba
+```
+
+**Respuesta exitosa (200):**
 ```json
 {
   "ok": true,
   "data": [
     {
-      "id": "92eb26d4-661c-49d7-977a-3a30c05b2792",
-      "servicio": "EPM Energía",
+      "referencia_pago": "ETB-2026-001",
+      "servicio": "Internet ETB",
       "monto": 85000,
-      "estado": "pagada",
-      "periodo": "2026-02-01",
-      "fecha_vencimiento": "2026-03-05",
-      "fecha_emision": "2026-02-01",
+      "estado": "validada",
+      "origen": "bot_whatsapp",
+      "archivo_url": "https://storage.supabase.co/facturas/etb.jpg",
+      "etiqueta": "internet",
+      "fecha_emision": "2026-02-25",
+      "fecha_vencimiento": "2026-03-10",
+      "periodo": "2026-03-01",
       "extraccion_estado": "ok",
+      "extraccion_json": null,
       "extraccion_confianza": 0.95,
-      "obligacion_id": "81b23515-aa5e-4566-9adf-fa027db91757"
-    },
-    {
-      "id": "989491ed-9119-433f-b88d-01381b87b0dc",
-      "servicio": "Agua EPM",
-      "monto": 45000,
-      "estado": "pagada",
-      "periodo": "2026-02-01",
-      "extraccion_estado": "ok",
-      "extraccion_confianza": 0.9
-    },
-    {
-      "id": "07a7d72d-a3fd-4f2d-8ba2-b8e72dce3d37",
-      "servicio": "Gas Natural Dudosa",
-      "monto": 32000,
-      "estado": "rechazada",
-      "motivo_rechazo": "Imagen ilegible, no se puede verificar el monto correcto",
-      "extraccion_estado": "dudosa",
-      "extraccion_confianza": 0.35
+      "observaciones_admin": "Factura verificada",
+      "motivo_rechazo": null,
+      "_id": "63dd4b3b-9e6c-43b1-a6b6-ff5858554733"
     }
   ],
   "error": null
 }
 ```
 
----
+| Campo | Significado |
+|-------|-------------|
+| `referencia_pago` | Referencia de pago de la factura. Es el identificador que el usuario conoce |
+| `_id` | UUID interno. Usar este valor para el endpoint de pagos (13) en el campo `factura_id` |
+| `estado` | Estado actual de la factura (ver diagrama abajo) |
+| `observaciones_admin` | Notas que el admin escribió al validar (null si no ha validado) |
+| `motivo_rechazo` | Razón por la que se rechazó (null si no fue rechazada) |
 
-### 4.3 `PUT /api/facturas/:id/validar` — Admin valida factura
-
-> 👨‍💼 El admin confirma/corrige los datos de la factura. Cambia estado a `validada`.  
-> ⚡ **Genera notificación automática** `factura_validada` al usuario.  
-> ✅ **Transiciones válidas:** `extraida` → `validada`, `en_revision` → `validada`
-
-**Headers:**
-```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `monto` | number | ✅ Sí | Monto confirmado (positivo) |
-| `fecha_vencimiento` | string | ❌ No | Fecha de vencimiento confirmada |
-| `fecha_emision` | string | ❌ No | Fecha de emisión |
-| `observaciones_admin` | string | ❌ No | Notas del administrador |
-
-**Ejemplo:**
-```json
-{
-  "monto": 85000,
-  "fecha_vencimiento": "2026-03-05",
-  "observaciones_admin": "Datos verificados correctamente"
-}
-```
-
-**Response (200) — Probado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "factura_id": "92eb26d4-661c-49d7-977a-3a30c05b2792",
-    "servicio": "EPM Energía",
-    "estado": "validada"
-  },
-  "error": null
-}
-```
-
-**Response (409) — Transición inválida:**
-```json
-{
-  "ok": false,
-  "data": null,
-  "error": "No se puede validar factura en estado 'pagada'. Debe estar en 'en_revision' o 'extraida'."
-}
-```
+**Estados posibles de una factura:**
+| Estado | Significado |
+|--------|-------------|
+| `extraida` | Capturada correctamente por el bot. Pendiente de validación del admin |
+| `en_revision` | La extracción fue dudosa. El admin debe verificar los datos |
+| `validada` | El admin confirmó los datos. **Lista para pagar** |
+| `pagada` | Ya se realizó el pago de esta factura |
+| `rechazada` | El admin rechazó esta factura (datos incorrectos, duplicada, etc.) |
 
 ---
 
-### 4.4 `PUT /api/facturas/:id/rechazar` — Admin rechaza factura
+## 8. `POST /api/recargas/reportar` — Reportar recarga
 
-> 👨‍💼 El admin rechaza una factura que no se puede verificar.  
-> ⚡ **Genera notificación automática** `factura_rechazada` al usuario.  
-> ✅ **Transiciones válidas:** `extraida` → `rechazada`, `en_revision` → `rechazada`
+### ¿Qué hace?
+Registra que el usuario depositó dinero en la plataforma (por Nequi, PSE, Bancolombia, etc.). La recarga queda en estado `en_validacion` hasta que un admin la apruebe. Una vez aprobada, el monto se suma al saldo disponible del usuario.
 
-**Headers:**
-```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
+### ¿Cuándo usarlo?
+- Cuando el usuario envía un comprobante de pago/transferencia por WhatsApp
+- El bot debe incluir la URL del comprobante y el monto
 
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `motivo_rechazo` | string | ✅ Sí | Razón del rechazo |
-
-**Ejemplo:**
-```json
-{
-  "motivo_rechazo": "Imagen ilegible, no se puede verificar el monto correcto"
-}
-```
-
-**Response (200) — Probado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "factura_id": "07a7d72d-a3fd-4f2d-8ba2-b8e72dce3d37",
-    "servicio": "Gas Natural Dudosa",
-    "estado": "rechazada"
-  },
-  "error": null
-}
-```
-
----
-
-## 5. Recargas (`/api/recargas`)
-
-> **Concepto:** Una recarga es cuando el usuario **deposita dinero** (por Nequi, PSE, Bancolombia, etc.) para que DeOne pague sus facturas. El usuario reporta la recarga con comprobante y el admin la aprueba o rechaza.
-
----
-
-### 5.1 `POST /api/recargas/reportar` — Reportar recarga
-
-> 🤖 El usuario reporta que hizo una consignación.  
-> Si envía `referencia_tx` y ya existe → retorna la existente (idempotencia, status 200).  
-> Se crea una **revisión admin** automáticamente para que el admin valide el comprobante.
+### Comportamiento importante:
+- Si se envía `referencia_tx` y ya existe una recarga con esa referencia → NO se duplica, devuelve la existente
+- La recarga NO está disponible inmediatamente. Debe ser aprobada por un admin primero
+- Al ser aprobada, se genera automáticamente una notificación `recarga_aprobada`
+- 🆕 **Además**, al ser aprobada también se genera una notificación `recarga_confirmada` con un mensaje personalizado que incluye el nombre del usuario y su saldo actualizado
 
 **Headers:**
 ```
@@ -917,41 +646,41 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `telefono` | string | ✅ Sí | Teléfono del usuario |
-| `periodo` | string | ✅ Sí | Periodo (YYYY-MM-DD) |
-| `monto` | number | ✅ Sí | Monto de la recarga (positivo) |
-| `comprobante_url` | string | ✅ Sí | URL del comprobante |
-| `referencia_tx` | string | ❌ No | Referencia de transacción (para idempotencia) |
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario |
+| `periodo` | `string` | ✅ Sí | Periodo de la recarga `"YYYY-MM-DD"`. Ej: `"2026-03-01"` |
+| `monto` | `number` | ✅ Sí | Monto recargado en pesos (debe ser positivo) |
+| `comprobante_url` | `string` | ✅ Sí | URL de la imagen/captura del comprobante de pago |
+| `referencia_tx` | `string` | ❌ No | Referencia de la transacción bancaria. **Previene duplicados** |
 
 **Ejemplo:**
 ```json
 {
-  "telefono": "3001112233",
-  "periodo": "2026-02-01",
-  "monto": 200000,
-  "comprobante_url": "https://storage.example.com/comprobante_nequi.jpg",
-  "referencia_tx": "NEQ-20260220-001"
+  "telefono": "573046757626",
+  "periodo": "2026-03-01",
+  "monto": 130000,
+  "comprobante_url": "https://storage.supabase.co/comprobantes/nequi_001.jpg",
+  "referencia_tx": "NEQUI-2026030812345"
 }
 ```
 
-**Response (201) — Nueva recarga:**
+**Respuesta exitosa (201):**
 ```json
 {
   "ok": true,
   "data": {
-    "recarga_id": "974bad6d-c896-4ab3-a008-a64d071219b2",
+    "recarga_id": "974bad6d-...",
     "estado": "en_validacion"
   },
   "error": null
 }
 ```
 
-**Response (200) — Ya existía (idempotencia por `referencia_tx`):**
+**Si ya existía esa referencia_tx (200 — idempotente):**
 ```json
 {
   "ok": true,
   "data": {
-    "recarga_id": "974bad6d-c896-4ab3-a008-a64d071219b2",
+    "recarga_id": "974bad6d-...",
     "estado": "en_validacion",
     "mensaje": "Recarga ya reportada con esta referencia de transacción"
   },
@@ -959,103 +688,22 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 }
 ```
 
----
-
-### 5.2 `PUT /api/recargas/:id/aprobar` — Admin aprueba recarga
-
-> 👨‍💼 El admin verifica el comprobante y aprueba la recarga.  
-> ⚡ **Genera notificación automática** `recarga_aprobada` al usuario.  
-> ✅ **Transiciones válidas:** `en_validacion` → `aprobada`
-
-**Headers:**
-```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `observaciones_admin` | string | ❌ No | Notas del admin |
-
-**Ejemplo:**
-```json
-{
-  "observaciones_admin": "Comprobante Nequi verificado, monto correcto"
-}
-```
-
-**Response (200) — Probado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "974bad6d-c896-4ab3-a008-a64d071219b2",
-    "usuario_id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-    "monto": 200000,
-    "estado": "aprobada",
-    "periodo": "2026-02-01",
-    "comprobante_url": "https://storage.example.com/comprobante_nequi.jpg",
-    "validada_en": "2026-02-20T04:02:16.159+00:00",
-    "observaciones_admin": "Comprobante Nequi verificado, monto correcto"
-  },
-  "error": null
-}
-```
+| Campo respuesta | Significado |
+|-----------------|-------------|
+| `recarga_id` | UUID de la recarga |
+| `estado` | `"en_validacion"` = esperando aprobación del admin |
 
 ---
 
-### 5.3 `PUT /api/recargas/:id/rechazar` — Admin rechaza recarga
+## 9. `GET /api/disponible` — Consultar saldo disponible
 
-> 👨‍💼 El admin rechaza la recarga porque el comprobante no es válido.  
-> ⚡ **Genera notificación automática** `recarga_rechazada` al usuario.  
-> ✅ **Transiciones válidas:** `en_validacion` → `rechazada`
+### ¿Qué hace?
+Calcula en tiempo real cuánto dinero tiene disponible el usuario para pagar facturas. La fórmula es: `disponible = total_recargas_aprobadas - total_pagos_realizados`. Solo cuenta recargas en estado "aprobada" y pagos en estado "pagado" o "en_proceso".
 
-**Headers:**
-```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `motivo_rechazo` | string | ✅ Sí | Razón del rechazo |
-
-**Ejemplo:**
-```json
-{
-  "motivo_rechazo": "Comprobante borroso, no se puede verificar el monto"
-}
-```
-
-**Response (200) — Probado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "676b3c7e-0fbd-4d74-a6e5-3fcdc94be234",
-    "monto": 50000,
-    "estado": "rechazada",
-    "motivo_rechazo": "Comprobante borroso, no se puede verificar el monto",
-    "validada_en": "2026-02-20T04:02:35.123+00:00"
-  },
-  "error": null
-}
-```
-
----
-
-## 6. Disponibilidad / Saldo (`/api/disponible`)
-
----
-
-### 6.1 `GET /api/disponible` — Consultar saldo disponible
-
-> 🤖👨‍💼 Calcula el saldo disponible de un usuario:  
-> **`disponible = recargas aprobadas − pagos (en_proceso + pagados)`**
+### ¿Cuándo usarlo?
+- Antes de intentar crear un pago (endpoint 13)
+- Cuando el usuario pregunta "¿cuánto tengo disponible?"
+- Para verificar si necesita hacer una recarga adicional
 
 **Headers:**
 ```
@@ -1066,640 +714,1318 @@ x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 
 | Param | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `telefono` | string | ✅ Sí | Teléfono del usuario |
-| `periodo` | string | ✅ Sí | Periodo (YYYY-MM-DD) |
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario |
+| `periodo` | `string` | ✅ Sí | Periodo a consultar `"YYYY-MM-DD"` |
 
 **Ejemplo:**
 ```
-GET /api/disponible?telefono=3001112233&periodo=2026-02-01
+GET /api/disponible?telefono=573046757626&periodo=2026-03-01
 ```
 
-**Response (200) — Probado:**
+**Respuesta exitosa (200):**
 ```json
 {
   "ok": true,
   "data": {
-    "usuario_id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-    "periodo": "2026-02-01",
-    "total_recargas": 200000,
-    "total_pagos": 130000,
-    "disponible": 70000
+    "usuario_id": "49f3c602-...",
+    "periodo": "2026-03-01",
+    "total_recargas_aprobadas": 250000,
+    "total_pagos_pagados": 130000,
+    "disponible": 120000
   },
   "error": null
 }
 ```
 
-> 💡 **Interpretación:** El usuario recargó $200,000. Se usaron $130,000 en pagos. Le quedan $70,000 disponibles.
+| Campo respuesta | Significado |
+|-----------------|-------------|
+| `total_recargas_aprobadas` | Suma de todas las recargas que el admin ya aprobó en este periodo |
+| `total_pagos_pagados` | Suma de todos los pagos creados (en_proceso + pagados) en este periodo |
+| `disponible` | Lo que queda para pagar. Si es 0 o negativo, el usuario necesita recargar |
 
 ---
 
-## 7. Pagos (`/api/pagos`)
+## 10. `GET /api/notificaciones/pendientes/:telefono` — Notificaciones pendientes
 
-> **Concepto:** Un pago es la ejecución del pago de una factura validada usando fondos de las recargas. El sistema verifica saldo disponible antes de crear el pago.
+### ¿Qué hace?
+Devuelve todas las notificaciones que están en estado "pendiente" para un usuario. Estas son las notificaciones que el bot debe enviar por WhatsApp. Cada notificación tiene un `payload.mensaje` con el texto listo para enviar.
 
----
+### 🆕 Comportamiento atómico (consulta + marcado):
+- Al consultar este endpoint, **automáticamente cambia el estado de todas las notificaciones devueltas a `"enviada"`**
+- Esto evita duplicados si el bot se reinicia o hace múltiples consultas
+- Excluye automáticamente las notificaciones de tipo `alerta_admin` (esas solo las ve el admin)
+- **Ya NO es necesario llamar los endpoints 11 o 12** después de consultar — el marcado es automático
 
-### 7.1 `POST /api/pagos/crear` — Crear pago
-
-> 👨‍💼 Crea un pago para una factura que esté en estado `validada`. **Verifica saldo disponible** antes de crear.
+### ¿Cuándo usarlo?
+- El bot debe llamar este endpoint periódicamente (cada 30-60 segundos) para cada usuario activo
+- O cuando el usuario inicia conversación, para enviarle las notificaciones acumuladas
+- **Ya no necesita marcar como enviadas después** — se marca automáticamente al consultar
 
 **Headers:**
 ```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 ```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `telefono` | string | ✅ Sí | Teléfono del usuario |
-| `factura_id` | UUID | ✅ Sí | ID de la factura validada a pagar |
-
-**Ejemplo:**
-```json
-{
-  "telefono": "3001112233",
-  "factura_id": "92eb26d4-661c-49d7-977a-3a30c05b2792"
-}
-```
-
-**Response (201) — Pago creado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "pago_id": "8491016e-ab24-4c60-85ad-35c5345e415e",
-    "estado": "en_proceso",
-    "monto": 85000,
-    "servicio": "EPM Energía"
-  },
-  "error": null
-}
-```
-
-**Response (409) — Fondos insuficientes:**
-```json
-{
-  "ok": false,
-  "data": null,
-  "error": "Fondos insuficientes. Disponible: $15,000, Requerido: $85,000"
-}
-```
-
-**Response (409) — Factura no válida para pago:**
-```json
-{
-  "ok": false,
-  "data": null,
-  "error": "No se puede crear pago para factura en estado 'pagada'. Debe estar 'validada'."
-}
-```
-
----
-
-### 7.2 `PUT /api/pagos/:id/confirmar` — Confirmar pago exitoso
-
-> 👨‍💼 Confirma que el pago fue procesado exitosamente.  
-> ⚡ **Genera notificación automática** `pago_confirmado` al usuario.  
-> ⚡ **Si la obligación se completa** (todas las facturas pagadas):
-> 1. Auto-crea obligación del siguiente mes con las mismas facturas
-> 2. Notifica `obligacion_completada`
-> 3. Notifica `nueva_obligacion`
-
-**Headers:**
-```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `proveedor_pago` | string | ❌ No | Pasarela usada (PSE, Nequi, etc.) |
-| `referencia_pago` | string | ❌ No | Referencia de la transacción |
-| `comprobante_pago_url` | string | ❌ No | URL del comprobante de pago |
-
-**Ejemplo:**
-```json
-{
-  "proveedor_pago": "PSE",
-  "referencia_pago": "PSE-REF-001",
-  "comprobante_pago_url": "https://storage.example.com/pago_001.pdf"
-}
-```
-
-**Response (200) — Probado (obligación no se completa aún):**
-```json
-{
-  "ok": true,
-  "data": {
-    "pago_id": "8491016e-ab24-4c60-85ad-35c5345e415e",
-    "estado": "pagado",
-    "factura_estado": "pagada",
-    "obligacion_estado": "en_progreso",
-    "nueva_obligacion_id": null
-  },
-  "error": null
-}
-```
-
-**Response (200) — Cuando se completa la obligación (último pago del periodo):**
-```json
-{
-  "ok": true,
-  "data": {
-    "pago_id": "0da485dd-a689-42fd-a88d-b3390fe3baac",
-    "estado": "pagado",
-    "factura_estado": "pagada",
-    "obligacion_estado": "completada",
-    "nueva_obligacion_id": "abc-nueva-obligacion-siguiente-mes"
-  },
-  "error": null
-}
-```
-
-> 💡 Cuando `obligacion_estado === "completada"`, el sistema automáticamente:
-> 1. Marca la obligación como completada
-> 2. Crea una nueva obligación para el siguiente mes
-> 3. Copia las mismas facturas (servicios) con el nuevo periodo
-> 4. Envía notificación `obligacion_completada` al usuario
-> 5. Envía notificación `nueva_obligacion` al usuario
-
----
-
-### 7.3 `PUT /api/pagos/:id/fallar` — Marcar pago como fallido
-
-> 👨‍💼 Marca un pago como fallido (error en pasarela, timeout, etc.).  
-> ✅ **Transiciones válidas:** `en_proceso` → `fallido`
-
-**Headers:**
-```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `error_detalle` | string | ✅ Sí | Descripción del error |
-
-**Ejemplo:**
-```json
-{
-  "error_detalle": "Timeout en la pasarela PSE, el banco no respondió"
-}
-```
-
-**Response (200):**
-```json
-{
-  "ok": true,
-  "data": {
-    "pago_id": "...",
-    "estado": "fallido"
-  },
-  "error": null
-}
-```
-
-**Response (409) — Estado ya es final (Probado: intentar fallar un pago ya pagado):**
-```json
-{
-  "ok": false,
-  "data": null,
-  "error": "No se puede confirmar pago en estado 'pagado'"
-}
-```
-
-> 💡 La **máquina de estados protege** contra transiciones inválidas. Un pago que ya está `pagado` no puede cambiar a `fallido`.
-
----
-
-## 8. Revisiones Admin (`/api/revisiones`)
-
-> **Concepto:** Las revisiones se crean **automáticamente** cuando:
-> - Se captura una factura con extracción dudosa/fallida
-> - Se reporta una recarga (comprobante pendiente de validar)
->
-> El admin las gestiona desde su panel.
-
----
-
-### 8.1 `GET /api/revisiones` — Listar revisiones
-
-> 👨‍💼 Lista las revisiones con filtros opcionales.
-
-**Headers:**
-```
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Query Params:**
-
-| Param | Tipo | Requerido | Valores |
-|-------|------|-----------|---------|
-| `tipo` | string | ❌ No | `"factura"`, `"recarga"` |
-| `estado` | string | ❌ No | `"pendiente"`, `"en_proceso"`, `"resuelta"`, `"descartada"` |
 
 **Ejemplo:**
 ```
-GET /api/revisiones?estado=pendiente
-GET /api/revisiones?tipo=factura&estado=pendiente
+GET /api/notificaciones/pendientes/573046757626
 ```
 
-**Response (200) — Probado (6 revisiones pendientes de recargas):**
+**Respuesta exitosa (200):**
 ```json
 {
   "ok": true,
   "data": [
     {
-      "id": "37a731a3-2659-4961-bc92-009e43c37ec9",
-      "tipo": "recarga",
+      "id": "7cc2d2eb-...",
+      "tipo": "solicitud_recarga",
+      "canal": "whatsapp",
       "estado": "pendiente",
-      "prioridad": 2,
-      "razon": "Comprobante recibido: validar recarga",
-      "factura_id": null,
-      "recarga_id": "323008c0-6ab0-4d89-bb87-e9abdf532d3d",
-      "creado_en": "2026-02-16T03:11:30.369564+00:00",
-      "asignada_a": null,
-      "resuelta_por": null,
-      "resuelta_en": null,
-      "notificada": false,
-      "usuarios": {
-        "nombre": "Juan Carlos",
-        "apellido": "Pérez González",
-        "telefono": "+573001234567"
-      }
-    },
-    {
-      "id": "1e038534-0330-44cb-bf30-b7e95f0158ba",
-      "tipo": "recarga",
-      "estado": "pendiente",
-      "prioridad": 2,
-      "razon": "Comprobante recibido: validar recarga",
-      "usuarios": {
-        "nombre": "ensayo 1",
-        "apellido": "martinex",
-        "telefono": "3456787887"
-      }
+      "payload": {
+        "solicitud_id": "09e2ed08-...",
+        "numero_cuota": 1,
+        "total_cuotas": 2,
+        "monto": 215000,
+        "fecha_limite": "2026-03-10",
+        "plan": "tranquilidad",
+        "mensaje": "Hola, tu primera cuota es de $215,000. Fecha límite: 2026-03-10. Cuota 1 de 2."
+      },
+      "ultimo_error": null,
+      "creado_en": "2026-03-09T16:04:24.222Z"
     }
   ],
   "error": null
 }
 ```
 
+**Todos los tipos de notificación que puede recibir el bot:**
+
+| Tipo | Se genera cuando... | Ejemplo de `payload.mensaje` |
+|------|---------------------|------------------------------|
+| `solicitud_recarga` | Se generan solicitudes de recarga automáticas (endpoint 14) | "Hola, tu primera cuota es de $215,000. Fecha límite: 2026-03-10. Cuota 1 de 2." |
+| `solicitud_recarga_inicio_mes` | 🆕 El cron job detecta que es inicio de mes y el usuario tiene obligaciones activas | Ver sección "Plantillas de mensajes automáticos" más abajo |
+| `recarga_confirmada` | 🆕 El admin aprueba una recarga del usuario | "Recibido, {nombre} ✌🏼 Ya registré tu recarga. Tu saldo disponible es de ${saldo}." |
+| `recordatorio_recarga` | El sistema detecta cuotas próximas a vencer sin saldo (endpoint 16) | "Recuerda que tienes una recarga pendiente de $120,000 antes del 2026-03-20. Cuota 2 de 2." |
+| `recarga_aprobada` | El admin aprueba una recarga | "Tu recarga de $130,000 ha sido aprobada." |
+| `recarga_rechazada` | El admin rechaza una recarga | "Tu recarga de $130,000 ha sido rechazada. Motivo: Comprobante borroso" |
+| `factura_validada` | El admin valida una factura | "Tu factura de Internet ETB por $85,000 ha sido validada y está lista para pago." |
+| `factura_rechazada` | El admin rechaza una factura | "Tu factura de Internet ETB fue rechazada. Motivo: Factura duplicada" |
+| `pago_confirmado` | Se confirma un pago exitoso | "Se ha confirmado el pago de $85,000 para Internet ETB." |
+| `obligacion_completada` | Todas las facturas de una obligación fueron pagadas | "¡Felicidades! Todas tus facturas del periodo marzo 2026 han sido pagadas." |
+| `nueva_obligacion` | Se crea automáticamente la obligación del siguiente mes | "Se ha creado tu nueva obligación para abril 2026." |
+| `alerta_admin` | 🆕 Job de inactividad detecta usuario sin respuesta 24h | Solo visible para admin en endpoint 20. No aparece en el bot |
+
+**Flujo recomendado para el bot:**
+```
+1. GET /api/notificaciones/pendientes/573046757626 → obtener pendientes
+   (⚡ las notificaciones devueltas se marcan como 'enviada' AUTOMÁTICAMENTE)
+2. Por cada notificación:
+   a. Leer payload.mensaje (texto formateado listo para enviar)
+   b. Enviar por WhatsApp al usuario
+3. ✅ NO necesita llamar batch-enviadas — ya están marcadas
+```
+
+> **🆕 Nota importante:** Ahora el sistema genera automáticamente notificaciones de tipo `solicitud_recarga_inicio_mes`, `solicitud_recarga` y `recarga_confirmada` con mensajes personalizados que incluyen el nombre del usuario, detalle de obligaciones con @etiquetas, montos y la llave de recarga `0090944088`. El bot solo necesita leer `payload.mensaje` y enviarlo.
+>
+> **Sobre duplicados:** Si el bot se cae después de consultar pero antes de enviar por WhatsApp, las notificaciones ya estarán marcadas como 'enviada'. El bot debe guardar localmente las notificaciones recibidas para re-enviarlas si falla.
+
 ---
 
-### 8.2 `PUT /api/revisiones/:id/tomar` — Admin toma una revisión
+## 11. `PUT /api/notificaciones/:id` — Marcar notificación como enviada
 
-> 👨‍💼 El admin "toma" una revisión para trabajarla.  
-> ✅ **Transiciones válidas:** `pendiente` → `en_proceso`
+### ¿Qué hace?
+Actualiza el estado de UNA notificación individual. Normalmente se usa para marcarla como "enviada" después de que el bot la envió por WhatsApp. También permite marcar como "fallida" si hubo un error al enviarla.
+
+### ¿Cuándo usarlo?
+- Después de enviar una notificación individual por WhatsApp
+- Si hubo un error al enviar, marcar como "fallida" con el detalle del error
+- Para lotes grandes, es más eficiente usar el endpoint 12 (batch)
 
 **Headers:**
 ```
 Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+```
+
+**Body JSON:**
+
+| Campo | Tipo | Requerido | Valores |
+|-------|------|-----------|---------|
+| `estado` | `string` | ✅ Sí | `"enviada"` \| `"fallida"` \| `"leida"` |
+| `ultimo_error` | `string` | ❌ No | Detalle del error (solo si estado = `"fallida"`) |
+
+**Ejemplo — Enviada con éxito:**
+```json
+{ "estado": "enviada" }
+```
+
+**Ejemplo — Error al enviar:**
+```json
+{
+  "estado": "fallida",
+  "ultimo_error": "WhatsApp API timeout después de 30 segundos"
+}
+```
+
+**Respuesta exitosa (200):** Devuelve la notificación actualizada completa.
+
+---
+
+## 12. `POST /api/notificaciones/batch-enviadas` — Marcar varias como enviadas
+
+### ¿Qué hace?
+Marca múltiples notificaciones como "enviada" en una sola llamada al API. Es más eficiente que llamar al endpoint 11 una por una. Acepta un array de IDs.
+
+### ¿Cuándo usarlo?
+- Después de enviar un lote de notificaciones por WhatsApp
+- Es la forma recomendada si hay más de 1 notificación pendiente
+
+**Headers:**
+```
+Content-Type: application/json
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 ```
 
 **Body JSON:**
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `admin_id` | string | ❌ No | ID del admin que toma la revisión |
+| `ids` | `string[]` | ✅ Sí | Array de UUIDs de las notificaciones a marcar |
 
 **Ejemplo:**
 ```json
 {
-  "admin_id": "admin-geiner-01"
+  "ids": [
+    "7cc2d2eb-6b6b-4d6e-b3c2-2e9e4e6ed7ca",
+    "a1b2c3d4-5678-90ab-cdef-1234567890ab"
+  ]
 }
 ```
 
-**Response (200) — Probado:**
+**Respuesta exitosa (200):**
+```json
+{
+  "ok": true,
+  "data": { "actualizadas": 2 },
+  "error": null
+}
+```
+
+---
+
+## 12a. `GET /api/notificaciones/pendientes-hoy` — Obtener notificaciones de inicio mes global
+
+### ¿Qué hace?
+🆕 **Endpoint estratégico para automatización:** Devuelve TODAS las notificaciones de inicio de mes (`solicitud_recarga_inicio_mes`) del día actual, para TODOS los usuarios. Se diseñó para ser consultado una sola vez diariamente por un job automático o cron job. Automáticamente marca todas las notificaciones devueltas como `"enviadas"` para evitar duplicados en reintentos.
+
+### ¿Cuándo usarlo?
+
+- **Una sola vez por día** (típicamente a las 9:00 AM junto con el cron job de evaluación de recargas)
+- Para que un **bot global o job automático** distribuya notificaciones de inicio de mes a todos los usuarios
+- Cuando inicia un nuevo mes y el cron job `jobEvaluacionRecargas` crea las notificaciones
+- **NO es para consultas por usuario individual** — usa el endpoint 10 (pendientes/:telefono) para eso
+
+### Flujo garantizado
+
+1. **Job cron (9 AM):** Crea notificaciones de inicio mes para usuarios que detecta en esa fecha
+2. **Misma hora:** Tu bot/process consulta este endpoint
+3. **Respuesta:** Array con todos los usuarios + sus notificaciones + datos
+4. **Acción:** Tu bot envía mensaje por WhatsApp a cada `usuarios.telefono`
+5. **Automático:** Las notificaciones se marcan como `"enviada"` **en la misma consulta**
+6. **Día siguiente:** Si consultas de nuevo, devuelve vacío (todo ya está marcado)
+
+**Headers:**
+```
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+```
+
+O también:
+```
+x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+```
+
+**Parámetros:** 
+- **Sin query params**
+- **Sin body JSON**
+
+**Ejemplo de consulta:**
+```
+GET /api/notificaciones/pendientes-hoy
+```
+
+**Respuesta exitosa (200) — Hay notificaciones:**
 ```json
 {
   "ok": true,
   "data": {
-    "id": "37a731a3-2659-4961-bc92-009e43c37ec9",
-    "tipo": "recarga",
+    "total": 2,
+    "notificaciones": [
+      {
+        "id": "notif-001",
+        "usuario_id": "user-001",
+        "tipo": "solicitud_recarga_inicio_mes",
+        "canal": "whatsapp",
+        "estado": "pendiente",
+        "payload": {
+          "tipo_mensaje": "inicio_mes",
+          "nombre_usuario": "Laura Durán",
+          "mes_actual": "Marzo 2026",
+          "mes_anterior": "Febrero 2026",
+          "obligaciones": [
+            { "etiqueta": "energia", "monto": 85000 },
+            { "etiqueta": "gas", "monto": 50950 }
+          ],
+          "total_obligaciones": 135950,
+          "saldo_actual": 0,
+          "valor_a_recargar": 135950,
+          "es_primera_recarga": true,
+          "obligacion_id": "obl-123",
+          "periodo": "2026-03-01",
+          "mensaje": "Hola Laura Durán ✌🏼\nArrancamos mes!\n\nEn Febrero pagaste $ 0 y tienes un saldo de $ 0\n\nPara Marzo, tus obligaciones suman $ 135,950, así:\n\n\"@energia\": \"$ 85,000\".\n\"@gas\": \"$ 50,950\".\n\nLa recarga total sugerida para Marzo es de $ 135,950.\n\nPuedes hacer la recarga a la llave 0090944088.\n\nApenas la hagas, me envías el comprobante y yo me encargo del resto deOne! 🙌🏼"
+        },
+        "usuarios": {
+          "nombre": "Laura",
+          "apellido": "Durán",
+          "telefono": "573046757626"
+        },
+        "creado_en": "2026-03-16T09:00:15.000Z"
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+**Respuesta exitosa (200) — Sin notificaciones:**
+```json
+{
+  "ok": true,
+  "data": {
+    "total": 0,
+    "notificaciones": []
+  },
+  "error": null
+}
+```
+
+### Campos importantes en respuesta
+
+| Campo | Descripción |
+|-------|-------------|
+| `id` | UUID único de la notificación |
+| `tipo` | Siempre `"solicitud_recarga_inicio_mes"` para este endpoint |
+| `estado` | `"pendiente"` — pero se marca a `"enviada"` automáticamente |
+| `payload.mensaje` | **Texto final listo para enviar por WhatsApp** — no requiere post-procesamiento |
+| `payload.valor_a_recargar` | Cantidad recomendada a recargar = obligaciones - saldo actual |
+| `usuarios.telefono` | Número WhatsApp destino para el envío |
+| `creado_en` | Timestamp de cuándo se generó automáticamente |
+
+### Implementación típica en Python/Node.js
+
+```javascript
+// En tu job que corre cada día a las 9:00 AM
+
+async function enviarNotificacionesInicioMes() {
+  // 1. Consultar notificaciones de hoy
+  const response = await fetch('http://localhost:3001/api/notificaciones/pendientes-hoy', {
+    method: 'GET',
+    headers: {
+      'x-bot-api-key': 'TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3'
+    }
+  });
+  
+  const { ok, data } = await response.json();
+  
+  if (!ok || data.total === 0) {
+    console.log('No hay notificaciones para enviar hoy');
+    return;
+  }
+  
+  // 2. Iterar sobre cada notificación
+  for (const notificacion of data.notificaciones) {
+    const telefonoDestino = notificacion.usuarios.telefono;
+    const mensaje = notificacion.payload.mensaje;
+    
+    // 3. Enviar por WhatsApp (usando tu bot)
+    await enviarPorWhatsApp(telefonoDestino, mensaje);
+    
+    console.log(`✅ Notificación enviada a ${telefonoDestino}`);
+  }
+  
+  // ¡Listo! Las notificaciones ya están marcadas como "enviadas"
+  // No necesitas hacer nada más
+  console.log(`${data.total} notificaciones de inicio mes distribuidas`);
+}
+```
+
+### Casos especiales
+
+**¿Qué pasa si consulto 2 veces en el mismo día?**
+- 1ª consulta: Devuelve 5 notificaciones, las marca como enviadas
+- 2ª consulta: Devuelve vacío `[]` (todas ya están marcadas)
+
+**¿Qué pasa si mi job falla mientras envía?**
+- Las notificaciones se devolvieron pero se marcaron como `"enviada"`
+- Retiene el log de que fueron "enviadas" pero sin confirmación de WhatsApp
+- Para reintentos, usa el endpoint 10 (pendientes/:telefono) con el usuario específico
+
+**¿Cómo sé si un usuario recibió el mensaje?**
+- Este endpoint solo marca como `"enviada"` (salió del sistema)
+- El estado de WhatsApp (leído, fallido) se trackea en un campo separado `ultimo_error`
+- Puedes consultar con el endpoint 3 (listar notificaciones) filtradas por `estado=enviada` y revisar `ultimo_error`
+
+---
+
+## 13. `POST /api/pagos/crear` — Crear un pago
+
+### ¿Qué hace?
+Crea un pago para una factura específica. Verifica automáticamente que:
+1. La factura exista y esté en estado `"validada"` (el admin ya la revisó)
+2. El usuario tenga saldo disponible suficiente (recargas aprobadas - pagos existentes ≥ monto de la factura)
+
+Si ambas condiciones se cumplen, crea el pago en estado `"en_proceso"`. El monto se descuenta inmediatamente del saldo disponible.
+
+### ¿Cuándo usarlo?
+- Cuando el usuario tiene saldo disponible y facturas validadas
+- Después de verificar el saldo con el endpoint 9
+- El bot debería llamar este endpoint automáticamente cuando las condiciones se cumplan
+
+### Flujo previo necesario:
+1. La factura debe estar en estado `"validada"` (el admin la validó con `PUT /api/facturas/:id/validar`)
+2. El usuario debe tener saldo suficiente (haber hecho recargas aprobadas)
+
+**Headers:**
+```
+Content-Type: application/json
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+```
+
+**Body JSON:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario |
+| `factura_id` | `string (UUID)` | ✅ Sí | UUID de la factura a pagar. Obtenerlo del campo `_id` del endpoint 7 |
+
+**Ejemplo:**
+```json
+{
+  "telefono": "573046757626",
+  "factura_id": "63dd4b3b-9e6c-43b1-a6b6-ff5858554733"
+}
+```
+
+**Respuesta exitosa (201):**
+```json
+{
+  "ok": true,
+  "data": {
+    "pago_id": "0da485dd-...",
     "estado": "en_proceso",
-    "prioridad": 2,
-    "razon": "Comprobante recibido: validar recarga",
-    "recarga_id": "323008c0-6ab0-4d89-bb87-e9abdf532d3d",
-    "asignada_a": null,
-    "resuelta_por": null,
-    "resuelta_en": null,
-    "notificada": false
+    "monto": 85000,
+    "servicio": "Internet ETB"
   },
   "error": null
 }
 ```
 
+**Errores posibles:**
+```json
+{ "code": "NOT_FOUND", "message": "Factura no encontrada" }
+{ "code": "INVALID_STATE_TRANSITION", "message": "No se puede crear pago para factura en estado 'extraida'. Debe estar 'validada'." }
+{ "code": "INSUFFICIENT_FUNDS", "message": "Fondos insuficientes. Disponible: $0, Requerido: $120,000" }
+```
+
 ---
 
-### 8.3 `PUT /api/revisiones/:id/descartar` — Admin descarta revisión
+## 14. `POST /api/solicitudes-recarga/generar` — 🆕 Generar solicitudes de recarga automáticas
 
-> 👨‍💼 Descarta una revisión que ya no es necesaria.  
-> ✅ **Transiciones válidas:** `pendiente` → `descartada`, `en_proceso` → `descartada`
+### ¿Qué hace?
+Analiza las facturas de una obligación y genera automáticamente solicitudes de recarga según el plan del usuario. Es el "cerebro" que le dice al usuario cuánto recargar y cuándo.
+
+### Lógica según plan:
+
+**Plan `control` (1 cuota):**
+- Genera 1 sola solicitud por el monto total de todas las facturas
+- Fecha límite = fecha de vencimiento más próxima de las facturas
+- Fecha de recordatorio = 5 días antes de la fecha límite
+- 🆕 Si la factura no tiene fecha_vencimiento → usa `creado_en + 15 días`
+
+**Plan `tranquilidad` o `respaldo` (2 cuotas):**
+- Divide las facturas en 2 grupos según su fecha de vencimiento:
+  - **Cuota 1**: facturas que vencen del día 1 al 15 del mes
+  - **Cuota 2**: facturas que vencen del día 16 al 31 del mes
+- Si TODAS las facturas caen en la misma mitad del mes → divide 50/50 por monto
+- 🆕 Facturas sin fecha_vencimiento se asignan según `creado_en + 15 días`
+- Fecha límite de cada cuota = la fecha de vencimiento más próxima de sus facturas
+- Recordatorio = 5 días antes de cada fecha límite
+
+### Comportamiento automático:
+- Genera una notificación `solicitud_recarga` con el detalle de la primera cuota
+- No permite duplicar: si ya hay solicitudes activas (pendiente/parcial) para esa obligación, devuelve error 409
+- Registra audit log de la operación
+
+### ¿Cuándo usarlo?
+- Después de cargar todas las facturas del mes (endpoints 6)
+- Después de asignar el plan al usuario (endpoint 2)
+- Generalmente una vez al mes por obligación
 
 **Headers:**
 ```
 Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 ```
 
 **Body JSON:**
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `razon` | string | ❌ No | Motivo del descarte |
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario |
+| `obligacion_id` | `string (UUID)` | ✅ Sí | ID de la obligación (obtenido del endpoint 3) |
 
 **Ejemplo:**
 ```json
 {
-  "razon": "Duplicado, ya se procesó antes"
+  "telefono": "573046757626",
+  "obligacion_id": "260b7859-a392-45bc-95c9-5a7f627a93f7"
 }
 ```
 
-**Response (200) — Probado:**
+**Respuesta exitosa (201) — Plan tranquilidad con 3 facturas:**
 ```json
 {
   "ok": true,
   "data": {
-    "id": "1e038534-0330-44cb-bf30-b7e95f0158ba",
-    "tipo": "recarga",
-    "estado": "descartada",
-    "resuelta_en": "2026-02-20T04:09:12.662+00:00",
-    "notificada": false
+    "solicitudes": [
+      {
+        "id": "09e2ed08-...",
+        "numero_cuota": 1,
+        "total_cuotas": 2,
+        "monto_solicitado": 215000,
+        "fecha_limite": "2026-03-10",
+        "fecha_recordatorio": "2026-03-05",
+        "facturas_ids": ["7bd45f33-...", "f1bf3f36-..."],
+        "estado": "pendiente",
+        "plan": "tranquilidad"
+      },
+      {
+        "id": "3e30936d-...",
+        "numero_cuota": 2,
+        "total_cuotas": 2,
+        "monto_solicitado": 120000,
+        "fecha_limite": "2026-03-22",
+        "fecha_recordatorio": "2026-03-17",
+        "facturas_ids": ["845a1a5c-..."],
+        "estado": "pendiente",
+        "plan": "tranquilidad"
+      }
+    ],
+    "plan": "tranquilidad",
+    "monto_total": 335000,
+    "total_cuotas": 2
   },
   "error": null
 }
 ```
 
----
-
-## 9. Notificaciones (`/api/notificaciones`)
-
-> **Concepto:** Sistema de notificaciones para comunicar al usuario eventos importantes.  
-> Muchas se generan **automáticamente** (pago confirmado, recarga aprobada, etc.).  
-> El bot consume las pendientes y las marca como enviadas.
-
-### Tipos de notificación automática:
-
-| Tipo | Se genera cuando... |
-|------|-------------------|
-| `factura_validada` | Admin valida una factura |
-| `factura_rechazada` | Admin rechaza una factura |
-| `recarga_aprobada` | Admin aprueba una recarga |
-| `recarga_rechazada` | Admin rechaza una recarga |
-| `pago_confirmado` | Se confirma un pago |
-| `obligacion_completada` | Todas las facturas de una obligación quedan pagadas |
-| `nueva_obligacion` | Se auto-crea la obligación del siguiente mes |
-
-### Tipos de notificación manual:
-
-| Tipo | Uso |
-|------|-----|
-| `recordatorio_recarga` | Recordar al usuario que debe recargar |
-| `promocion` | Ofertas y promociones |
-| *(cualquier string)* | Puedes crear tipos personalizados |
-
-### Estados de una notificación:
-
-| Estado | Descripción |
-|--------|-------------|
-| `pendiente` | Creada, esperando ser enviada |
-| `enviada` | Ya fue enviada al usuario |
-| `fallida` | Falló el envío |
-| `leida` | El usuario la leyó |
-
----
-
-### 9.1 `POST /api/notificaciones` — Crear notificación manual
-
-> 👨‍💼 Crea una notificación dirigida a un usuario específico.
-
-**Headers:**
-```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Valores |
-|-------|------|-----------|---------|
-| `telefono` | string | ✅ Sí | Teléfono del usuario |
-| `tipo` | string | ✅ Sí | Tipo de notificación (cualquier string) |
-| `canal` | string | ❌ No | `"whatsapp"` (default), `"email"`, `"push"`, `"sms"` |
-| `payload` | object | ❌ No | Datos adicionales (formato libre) |
-
-**Ejemplo:**
-```json
-{
-  "telefono": "3001112233",
-  "tipo": "recordatorio_recarga",
-  "canal": "whatsapp",
-  "payload": {
-    "mensaje": "Hola Carlos, recuerda recargar para pagar tus facturas de marzo.",
-    "monto_sugerido": 200000
-  }
-}
-```
-
-**Response (201) — Probado:**
+**Respuesta exitosa (201) — Plan control con las mismas facturas:**
 ```json
 {
   "ok": true,
   "data": {
-    "id": "c4e8c380-db41-4ad2-aed2-cf38af03d8a3",
-    "creado_en": "2026-02-20T04:06:32.157013+00:00",
-    "usuario_id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-    "tipo": "recordatorio_recarga",
-    "canal": "whatsapp",
-    "payload": {
-      "mensaje": "Hola Carlos, recuerda recargar para pagar tus facturas de marzo.",
-      "monto_sugerido": 200000
-    },
-    "estado": "pendiente",
-    "ultimo_error": null
+    "solicitudes": [
+      {
+        "id": "a1b2c3d4-...",
+        "numero_cuota": 1,
+        "total_cuotas": 1,
+        "monto_solicitado": 335000,
+        "fecha_limite": "2026-03-10",
+        "fecha_recordatorio": "2026-03-05",
+        "facturas_ids": ["7bd45f33-...", "f1bf3f36-...", "845a1a5c-..."],
+        "estado": "pendiente",
+        "plan": "control"
+      }
+    ],
+    "plan": "control",
+    "monto_total": 335000,
+    "total_cuotas": 1
   },
   "error": null
 }
 ```
 
----
+| Campo respuesta | Significado |
+|-----------------|-------------|
+| `solicitudes` | Array con cada cuota generada |
+| `solicitudes[].id` | UUID de la solicitud. Usar para el endpoint 17 (cambiar fechas) |
+| `solicitudes[].numero_cuota` | 1 = primera (o única) cuota, 2 = segunda cuota |
+| `solicitudes[].total_cuotas` | 1 = plan control, 2 = plan tranquilidad/respaldo |
+| `solicitudes[].monto_solicitado` | Cuánto debe recargar el usuario para esta cuota |
+| `solicitudes[].fecha_limite` | Fecha máxima para hacer la recarga |
+| `solicitudes[].fecha_recordatorio` | 5 días antes de la fecha límite. El sistema genera recordatorio automático |
+| `solicitudes[].facturas_ids` | Array de UUIDs de las facturas que cubre esta cuota |
+| `plan` | Plan del usuario al momento de generar |
+| `monto_total` | Suma total de todas las facturas |
+| `total_cuotas` | 1 o 2 según el plan |
 
-### 9.2 `POST /api/notificaciones/masiva` — Notificación masiva
-
-> 👨‍💼 Envía una notificación a **todos los usuarios activos**, opcionalmente filtrados por plan.
-
-**Headers:**
-```
-Content-Type: application/json
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Valores |
-|-------|------|-----------|---------|
-| `tipo` | string | ✅ Sí | Tipo de notificación |
-| `canal` | string | ❌ No | `"whatsapp"` (default), `"email"`, `"push"`, `"sms"` |
-| `payload` | object | ❌ No | Datos del mensaje |
-| `filtro_plan` | string | ❌ No | `"control"`, `"tranquilidad"`, `"respaldo"` |
-
-**Ejemplo — A todos los usuarios activos:**
+**Errores posibles:**
 ```json
-{
-  "tipo": "promocion",
-  "canal": "whatsapp",
-  "payload": {
-    "mensaje": "¡Aprovecha el 10% de descuento en recargas este fin de semana!"
-  }
-}
-```
-
-**Response (201) — Probado (22 usuarios activos):**
-```json
-{
-  "ok": true,
-  "data": {
-    "total_enviadas": 22
-  },
-  "error": null
-}
-```
-
-**Ejemplo — Solo usuarios del plan tranquilidad:**
-```json
-{
-  "tipo": "upgrade_disponible",
-  "canal": "whatsapp",
-  "payload": { "mensaje": "Upgrade al plan Respaldo con beneficios exclusivos" },
-  "filtro_plan": "tranquilidad"
-}
+{ "code": "NOT_FOUND", "message": "Usuario no encontrado con ese teléfono" }
+{ "code": "NOT_FOUND", "message": "Obligación no encontrada o no pertenece al usuario" }
+{ "code": "BAD_REQUEST", "message": "No hay facturas validadas o extraídas en esta obligación" }
+{ "code": "BAD_REQUEST", "message": "El monto total de las facturas es 0. No se puede generar solicitud." }
+{ "code": "CONFLICT_DUPLICATE", "message": "Ya existen solicitudes de recarga activas para esta obligación. Cancélalas primero si deseas regenerar." }
 ```
 
 ---
 
-### 9.3 `GET /api/notificaciones` — Listar notificaciones (admin)
+## 15. `GET /api/solicitudes-recarga` — 🆕 Listar solicitudes de recarga
 
-> 👨‍💼 Lista notificaciones con filtros. Incluye info del usuario.
+### ¿Qué hace?
+Lista todas las solicitudes de recarga de un usuario. Permite filtrar por estado y por obligación. Devuelve información completa de cada solicitud incluyendo montos, fechas, facturas asignadas y si se enviaron notificaciones/recordatorios.
+
+### ¿Cuándo usarlo?
+- Para mostrar al usuario cuánto debe recargar y para cuándo
+- Para verificar si hay cuotas pendientes
+- Para el dashboard del bot con el estado de las solicitudes
 
 **Headers:**
 ```
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 ```
 
 **Query Params:**
 
-| Param | Tipo | Default | Descripción |
-|-------|------|---------|-------------|
-| `telefono` | string | — | Filtrar por usuario |
-| `tipo` | string | — | Filtrar por tipo (ej: `pago_confirmado`) |
-| `estado` | string | — | `"pendiente"`, `"enviada"`, `"fallida"`, `"leida"` |
-| `limit` | number | `50` | Registros por consulta (máx 100) |
-| `offset` | number | `0` | Offset para paginación |
+| Param | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario |
+| `estado` | `string` | ❌ No | Filtrar: `"pendiente"`, `"parcial"`, `"cumplida"`, `"vencida"`, `"cancelada"` |
+| `obligacion_id` | `string (UUID)` | ❌ No | Filtrar por obligación específica |
+
+**Ejemplos:**
+```
+GET /api/solicitudes-recarga?telefono=573046757626
+GET /api/solicitudes-recarga?telefono=573046757626&estado=pendiente
+GET /api/solicitudes-recarga?telefono=573046757626&obligacion_id=260b7859-...
+```
+
+**Respuesta exitosa (200):**
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "id": "09e2ed08-...",
+      "creado_en": "2026-03-09T16:04:24.011544+00:00",
+      "usuario_id": "d630868d-...",
+      "obligacion_id": "260b7859-...",
+      "numero_cuota": 1,
+      "total_cuotas": 2,
+      "monto_solicitado": 215000,
+      "monto_recargado": 0,
+      "fecha_limite": "2026-03-08",
+      "fecha_recordatorio": "2026-03-03",
+      "estado": "pendiente",
+      "facturas_ids": ["7bd45f33-...", "0c1327ce-...", "f1bf3f36-..."],
+      "plan": "tranquilidad",
+      "notificacion_enviada": false,
+      "recordatorio_enviado": true,
+      "actualizado_en": "2026-03-09T16:04:58.864+00:00"
+    }
+  ],
+  "error": null
+}
+```
+
+| Campo | Significado |
+|-------|-------------|
+| `monto_solicitado` | Cuánto debe recargar en total para esta cuota |
+| `monto_recargado` | Cuánto ha recargado hasta ahora (para tracking parcial) |
+| `estado` | `pendiente` = no ha recargado, `parcial` = recargó algo pero no todo, `cumplida` = recargó todo, `vencida` = se pasó la fecha, `cancelada` = cancelada |
+| `notificacion_enviada` | Si ya se envió la notificación inicial de esta cuota |
+| `recordatorio_enviado` | Si ya se envió el recordatorio de 5 días antes |
+
+---
+
+## 16. `POST /api/solicitudes-recarga/verificar-recordatorios` — 🆕 Verificar y generar recordatorios
+
+### ¿Qué hace?
+Busca solicitudes de recarga que están próximas a vencer (la fecha de recordatorio ya pasó o es hoy), verifica si el usuario tiene saldo suficiente para cubrirlas, y si NO tiene saldo suficiente genera una notificación `recordatorio_recarga` para que el bot la envíe por WhatsApp.
+
+> **🆕 Nota:** El cron job diario (9:00 AM) ya ejecuta esta verificación automáticamente para TODOS los usuarios. Este endpoint es útil como respaldo o para verificar un usuario específico bajo demanda.
+
+### Lógica detallada:
+1. Busca solicitudes en estado `pendiente` o `parcial` donde `recordatorio_enviado = false` Y `fecha_recordatorio <= hoy`
+2. Para cada solicitud encontrada:
+   a. Calcula el saldo disponible del usuario (recargas aprobadas - pagos pagados)
+   b. Calcula cuánto le falta recargar (`monto_solicitado - monto_recargado`)
+   c. Si el saldo disponible < monto faltante → genera notificación `recordatorio_recarga`
+   d. Marca `recordatorio_enviado = true` para no enviar duplicados
+3. Si el usuario ya tiene saldo suficiente → NO genera recordatorio
+
+### ¿Cuándo usarlo?
+- 🆕 **Ya no es obligatorio llamarlo periódicamente** — el cron job diario lo hace automáticamente para todos los usuarios
+- Útil si quieres forzar una verificación inmediata para un usuario específico
+- Es seguro llamarlo múltiples veces: no genera recordatorios duplicados gracias al flag `recordatorio_enviado`
+
+**Headers:**
+```
+Content-Type: application/json
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+```
+
+**Body JSON:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `telefono` | `string` | ✅ Sí | Teléfono del usuario a verificar |
+
+**Ejemplo:**
+```json
+{
+  "telefono": "573046757626"
+}
+```
+
+**Respuesta exitosa — Se generaron recordatorios (200):**
+```json
+{
+  "ok": true,
+  "data": {
+    "recordatorios_generados": 1,
+    "detalle": [
+      {
+        "solicitud_id": "09e2ed08-...",
+        "monto_faltante": 215000,
+        "fecha_limite": "2026-03-08"
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+**Respuesta exitosa — No se necesitan recordatorios (200):**
+```json
+{
+  "ok": true,
+  "data": {
+    "recordatorios_generados": 0,
+    "detalle": []
+  },
+  "error": null
+}
+```
+
+| Campo respuesta | Significado |
+|-----------------|-------------|
+| `recordatorios_generados` | Cantidad de recordatorios nuevos creados |
+| `detalle[].solicitud_id` | ID de la solicitud que generó el recordatorio |
+| `detalle[].monto_faltante` | Cuánto le falta recargar al usuario (después de restar saldo disponible) |
+| `detalle[].fecha_limite` | Fecha máxima para la recarga |
+
+> Las notificaciones generadas aparecerán en el endpoint 10 (`GET /api/notificaciones/pendientes/:telefono`) con tipo `recordatorio_recarga`.
+
+---
+
+## 17. `PUT /api/solicitudes-recarga/:id/fechas` — 🆕 Personalizar fechas de cuotas
+
+### ¿Qué hace?
+Permite al usuario cambiar las fechas límite de sus cuotas de recarga. Por defecto las cuotas se calculan automáticamente según las fechas de vencimiento de las facturas, pero el usuario puede personalizarlas.
+
+### Comportamiento:
+- Si se envían `fecha_cuota_1` Y `fecha_cuota_2` y la solicitud es de 2 cuotas → actualiza AMBAS solicitudes de esa obligación
+- Si solo se envía una fecha → actualiza solo la cuota correspondiente
+- Recalcula automáticamente la `fecha_recordatorio` (5 días antes de la nueva fecha)
+- Resetea `recordatorio_enviado` a `false` para que se envíe un nuevo recordatorio con la fecha actualizada
+- Solo se pueden modificar solicitudes en estado `pendiente` o `parcial`
+
+### ¿Cuándo usarlo?
+- Cuando el usuario dice "quiero pagar la primera cuota el día 5 en vez del día 10"
+- Para ajustar las fechas a la conveniencia del usuario
+
+**Headers:**
+```
+Content-Type: application/json
+x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+```
+
+**URL Params:**
+- `:id` = UUID de cualquiera de las solicitudes de esa obligación
+
+**Body JSON:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `fecha_cuota_1` | `string` | ❌ No | Nueva fecha límite para la cuota 1. Formato `"YYYY-MM-DD"` |
+| `fecha_cuota_2` | `string` | ❌ No | Nueva fecha límite para la cuota 2. Formato `"YYYY-MM-DD"` |
+
+> Debe enviarse al menos una de las dos fechas.
+
+**Ejemplo — Cambiar ambas fechas:**
+```json
+{
+  "fecha_cuota_1": "2026-03-05",
+  "fecha_cuota_2": "2026-03-18"
+}
+```
+
+**Ejemplo — Cambiar solo cuota 1:**
+```json
+{
+  "fecha_cuota_1": "2026-03-05"
+}
+```
+
+**Respuesta exitosa — Ambas cuotas actualizadas (200):**
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "id": "09e2ed08-...",
+      "numero_cuota": 1,
+      "total_cuotas": 2,
+      "monto_solicitado": 215000,
+      "fecha_limite": "2026-03-05",
+      "fecha_recordatorio": "2026-02-28",
+      "estado": "pendiente",
+      "recordatorio_enviado": false,
+      "actualizado_en": "2026-03-09T..."
+    },
+    {
+      "id": "3e30936d-...",
+      "numero_cuota": 2,
+      "total_cuotas": 2,
+      "monto_solicitado": 120000,
+      "fecha_limite": "2026-03-18",
+      "fecha_recordatorio": "2026-03-13",
+      "estado": "pendiente",
+      "recordatorio_enviado": false,
+      "actualizado_en": "2026-03-09T..."
+    }
+  ],
+  "error": null
+}
+```
+
+**Errores posibles:**
+```json
+{ "code": "NOT_FOUND", "message": "Solicitud no encontrada" }
+{ "code": "BAD_REQUEST", "message": "Solo se pueden modificar solicitudes pendientes o parciales" }
+```
+
+---
+
+---
+
+## 🔄 Flujo Completo con Todos los Actores (Paso a Paso)
+
+```
+═══════════════════════════════════════════════════════════
+ FASE 1: REGISTRO Y CONFIGURACIÓN (Bot ↔ Usuario)
+═══════════════════════════════════════════════════════════
+
+1. USUARIO LLEGA POR WHATSAPP
+   └─ POST /api/users/upsert → registrar usuario
+   └─ (guardar usuario_id)
+
+2. ELIGE PLAN
+   └─ PUT /api/users/plan → asignar plan (control / tranquilidad / respaldo)
+
+3. CREAR OBLIGACIÓN DEL MES
+   └─ POST /api/obligaciones → crear compromiso mensual
+   └─ (guardar obligacion_id)
+
+4. CARGAR FACTURAS (una por cada servicio)
+   └─ POST /api/facturas/captura → Internet ETB
+   └─ POST /api/facturas/captura → Gas Vanti
+   └─ POST /api/facturas/captura → Energía Enel
+   └─ (repetir por cada servicio)
+
+5. GENERAR SOLICITUDES DE RECARGA AUTOMÁTICAS
+   └─ POST /api/solicitudes-recarga/generar
+   └─ (calcula cuánto y cuándo recargar según el plan)
+   └─ (genera notificación automática al usuario)
+
+═══════════════════════════════════════════════════════════
+ FASE 2: EVALUACIÓN AUTOMÁTICA (Cron Jobs del Sistema)
+═══════════════════════════════════════════════════════════
+
+6. ⚙️ CRON JOB 9:00 AM — jobEvaluacionRecargas
+   └─ Evalúa TODAS las obligaciones activas
+   └─ Para cada una: calcula montos, verifica saldo
+   └─ Detecta si es primera recarga del mes
+   └─ Genera notificación tipo:
+      • "solicitud_recarga_inicio_mes" (primera del mes)
+      • "solicitud_recarga" (genérica)
+   └─ Previene duplicados con existeNotificacionHoy()
+   └─ (NO requiere acción del bot — completamente automático)
+
+7. ⚙️ CRON JOB CADA 6 HORAS — jobVerificarInactividad
+   └─ Busca notificaciones de cobro enviadas hace 24-48h
+   └─ Verifica si el usuario hizo alguna recarga después
+   └─ Si NO hay recarga → crea alerta_admin (usuario_id: null)
+   └─ Admin las ve en: GET /api/notificaciones/admin/alertas
+
+═══════════════════════════════════════════════════════════
+ FASE 3: RECARGA Y APROBACIÓN (Bot ↔ Usuario ↔ Admin)
+═══════════════════════════════════════════════════════════
+
+8. BOT ENTREGA NOTIFICACIONES AL USUARIO
+   └─ GET /api/notificaciones/pendientes/:telefono
+   └─ ⚡ Las notificaciones se marcan como "enviada" AUTOMÁTICAMENTE
+   └─ Bot lee payload.mensaje y envía por WhatsApp
+   └─ ✅ NO necesita llamar batch-enviadas
+
+9. USUARIO RECARGA DINERO
+   └─ POST /api/recargas/reportar → reportar con comprobante
+   └─ (queda en_validacion + se crea revisión administrativa)
+
+10. ADMIN VALIDA COMPROBANTE
+    └─ PUT /api/recargas/:id/aprobar
+    └─ 🧹 Auto-limpieza automática:
+       a. Cancela notificaciones de cobro pendientes del usuario
+       b. Actualiza solicitudes_recarga a 'cumplida' o 'parcial'
+       c. Crea notificación "recarga_aprobada"
+       d. Crea notificación "recarga_confirmada" con saldo actualizado
+    └─ O si rechaza: PUT /api/recargas/:id/rechazar
+       └─ Crea notificación "recarga_rechazada" con motivo
+
+11. BOT ENTREGA CONFIRMACIÓN
+    └─ GET /api/notificaciones/pendientes/:telefono
+    └─ Recibe notificación "recarga_confirmada" con saldo
+    └─ Envía por WhatsApp al usuario
+
+═══════════════════════════════════════════════════════════
+ FASE 4: PAGOS Y SEGUIMIENTO
+═══════════════════════════════════════════════════════════
+
+12. VERIFICAR SALDO
+    └─ GET /api/disponible?telefono=X&periodo=X
+
+13. CREAR PAGOS (cuando hay facturas validadas + saldo suficiente)
+    └─ POST /api/pagos/crear → pago para factura validada
+
+14. CONSULTAR ESTADO GENERAL
+    └─ GET /api/obligaciones?telefono=X → ver obligaciones y progreso
+    └─ GET /api/facturas/obligacion/:id → ver detalle de facturas
+    └─ GET /api/solicitudes-recarga?telefono=X → ver cuotas pendientes
+
+15. ADMIN CONSULTA ALERTAS (usuarios sin respuesta)
+    └─ GET /api/notificaciones/admin/alertas
+
+16. PERSONALIZAR FECHAS (si el usuario lo solicita)
+    └─ PUT /api/solicitudes-recarga/:id/fechas
+
+17. VERIFICAR RECORDATORIOS MANUALMENTE (opcional, el cron ya lo hace)
+    └─ POST /api/solicitudes-recarga/verificar-recordatorios
+```
+
+---
+
+## 💡 Ejemplo Completo: Caso Real
+
+### Escenario: Carlos tiene plan tranquilidad, 3 facturas en marzo
+
+**1. Registrar usuario:**
+```json
+POST /api/users/upsert
+{ "telefono": "573001234567", "nombre": "Carlos", "apellido": "Pérez" }
+→ { "usuario_id": "d630868d-...", "creado": true }
+```
+
+**2. Asignar plan:**
+```json
+PUT /api/users/plan
+{ "telefono": "573001234567", "plan": "tranquilidad" }
+→ { "plan_nuevo": "tranquilidad" }
+```
+
+**3. Crear obligación:**
+```json
+POST /api/obligaciones
+{ "telefono": "573001234567", "descripcion": "Pagos Marzo 2026", "periodo": "2026-03-01" }
+→ { "id": "260b7859-..." }
+```
+
+**4. Cargar facturas:**
+```json
+POST /api/facturas/captura
+{ "telefono": "573001234567", "obligacion_id": "260b7859-...", "servicio": "Internet ETB", "monto": 85000, "fecha_vencimiento": "2026-03-10", "referencia_pago": "ETB-001", "etiqueta": "internet" }
+→ Internet $85,000 — vence 10 marzo (1ra mitad)
+
+POST /api/facturas/captura
+{ ... "servicio": "Gas Vanti", "monto": 45000, "fecha_vencimiento": "2026-03-12", "referencia_pago": "VANTI-001", "etiqueta": "gas" }
+→ Gas $45,000 — vence 12 marzo (1ra mitad)
+
+POST /api/facturas/captura
+{ ... "servicio": "Energía Enel", "monto": 120000, "fecha_vencimiento": "2026-03-22", "referencia_pago": "ENEL-001", "etiqueta": "energia" }
+→ Energía $120,000 — vence 22 marzo (2da mitad)
+```
+
+**5. Generar solicitudes de recarga:**
+```json
+POST /api/solicitudes-recarga/generar
+{ "telefono": "573001234567", "obligacion_id": "260b7859-..." }
+→ Resultado:
+   Cuota 1: $130,000 (Internet + Gas) — límite: 10 marzo — recordatorio: 5 marzo
+   Cuota 2: $120,000 (Energía)         — límite: 22 marzo — recordatorio: 17 marzo
+```
+
+**6. El bot envía la notificación:** "Hola Carlos, tu primera cuota es de $130,000. Fecha límite: 2026-03-10. Cuota 1 de 2."
+
+**7. Carlos recarga $130,000 por Nequi → admin aprueba → saldo disponible: $130,000**
+
+**8. Bot crea pagos para Internet y Gas → saldo disponible: $0**
+
+**9. Bot verifica recordatorios el 17 de marzo → detecta que Carlos no tiene saldo para la cuota 2 → genera notificación:** "Recuerda que tienes una recarga pendiente de $120,000 antes del 2026-03-22. Cuota 2 de 2."
+
+**10. Carlos recarga $120,000 → admin aprueba → bot paga Energía Enel → ¡Obligación completada!**
+
+---
+
+## ⚙️ Sistema Automático de Evaluación (Cron Job)
+
+### ¿Qué es?
+El servidor ejecuta automáticamente un **cron job diario a las 9:00 AM** (hora del servidor) que evalúa todas las obligaciones activas, recalcula solicitudes de recarga y genera notificaciones sin intervención del bot ni del admin.
+
+### ¿Qué hace el cron job?
+
+**Job principal — `jobEvaluacionRecargas` (9:00 AM diario):**
+
+```
+Por cada obligación activa en el sistema:
+  1. Obtener facturas validadas/extraídas
+  2. Calcular fecha de recordatorio por factura:
+     - Si tiene fecha_vencimiento → vencimiento - 5 días
+     - Si NO tiene fecha_vencimiento → creado_en + 15 días
+  3. Si hoy < fecha_recordatorio → solo actualizar solicitud (sin notificación)
+  4. Si hoy ≥ fecha_recordatorio:
+     a. Calcular monto pendiente = total facturas - saldo usuario
+     b. Si monto pendiente ≤ 0 → marcar solicitud como "cumplida"
+     c. Si monto pendiente > 0 → crear/actualizar solicitud
+  5. Detectar si es la primera recarga del mes del usuario
+  6. Verificar si ya se envió notificación hoy (evitar duplicados)
+  7. Si no se envió → crear notificación:
+     - Primera recarga del mes → tipo "solicitud_recarga_inicio_mes"
+     - Recargas posteriores → tipo "solicitud_recarga"
+```
+
+**Job completo — `jobRecordatoriosCompleto`:**
+1. Recalcula TODAS las solicitudes activas (por si cambiaron facturas)
+2. Verifica recordatorios globales para TODOS los usuarios
+
+**Job 2 — `jobVerificarInactividad` (cada 6 horas):**
+
+```
+1. Calcular rango temporal: 24h a 48h atrás
+2. Buscar notificaciones tipo 'solicitud_recarga' o 'solicitud_recarga_inicio_mes'
+   con estado 'enviada' creadas en ese rango
+3. Para cada notificación:
+   a. Verificar si ya existe una alerta para esta notificación (evitar duplicados)
+   b. Buscar recargas del usuario posteriores a la notificación
+   c. Si NO hay recarga → crearAlertaAdmin()
+      → Crea notificación tipo 'alerta_admin' con usuario_id: null
+      → Incluye: nombre usuario, teléfono, periodo, días sin respuesta
+4. Las alertas aparecen en: GET /api/notificaciones/admin/alertas (endpoint 20)
+```
+
+### ¿Qué significa para el bot?
+- **No necesita llamar al endpoint 16 periódicamente** → el cron job lo hace automáticamente
+- El bot solo necesita **consultar las notificaciones pendientes** (endpoint 10) y enviarlas
+- Las notificaciones de tipo `solicitud_recarga_inicio_mes` y `solicitud_recarga` aparecerán automáticamente en el endpoint 10
+- Las alertas de inactividad (`alerta_admin`) **NO aparecen** en el endpoint 10 — son exclusivas del admin
+
+### Protecciones:
+- ✅ No genera notificaciones duplicadas el mismo día (`existeNotificacionHoy`)
+- ✅ Control de concurrencia (un solo job ejecutándose a la vez)
+- ✅ Si node-cron no está instalado, el servidor arranca sin jobs (degradación elegante)
+- ✅ Los montos de solicitudes se recalculan automáticamente cuando cambian las facturas
+- ✅ Job de inactividad verifica que no exista alerta previa antes de crear una nueva
+- ✅ Solo detecta inactividad entre 24-48h (no alerta repetidamente)
+
+---
+
+## 📨 Plantillas de Mensajes Automáticos
+
+Las notificaciones generadas por el sistema incluyen mensajes formateados listos para enviar por WhatsApp. El bot debe leer `payload.mensaje` y enviarlo tal cual.
+
+### Tipo: `solicitud_recarga_inicio_mes`
+Se genera al inicio de cada mes cuando el usuario tiene obligaciones activas. Incluye resumen del mes anterior y detalle del nuevo mes.
+
+**Ejemplo de `payload.mensaje`:**
+```
+Hola Carlos ✌🏼
+Arrancamos mes!
+
+En Febrero 2026 pagaste "$ 162,000" y tienes un saldo de "$ 70,000"
+
+Para Marzo 2026, tus obligaciones suman "$ 250,000", así:
+
+"@EPM Energía": "$ 120,000".
+"@Internet ETB": "$ 85,000".
+"@Gas Vanti": "$ 45,000".
+
+La recarga total sugerida para Marzo 2026 es de "$ 180,000".
+
+Puedes hacer la recarga a la llave 0090944088.
+
+Apenas la hagas, me envías el comprobante y yo me encargo del resto deOne! 🙌🏼
+```
+
+### Tipo: `solicitud_recarga` (genérico)
+Se genera cuando el usuario tiene obligaciones pendientes (no es inicio de mes).
+
+**Ejemplo de `payload.mensaje`:**
+```
+Hola Carlos! 👋🏼
+Ya estamos listos para recibir tu recarga, con la que cubriremos:
+"@EPM Energía": "$ 120,000".
+"@Internet ETB": "$ 85,000".
+"@Gas Vanti": "$ 45,000".
+
+Total: "$ 250,000"
+Aplicamos tu saldo: "$ 50,000"
+
+Total a recargar: "$ 200,000".
+Puedes hacer la recarga a la llave 0090944088.
+
+Apenas la hagas, me envías el comprobante y yo me encargo del resto deOne! 🙌🏼
+```
+
+### Tipo: `recarga_confirmada`
+Se genera automáticamente cuando el admin aprueba una recarga del usuario.
+
+**Ejemplo de `payload.mensaje`:**
+```
+Recibido, Carlos ✌🏼
+
+Ya registré tu recarga. Tu saldo disponible en deOne es de $ 130,000
+```
+
+### Datos que incluye `payload` en notificaciones automáticas:
+
+| Campo en `payload` | Descripción |
+|--------------------|-------------|
+| `mensaje` | Texto completo formateado, listo para enviar por WhatsApp |
+| `tipo_mensaje` | `"inicio_mes"` \| `"generico"` \| `"confirmada"` |
+| `nombre_usuario` | Nombre del usuario |
+| `mes_actual` | Nombre del mes actual (ej: "Marzo 2026") |
+| `mes_anterior` | Nombre del mes anterior (ej: "Febrero 2026") |
+| `obligaciones` | Array de objetos `{ etiqueta, monto }` — cada factura como obligación |
+| `total_obligaciones` | Suma total de todas las facturas |
+| `saldo_actual` | Saldo actual del usuario |
+| `valor_a_recargar` | Diferencia: total_obligaciones - saldo_actual |
+| `es_primera_recarga` | `true` si es la primera recarga del mes |
+| `obligacion_id` | ID de la obligación relacionada |
+| `periodo` | Periodo de la obligación (ej: "2026-03-01") |
+
+> **Llave de recarga:** `0090944088` — Esta llave aparece en los mensajes automáticos para que el usuario sepa dónde recargar.
+
+---
+
+## 18. `PUT /api/recargas/:id/aprobar` — Admin aprueba recarga
+
+### ¿Qué hace?
+El admin valida el comprobante de recarga y aprueba la operación. Ejecuta automáticamente una serie de acciones de limpieza.
+
+**Auth:** `x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3`
+
+**URL Params:** `:id` = UUID de la recarga
+
+**Body JSON:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `observaciones_admin` | `string` | ❌ No | Notas del admin sobre la verificación |
+
+**Ejemplo:**
+```json
+{ "observaciones_admin": "Comprobante Nequi verificado correctamente, monto coincide" }
+```
+
+**Respuesta exitosa (200):**
+```json
+{
+  "ok": true,
+  "data": {
+    "id": "974bad6d-...",
+    "usuario_id": "7f98125c-...",
+    "periodo": "2026-03-01",
+    "monto": 200000,
+    "estado": "aprobada",
+    "comprobante_url": "https://storage...",
+    "validada_por": "admin-001",
+    "validada_en": "2026-03-12T10:30:15.123Z",
+    "observaciones_admin": "Comprobante Nequi verificado correctamente, monto coincide"
+  },
+  "error": null
+}
+```
+
+### 🧹 Acciones automáticas al aprobar (Auto-limpieza):
+1. **Valida transición** de estado (`en_validacion` → `aprobada`)
+2. **Cierra revisión administrativa** asociada (estado → `resuelta`)
+3. **Crea notificación `recarga_aprobada`** con monto y periodo
+4. **Crea notificación `recarga_confirmada`** con mensaje personalizado y saldo actualizado
+5. **Cancela notificaciones de cobro pendientes** del usuario:
+   - Busca notificaciones tipo `solicitud_recarga` / `solicitud_recarga_inicio_mes` en estado `pendiente` o `enviada`
+   - Las cambia a estado `cancelada` con `payload.cancelacion = { cancelada_por: 'aprobar_recarga', recarga_aprobada_id: '...' }`
+6. **Actualiza solicitudes de recarga** del usuario:
+   - Suma el monto de la recarga a `monto_recargado`
+   - Si `monto_recargado >= monto_solicitado` → estado `cumplida`
+   - Si no → estado `parcial`
+7. **Registra audit log**
+
+**Errores posibles:**
+```json
+{ "code": "NOT_FOUND", "message": "Recarga no encontrada" }
+{ "code": "INVALID_STATE_TRANSITION", "message": "No se puede aprobar recarga en estado 'aprobada'. Debe estar en 'en_validacion'." }
+```
+
+---
+
+## 19. `PUT /api/recargas/:id/rechazar` — Admin rechaza recarga
+
+### ¿Qué hace?
+El admin rechaza una recarga (comprobante borroso, monto incorrecto, etc.).
+
+**Auth:** `x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3`
+
+**URL Params:** `:id` = UUID de la recarga
+
+**Body JSON:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `motivo_rechazo` | `string` | ✅ Sí | Razón del rechazo |
+
+**Ejemplo:**
+```json
+{ "motivo_rechazo": "Comprobante borroso, no se puede verificar el monto" }
+```
+
+**Respuesta exitosa (200):**
+```json
+{
+  "ok": true,
+  "data": {
+    "id": "676b3c7e-...",
+    "estado": "rechazada",
+    "motivo_rechazo": "Comprobante borroso, no se puede verificar el monto"
+  },
+  "error": null
+}
+```
+
+### Acciones automáticas al rechazar:
+1. Valida transición de estado (`en_validacion` → `rechazada`)
+2. Cierra revisión administrativa asociada
+3. Crea notificación `recarga_rechazada` con el motivo
+4. Registra audit log
+
+---
+
+## 20. `GET /api/notificaciones/admin/alertas` — Alertas para el admin
+
+### ¿Qué hace?
+Devuelve todas las alertas pendientes generadas por el job de inactividad. Estas alertas indican usuarios que recibieron notificación de cobro pero no respondieron en 24 horas.
+
+**Auth:** `x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3`
 
 **Ejemplo:**
 ```
-GET /api/notificaciones?telefono=3001112233
+GET /api/notificaciones/admin/alertas
 ```
 
-**Response (200) — Probado (8 notificaciones auto-generadas + manuales):**
+**Respuesta exitosa (200):**
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "id": "a1b2c3d4-...",
+      "creado_en": "2026-03-12T15:00:00.000Z",
+      "usuario_id": null,
+      "tipo": "alerta_admin",
+      "canal": "sistema",
+      "payload": {
+        "tipo_alerta": "usuario_sin_respuesta",
+        "mensaje": "El usuario Juan Pérez (3001112233) no ha respondido a la solicitud de recarga hace más de 24 horas.",
+        "usuario_id": "7f98125c-...",
+        "usuario_nombre": "Juan Pérez",
+        "usuario_telefono": "3001112233",
+        "notificacion_cobro_id": "716d4170-...",
+        "periodo": "2026-03-01",
+        "dias_sin_respuesta": 1,
+        "fecha_deteccion": "2026-03-12T15:00:00.000Z"
+      },
+      "estado": "pendiente"
+    }
+  ],
+  "error": null
+}
+```
+
+| Campo en `payload` | Significado |
+|--------------------|-------------|
+| `tipo_alerta` | Siempre `"usuario_sin_respuesta"` |
+| `usuario_id` | UUID del usuario que no respondió |
+| `usuario_nombre` | Nombre del usuario |
+| `usuario_telefono` | Teléfono del usuario |
+| `notificacion_cobro_id` | ID de la notificación de cobro que no fue respondida |
+| `dias_sin_respuesta` | Días sin respuesta (mínimo 1) |
+
+> **Nota:** Las alertas se crean con `usuario_id: null` en la tabla para que el endpoint 10 (pendientes por teléfono) NO las devuelva al bot. Solo son visibles en este endpoint de admin.
+
+---
+
+## 21. `GET /api/notificaciones` — Listar todas las notificaciones (admin)
+
+### ¿Qué hace?
+Lista todas las notificaciones del sistema con datos del usuario. Permite filtrar por teléfono, tipo, estado y paginar.
+
+**Auth:** `x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3`
+
+**Query Params (todos opcionales):**
+
+| Param | Tipo | Descripción |
+|-------|------|-------------|
+| `telefono` | `string` | Filtrar por usuario |
+| `tipo` | `string` | Filtrar por tipo de notificación |
+| `estado` | `string` | Filtrar: `pendiente`, `enviada`, `fallida`, `leida`, `cancelada` |
+| `limit` | `number` | Máximo resultados (1-100, default: 50) |
+| `offset` | `number` | Para paginación (default: 0) |
+
+**Ejemplo:**
+```
+GET /api/notificaciones?estado=pendiente
+GET /api/notificaciones?telefono=3001112233&tipo=solicitud_recarga
+```
+
+**Respuesta exitosa (200):**
 ```json
 {
   "ok": true,
   "data": {
     "notificaciones": [
       {
-        "id": "c4e8c380-db41-4ad2-aed2-cf38af03d8a3",
-        "tipo": "recordatorio_recarga",
+        "id": "7cc2d2eb-...",
+        "usuario_id": "d630868d-...",
+        "tipo": "solicitud_recarga_inicio_mes",
         "canal": "whatsapp",
-        "estado": "pendiente",
-        "payload": {
-          "mensaje": "Hola Carlos, recuerda recargar para pagar tus facturas de marzo.",
-          "monto_sugerido": 200000
-        },
-        "creado_en": "2026-02-20T04:06:32.157013+00:00",
-        "ultimo_error": null,
+        "estado": "enviada",
+        "payload": { "mensaje": "Hola Carlos ✌🏼 ..." },
+        "creado_en": "2026-03-12T14:00:00.000Z",
         "usuarios": {
-          "nombre": "Carlos Actualizado",
-          "apellido": "Frontend",
-          "telefono": "3001112233"
-        }
-      },
-      {
-        "id": "...",
-        "tipo": "pago_confirmado",
-        "estado": "pendiente",
-        "payload": {
-          "pago_id": "0da485dd-...",
-          "monto": 45000,
-          "servicio": "Agua EPM",
-          "mensaje": "Se ha confirmado el pago de $45,000 para Agua EPM."
-        }
-      },
-      {
-        "id": "...",
-        "tipo": "pago_confirmado",
-        "estado": "pendiente",
-        "payload": {
-          "pago_id": "8491016e-...",
-          "monto": 85000,
-          "servicio": "EPM Energía",
-          "mensaje": "Se ha confirmado el pago de $85,000 para EPM Energía."
-        }
-      },
-      {
-        "id": "...",
-        "tipo": "recarga_rechazada",
-        "payload": {
-          "recarga_id": "676b3c7e-...",
-          "monto": 50000,
-          "mensaje": "Tu recarga de $50,000 ha sido rechazada."
-        }
-      },
-      {
-        "id": "...",
-        "tipo": "recarga_aprobada",
-        "payload": {
-          "recarga_id": "974bad6d-...",
-          "monto": 200000,
-          "mensaje": "Tu recarga de $200,000 ha sido aprobada."
-        }
-      },
-      {
-        "id": "...",
-        "tipo": "factura_rechazada",
-        "payload": {
-          "servicio": "Gas Natural Dudosa",
-          "mensaje": "Tu factura de Gas Natural Dudosa ha sido rechazada."
-        }
-      },
-      {
-        "id": "...",
-        "tipo": "factura_validada",
-        "payload": {
-          "servicio": "Agua EPM",
-          "monto": 45000,
-          "mensaje": "Tu factura de Agua EPM por $45,000 ha sido validada y está lista para pago."
-        }
-      },
-      {
-        "id": "...",
-        "tipo": "factura_validada",
-        "payload": {
-          "servicio": "EPM Energía",
-          "monto": 85000,
-          "mensaje": "Tu factura de EPM Energía por $85,000 ha sido validada y está lista para pago."
+          "nombre": "Carlos",
+          "apellido": "Pérez",
+          "telefono": "573001234567"
         }
       }
     ],
-    "total": 8,
+    "total": 5,
     "limit": 50,
     "offset": 0
   },
@@ -1709,732 +2035,300 @@ GET /api/notificaciones?telefono=3001112233
 
 ---
 
-### 9.4 `GET /api/notificaciones/pendientes/:telefono` — Pendientes de un usuario
+## 📅 Manejo de Facturas sin Fecha de Vencimiento
 
-> 🤖👨‍💼 **Para el bot:** Obtiene las notificaciones pendientes de enviar a un usuario. Ordenadas cronológicamente (más antigua primero).
+Cuando una factura no tiene `fecha_vencimiento` (es `null`), el sistema usa la siguiente lógica alternativa:
 
-**Headers:**
-```
-x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Request:**
-```
-GET /api/notificaciones/pendientes/3001112233
-```
-
-**Response (200) — Probado (8 pendientes):**
-```json
-{
-  "ok": true,
-  "data": [
-    {
-      "id": "7cc2d2eb-6b6b-4d6e-b3c2-2e9e4e6ed7ca",
-      "tipo": "factura_validada",
-      "canal": "whatsapp",
-      "estado": "pendiente",
-      "payload": {
-        "factura_id": "92eb26d4-661c-49d7-977a-3a30c05b2792",
-        "servicio": "EPM Energía",
-        "monto": 85000,
-        "mensaje": "Tu factura de EPM Energía por $85,000 ha sido validada y está lista para pago."
-      },
-      "creado_en": "2026-02-20T04:02:12.649851+00:00"
-    },
-    {
-      "id": "716d4170-...",
-      "tipo": "factura_validada",
-      "payload": { "servicio": "Agua EPM", "monto": 45000 }
-    },
-    {
-      "id": "...",
-      "tipo": "recarga_aprobada",
-      "payload": { "monto": 200000, "mensaje": "Tu recarga de $200,000 ha sido aprobada." }
-    },
-    {
-      "id": "...",
-      "tipo": "pago_confirmado",
-      "payload": { "monto": 85000, "servicio": "EPM Energía" }
-    }
-  ],
-  "error": null
-}
-```
-
-> 💡 **Flujo recomendado para el bot:**
-> 1. `GET /api/notificaciones/pendientes/:telefono` → Obtener pendientes
-> 2. Enviar cada notificación al usuario por WhatsApp
-> 3. `PUT /api/notificaciones/:id` con `{"estado":"enviada"}` → Marcar como enviada
-> 4. O usar `POST /api/notificaciones/batch-enviadas` para marcar varias de golpe
-
----
-
-### 9.5 `PUT /api/notificaciones/:id` — Actualizar estado de notificación
-
-> 🤖👨‍💼 Marca una notificación como enviada, fallida o leída.
-
-**Headers:**
-```
-Content-Type: application/json
-x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Valores |
-|-------|------|-----------|---------|
-| `estado` | string | ✅ Sí | `"enviada"`, `"fallida"`, `"leida"` |
-| `ultimo_error` | string | ❌ No | Detalle del error (si estado=`fallida`) |
-
-**Ejemplo — Marcar como enviada:**
-```json
-{
-  "estado": "enviada"
-}
-```
-
-**Response (200) — Probado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "7cc2d2eb-6b6b-4d6e-b3c2-2e9e4e6ed7ca",
-    "creado_en": "2026-02-20T04:02:12.649851+00:00",
-    "usuario_id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-    "tipo": "factura_validada",
-    "canal": "whatsapp",
-    "payload": {
-      "monto": 85000,
-      "servicio": "EPM Energía",
-      "factura_id": "92eb26d4-661c-49d7-977a-3a30c05b2792",
-      "mensaje": "Tu factura de EPM Energía por $85,000 ha sido validada y está lista para pago."
-    },
-    "estado": "enviada",
-    "ultimo_error": null
-  },
-  "error": null
-}
-```
-
-**Ejemplo — Marcar como fallida:**
-```json
-{
-  "estado": "fallida",
-  "ultimo_error": "WhatsApp API timeout después de 30s"
-}
-```
-
-**Response (404) — Notificación no existe:**
-```json
-{ "ok": false, "data": null, "error": "Notificación no encontrada" }
-```
-
----
-
-### 9.6 `POST /api/notificaciones/batch-enviadas` — Marcar varias como enviadas
-
-> 🤖👨‍💼 Marca múltiples notificaciones como enviadas de una sola vez. Ideal para el bot después de enviar un batch.
-
-**Headers:**
-```
-Content-Type: application/json
-x-bot-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Body JSON:**
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `ids` | array de UUID | ✅ Sí | IDs de las notificaciones a marcar |
+| Situación | Cálculo de fecha_recordatorio |
+|-----------|------------------------------|
+| Factura **con** `fecha_vencimiento` | `fecha_vencimiento - 5 días` |
+| Factura **sin** `fecha_vencimiento` | `creado_en + 15 días` (se calcula el día en el mes actual) |
 
 **Ejemplo:**
-```json
-{
-  "ids": [
-    "716d4170-3831-49f2-9fa8-9b15a6c63018",
-    "b4503a04-3fc1-4fcb-bf04-fd161f5eda48"
-  ]
-}
+- Factura creada el 28 de febrero sin fecha de vencimiento
+- `28 + 15 = 43` → como febrero tiene 28 días → `43 - 28 = 15`
+- Fecha de recordatorio = **15 de marzo**
+
+Este cálculo es importante porque:
+- Las facturas heredadas o capturadas sin fecha de vencimiento no se quedan sin recordatorio
+- El sistema rota automáticamente al siguiente mes si el cálculo supera los días del mes actual
+- Aplica tanto para el cron job como para la generación manual de solicitudes
+
+---
+
+## 🔁 Recálculo Automático de Solicitudes
+
+Cuando las facturas de una obligación cambian (se agregan, validan, o rechazan), el sistema **recalcula automáticamente** las solicitudes de recarga:
+
+1. Obtiene todas las facturas válidas (validadas/extraídas) de la obligación
+2. Si no hay facturas → cancela todas las solicitudes pendientes
+3. Recalcula el `monto_solicitado` distribuyendo las facturas según el plan:
+   - **control**: 1 cuota con el monto total
+   - **tranquilidad/respaldo**: 2 cuotas distribuidas por fecha de vencimiento
+4. Actualiza `fecha_limite` y `fecha_recordatorio`
+5. Solo resetea `recordatorio_enviado` cuando la `fecha_recordatorio` realmente cambió (evita re-enviar recordatorios innecesariamente)
+
+Este recálculo ocurre:
+- Automáticamente en el cron job diario
+- Cuando se ejecuta `recalcularSolicitudesPorObligacion(obligacionId)` internamente
+
+---
+
+## 🗂️ Detalle Técnico de los Cron Jobs
+
+### Job 1: `jobEvaluacionRecargas()`
+- **Archivo:** `src/jobs/recordatorios.job.js`
+- **Programación:** `cron.schedule("0 9 * * *", ...)` — 9:00 AM diario
+- **Protecciones:**
+  - Lock concurrente con `isJobRunning` (previene ejecuciones paralelas)
+  - Verificación de duplicados con `existeNotificacionHoy()`
+  - Detección primera recarga del mes con `detectarPrimeraRecargaDelMes()`
+
+**Secuencia de ejecución:**
+```
+1. obtenerObligacionesActivas() → Lista de obligaciones estado 'activa'
+2. FOR cada obligación:
+   a. evaluarObligacion() → Calcula monto pendiente
+   b. detectarPrimeraRecargaDelMes() → Determina tipo mensaje
+   c. existeNotificacionHoy() → Evita duplicados diarios
+   d. prepararDatosNotificacion() → Construye payload con obligaciones
+   e. crearNotificacionRecarga() → Inserta notificación (estado 'pendiente')
+3. Retorna resumen: procesadas, creadas, errores
 ```
 
-**Response (200) — Probado:**
-```json
-{
-  "ok": true,
-  "data": {
-    "actualizadas": 2
-  },
-  "error": null
-}
+### Job 2: `jobVerificarInactividad()`
+- **Archivo:** `src/modules/notificaciones/notificaciones.service.js`
+- **Programación:** `cron.schedule("0 */6 * * *", ...)` — Cada 6 horas
+- **Diferenciación temporal:**
+  - Cada 6h = Frecuencia de ejecución
+  - 24h = Umbral para considerar "sin respuesta"
+  - No envía alertas cada ejecución — solo cuando detecta casos nuevos
+
+**Lógica de detección:**
+```
+1. Rango: notificaciones enviadas 24-48h atrás
+2. Tipos: 'solicitud_recarga' | 'solicitud_recarga_inicio_mes'
+3. Estado: 'enviada'
+4. VERIFICA: ¿Ya existe alerta para esta notificación? → Si sí, omitir
+5. VERIFICA: ¿Hay recargas después del mensaje?
+   → Si NO → crearAlertaAdmin() con usuario_id: null
 ```
 
-**Response (400) — Sin IDs:**
-```json
-{
-  "ok": false,
-  "data": null,
-  "error": { "code": "VALIDATION_ERROR", "message": "Se requiere un array de IDs" }
-}
+### Job 3: `jobRecordatoriosCompleto()`
+- **Archivo:** `src/jobs/recordatorios.job.js`
+- **Uso:** Se puede ejecutar manualmente para recalcular todo
+- **Pasos:**
+  1. `recalcularTodasSolicitudes()` — Recalcula montos de solicitudes activas
+  2. `verificarRecordatoriosGlobal()` — Envía recordatorios a todos los usuarios
+
+---
+
+## 📊 Resumen Completo de Estados del Sistema
+
+### Recargas:
+```
+en_validacion → aprobada | rechazada
+```
+
+### Notificaciones:
+```
+pendiente → enviada → leida
+          ↘ cancelada (por auto-limpieza)
+          ↘ fallida
+```
+
+### Solicitudes de Recarga:
+```
+pendiente → parcial → cumplida
+          ↘ vencida
+          ↘ cancelada
+```
+
+### Facturas:
+```
+extraida → validada → pagada
+   ↓          ↓
+en_revision   rechazada
+   ↓
+validada → pagada
+```
+
+### Obligaciones:
+```
+activa → en_progreso → completada
+       ↘ cancelada
+```
+
+### Pagos:
+```
+en_proceso → pagado | fallido
+```
+
+### Revisiones Admin:
+```
+pendiente → resuelta | descartada
 ```
 
 ---
 
-## 10. Admin Dashboard (`/api/admin`)
+## 🆕 2a. `DELETE /api/users/:id` (o `/api/users?telefono=XXX`) — Eliminar usuario
 
-> Todos los endpoints de esta sección requieren `x-admin-api-key`.
+### ¿Qué hace?
+Elimina un usuario del sistema. Por defecto realiza **soft delete** (marca `activo=false` preservando todo el historial). Con `?hard=true` realiza **hard delete** físico, lo cual elimina en cascada ajustes, obligaciones, facturas, recargas, pagos, revisiones y solicitudes_recarga (las notificaciones quedan con `usuario_id=NULL` para histórico).
 
----
+### ¿Cuándo usarlo?
+- Soft delete: cuando un usuario se da de baja pero se desea conservar histórico contable.
+- Hard delete: solo para depuración / GDPR / pruebas. **No recomendado en producción** si hay datos financieros.
 
-### 10.1 `GET /api/admin/dashboard` — Panel de métricas globales
-
-> 👨‍💼 Estadísticas consolidadas de toda la plataforma en tiempo real.
-
-**Headers:**
+### Auth
 ```
 x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 ```
+> Solo admin. Bot key NO autoriza este endpoint.
 
-**Request:**
-```
-GET /api/admin/dashboard
-```
+### Variantes
+- `DELETE /api/users/:id` — borra por UUID
+- `DELETE /api/users?telefono=573046757626` — borra por teléfono
 
-**Response (200) — Probado con datos reales:**
-```json
-{
-  "ok": true,
-  "data": {
-    "clientes": {
-      "total": 22,
-      "activos": 22
-    },
-    "obligaciones": {
-      "activas": 21,
-      "completadas": 2
-    },
-    "financiero": {
-      "total_recargas_aprobadas": 4900000,
-      "total_pagos_realizados": 1224333,
-      "pagos_en_proceso": 45000,
-      "recargas_pendientes_validacion": 9640000,
-      "saldo_global": 3675667
-    },
-    "revisiones_pendientes": {
-      "total": 10,
-      "facturas": 4,
-      "recargas": 6
-    },
-    "notificaciones_pendientes": 25
-  },
-  "error": null
-}
-```
-
-> 💡 **Campos del financiero explicados:**
-> | Campo | Significado |
-> |-------|-------------|
-> | `total_recargas_aprobadas` | Dinero total confirmado por recargas de todos los usuarios |
-> | `total_pagos_realizados` | Dinero total ya pagado a proveedores de servicios |
-> | `pagos_en_proceso` | Dinero en pagos que aún no se han confirmado |
-> | `recargas_pendientes_validacion` | Dinero en recargas reportadas esperando aprobación |
-> | `saldo_global` | Recargas aprobadas − Pagos realizados (dinero disponible en plataforma) |
-
----
-
-### 10.2 `GET /api/admin/clientes` — Listar clientes (paginado)
-
-> 👨‍💼 Lista todos los clientes con búsqueda, filtro por plan y paginación.
-
-**Headers:**
-```
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-```
-
-**Query Params:**
+### Query params
 
 | Param | Tipo | Default | Descripción |
 |-------|------|---------|-------------|
-| `page` | number | `1` | Página actual |
-| `limit` | number | `20` | Registros por página (máx 100) |
-| `search` | string | — | Busca en nombre, teléfono o correo |
-| `plan` | string | — | `"control"`, `"tranquilidad"`, `"respaldo"` |
-| `activo` | boolean | — | `true` o `false` |
+| `hard` | `boolean` | `false` | Si `true`, borra físicamente la fila (cascada) |
+| `force` | `boolean` | `false` | Si `true`, ignora restricciones (obligaciones activas / pagos confirmados) |
 
-**Ejemplo:**
+### Reglas / Restricciones
+
+| Caso | Comportamiento |
+|------|----------------|
+| Soft delete sobre usuario ya inactivo | Devuelve 200 con mensaje "ya estaba inactivo" (idempotente) |
+| Soft/Hard con obligaciones `activa` o `en_progreso` | **Bloqueado** con `INVALID_STATE_TRANSITION`. Usar `?force=true` para forzar |
+| Hard delete con pagos en estado `pagado`/`en_proceso` | **Bloqueado** por integridad financiera. Usar `?force=true` para forzar |
+
+### Ejemplo — Soft delete por teléfono
 ```
-GET /api/admin/clientes?page=1&limit=3&search=carlos
+DELETE /api/users?telefono=573046757626
 ```
 
-**Response (200) — Probado:**
+**Respuesta (200):**
 ```json
 {
   "ok": true,
   "data": {
-    "clientes": [
-      {
-        "id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-        "creado_en": "2026-02-20T03:59:07.226464+00:00",
-        "nombre": "Carlos Actualizado",
-        "apellido": "Frontend",
-        "correo": "carlos.test@email.com",
-        "telefono": "3001112233",
-        "direccion": null,
-        "plan": "tranquilidad",
-        "activo": true,
-        "ajustes_usuario": {
-          "id": "38a7136d-a1d3-4e60-85e0-fe4af589004d",
-          "tipo_notificacion": "whatsapp",
-          "umbral_monto_alto": 300000,
-          "recordatorios_activos": true,
-          "dias_anticipacion_recordatorio": 5,
-          "requiere_autorizacion_monto_alto": true
-        }
-      },
-      {
-        "id": "9a1ea3b4-f9a7-4990-a681-18c6447adc73",
-        "nombre": "Carlos",
-        "apellido": "Rodriguez",
-        "correo": "carlos@email.com",
-        "telefono": "3005555555",
-        "plan": "control",
-        "activo": true,
-        "ajustes_usuario": { "..." : "..." }
-      },
-      {
-        "id": "1e81f928-1640-4d8f-bd3b-e89d1bf573d3",
-        "nombre": "Juan Carlos",
-        "apellido": "Pérez González",
-        "correo": "juan.perez@email.com",
-        "telefono": "+573001234567",
-        "plan": "tranquilidad",
-        "activo": true,
-        "ajustes_usuario": { "..." : "..." }
-      }
-    ],
-    "total": 3,
-    "page": 1,
-    "limit": 3,
-    "total_pages": 1
+    "usuario_id": "49f3c602-80c8-4c59-9ee6-a005bbb86f08",
+    "telefono": "573046757626",
+    "modo": "soft",
+    "eliminado": true,
+    "activo": false
   },
   "error": null
 }
 ```
 
----
-
-### 10.3 `GET /api/admin/clientes/:telefono` — Perfil completo de un cliente
-
-> 👨‍💼 Retorna **toda** la información de un cliente: datos personales, resumen financiero, obligaciones con progreso, recargas, pagos y notificaciones recientes.
-
-**Headers:**
+### Ejemplo — Hard delete forzado
 ```
-x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
+DELETE /api/users/49f3c602-80c8-4c59-9ee6-a005bbb86f08?hard=true&force=true
 ```
 
-**Request:**
-```
-GET /api/admin/clientes/3001112233
-```
-
-**Response (200) — Probado:**
+**Respuesta (200):**
 ```json
 {
   "ok": true,
   "data": {
-    "usuario": {
-      "id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-      "creado_en": "2026-02-20T03:59:07.226464+00:00",
-      "nombre": "Carlos Actualizado",
-      "apellido": "Frontend",
-      "correo": "carlos.test@email.com",
-      "telefono": "3001112233",
-      "direccion": null,
-      "plan": "tranquilidad",
-      "activo": true,
-      "ajustes_usuario": {
-        "tipo_notificacion": "whatsapp",
-        "umbral_monto_alto": 300000,
-        "recordatorios_activos": true,
-        "dias_anticipacion_recordatorio": 5,
-        "requiere_autorizacion_monto_alto": true
-      }
-    },
-    "resumen": {
-      "total_obligaciones": 1,
-      "obligaciones_activas": 0,
-      "obligaciones_completadas": 1,
-      "total_recargas_aprobadas": 200000,
-      "total_pagos_realizados": 130000,
-      "saldo_disponible": 70000
-    },
-    "obligaciones": [
-      {
-        "id": "81b23515-aa5e-4566-9adf-fa027db91757",
-        "descripcion": "Servicios Febrero 2026",
-        "estado": "completada",
-        "periodo": "2026-02-01",
-        "completada_en": "2026-02-20T04:03:56.136+00:00",
-        "facturas": [
-          { "id": "92eb26d4-...", "servicio": "EPM Energía", "monto": 85000, "estado": "pagada" },
-          { "id": "989491ed-...", "servicio": "Agua EPM", "monto": 45000, "estado": "pagada" },
-          { "id": "07a7d72d-...", "servicio": "Gas Natural Dudosa", "monto": 32000, "estado": "rechazada" }
-        ],
-        "total_facturas": 3,
-        "facturas_pagadas": 2,
-        "monto_total": 162000,
-        "monto_pagado": 130000,
-        "progreso": 67
-      }
-    ],
-    "recargas": [
-      {
-        "id": "676b3c7e-0fbd-4d74-a6e5-3fcdc94be234",
-        "monto": 50000,
-        "estado": "rechazada",
-        "periodo": "2026-02-01",
-        "comprobante_url": "https://...",
-        "motivo_rechazo": "Comprobante borroso, no se puede verificar el monto"
-      },
-      {
-        "id": "974bad6d-c896-4ab3-a008-a64d071219b2",
-        "monto": 200000,
-        "estado": "aprobada",
-        "periodo": "2026-02-01",
-        "comprobante_url": "https://...",
-        "observaciones_admin": "Comprobante Nequi verificado, monto correcto"
-      }
-    ],
-    "pagos": [
-      {
-        "id": "0da485dd-a689-42fd-a88d-b3390fe3baac",
-        "monto_aplicado": 45000,
-        "estado": "pagado",
-        "ejecutado_en": "2026-02-20T04:03:56.082+00:00",
-        "proveedor_pago": "PSE",
-        "referencia_pago": "PSE-REF-002",
-        "facturas": { "servicio": "Agua EPM", "monto": 45000, "periodo": "2026-02-01" }
-      },
-      {
-        "id": "8491016e-ab24-4c60-85ad-35c5345e415e",
-        "monto_aplicado": 85000,
-        "estado": "pagado",
-        "ejecutado_en": "2026-02-20T04:03:24.998+00:00",
-        "proveedor_pago": "PSE",
-        "referencia_pago": "PSE-REF-001",
-        "comprobante_pago_url": "https://storage.example.com/pago_001.pdf",
-        "facturas": { "servicio": "EPM Energía", "monto": 85000, "periodo": "2026-02-01" }
-      }
-    ],
-    "notificaciones_recientes": [
-      {
-        "id": "c4e8c380-...",
-        "tipo": "recordatorio_recarga",
-        "estado": "pendiente",
-        "canal": "whatsapp",
-        "payload": { "mensaje": "Hola Carlos, recuerda recargar..." },
-        "creado_en": "2026-02-20T04:06:32.157013+00:00"
-      },
-      {
-        "id": "...",
-        "tipo": "pago_confirmado",
-        "estado": "pendiente",
-        "payload": { "monto": 45000, "servicio": "Agua EPM" }
-      }
-    ]
+    "usuario_id": "49f3c602-80c8-4c59-9ee6-a005bbb86f08",
+    "telefono": "573046757626",
+    "modo": "hard",
+    "eliminado": true
   },
   "error": null
 }
 ```
 
-**Response (404):**
+### Errores posibles
 ```json
-{ "ok": false, "data": null, "error": "Usuario no encontrado con ese teléfono" }
+{ "code": "NOT_FOUND", "message": "Usuario no encontrado" }
+{ "code": "INVALID_STATE_TRANSITION", "message": "El usuario tiene 2 obligación(es) activa(s)/en progreso. Use ?force=true para eliminar de todos modos." }
+{ "code": "INVALID_STATE_TRANSITION", "message": "El usuario tiene 5 pago(s) confirmado(s). Hard delete bloqueado por integridad financiera. Use ?force=true para forzar." }
+{ "code": "BAD_REQUEST", "message": "Debe indicar id o telefono" }
 ```
+
+### Auditoría
+Cada operación queda registrada en `audit_log` con `accion = "soft_delete_usuario"` o `"hard_delete_usuario"`, incluyendo el snapshot del usuario antes del cambio.
 
 ---
 
-### 10.4 `GET /api/admin/pagos` — Historial de pagos (paginado + filtros)
+## 🆕 5a. `DELETE /api/obligaciones/:id` — Eliminar obligación
 
-> 👨‍💼 Historial de todos los pagos de la plataforma con filtros opcionales. Incluye info de la factura y del usuario.
+### ¿Qué hace?
+Elimina una obligación (compromiso mensual). Es **hard delete** con restricciones estrictas para proteger datos financieros. Las solicitudes de recarga asociadas se eliminan automáticamente por CASCADE en BD; las facturas requieren cascada explícita con `?force=true`.
 
-**Headers:**
+### ¿Cuándo usarlo?
+- Para corregir obligaciones creadas por error que aún no tienen pagos.
+- Para limpiar periodos de prueba.
+
+### Auth
 ```
 x-admin-api-key: TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
 ```
+> Solo admin.
 
-**Query Params:**
+### Query params
 
 | Param | Tipo | Default | Descripción |
 |-------|------|---------|-------------|
-| `page` | number | `1` | Página actual |
-| `limit` | number | `20` | Registros por página (máx 100) |
-| `telefono` | string | — | Filtrar por usuario |
-| `estado` | string | — | `"en_proceso"`, `"pagado"`, `"fallido"` |
-| `periodo` | string | — | Filtrar por periodo (YYYY-MM-DD) |
+| `force` | `boolean` | `false` | Si `true`, elimina en cascada las facturas no protegidas |
 
-**Ejemplo:**
+### Reglas / Restricciones
+
+| Caso | Comportamiento |
+|------|----------------|
+| Existe ≥1 factura en estado `pagada` o `validada` | **Bloqueado SIEMPRE** (ni siquiera `force=true` lo permite) — protege integridad contable |
+| Hay facturas en otros estados (`extraida`, `en_revision`, `rechazada`) y `force=false` | Bloqueado con sugerencia de usar `?force=true` |
+| `force=true` y solo facturas no protegidas | Borra primero las facturas, luego la obligación |
+| Sin facturas asociadas | Elimina directamente |
+
+### Ejemplo — Sin facturas
 ```
-GET /api/admin/pagos?page=1&limit=5&estado=pagado
+DELETE /api/obligaciones/86a0c709-3ca9-41bc-9106-226cac7cf4ba
 ```
 
-**Response (200) — Probado:**
+**Respuesta (200):**
 ```json
 {
   "ok": true,
   "data": {
-    "pagos": [
-      {
-        "id": "0da485dd-a689-42fd-a88d-b3390fe3baac",
-        "creado_en": "2026-02-20T04:03:45.686151+00:00",
-        "usuario_id": "7f98125c-fbba-48b7-bc9f-b46e515f25ce",
-        "factura_id": "989491ed-9119-433f-b88d-01381b87b0dc",
-        "recarga_id": "974bad6d-c896-4ab3-a008-a64d071219b2",
-        "monto_aplicado": 45000,
-        "estado": "pagado",
-        "ejecutado_en": "2026-02-20T04:03:56.082+00:00",
-        "proveedor_pago": "PSE",
-        "referencia_pago": "PSE-REF-002",
-        "comprobante_pago_url": null,
-        "error_detalle": null,
-        "facturas": {
-          "monto": 45000,
-          "periodo": "2026-02-01",
-          "servicio": "Agua EPM",
-          "obligacion_id": "81b23515-aa5e-4566-9adf-fa027db91757"
-        },
-        "usuarios": {
-          "nombre": "Carlos Actualizado",
-          "apellido": "Frontend",
-          "telefono": "3001112233"
-        }
-      },
-      {
-        "id": "8491016e-ab24-4c60-85ad-35c5345e415e",
-        "creado_en": "2026-02-20T04:03:08.84605+00:00",
-        "monto_aplicado": 85000,
-        "estado": "pagado",
-        "ejecutado_en": "2026-02-20T04:03:24.998+00:00",
-        "proveedor_pago": "PSE",
-        "referencia_pago": "PSE-REF-001",
-        "comprobante_pago_url": "https://storage.example.com/pago_001.pdf",
-        "facturas": {
-          "monto": 85000,
-          "periodo": "2026-02-01",
-          "servicio": "EPM Energía",
-          "obligacion_id": "81b23515-aa5e-4566-9adf-fa027db91757"
-        },
-        "usuarios": {
-          "nombre": "Carlos Actualizado",
-          "apellido": "Frontend",
-          "telefono": "3001112233"
-        }
-      }
-    ],
-    "total": 9,
-    "page": 1,
-    "limit": 5,
-    "total_pages": 2
+    "obligacion_id": "86a0c709-3ca9-41bc-9106-226cac7cf4ba",
+    "eliminada": true,
+    "facturas_eliminadas": 0
   },
   "error": null
 }
 ```
 
----
-
-## 🔄 Máquinas de Estado
-
-> El sistema usa una máquina de transiciones que **protege** contra cambios inválidos. Si intentas una transición no permitida, recibirás **409 INVALID_STATE**.
-
-### Obligaciones
+### Ejemplo — Con facturas (force)
 ```
-activa ─────→ en_progreso ─────→ completada
-  │                                    
-  └──→ cancelada      cancelada ←──────┘
+DELETE /api/obligaciones/86a0c709-3ca9-41bc-9106-226cac7cf4ba?force=true
 ```
 
-### Facturas
-```
-         captura(ok)                captura(dudosa/fallida)
-              ↓                           ↓
-          extraida ───────────→ en_revision
-              │          ↘          │         ↘
-              ↓        rechazada    ↓       rechazada
-          validada              validada
-              ↓
-           pagada
-```
-
-### Recargas
-```
-reportar → en_validacion ──→ aprobada
-                          └─→ rechazada
+**Respuesta (200):**
+```json
+{
+  "ok": true,
+  "data": {
+    "obligacion_id": "86a0c709-3ca9-41bc-9106-226cac7cf4ba",
+    "eliminada": true,
+    "facturas_eliminadas": 3
+  },
+  "error": null
+}
 ```
 
-### Pagos
-```
-crear → en_proceso ──→ pagado
-                   └─→ fallido
-```
-
-### Revisiones Admin
-```
-(automática) → pendiente ──→ en_proceso ──→ resuelta
-                          └─→ descartada ←──┘
+### Errores posibles
+```json
+{ "code": "NOT_FOUND", "message": "Obligación no encontrada" }
+{ "code": "INVALID_STATE_TRANSITION", "message": "No se puede eliminar: la obligación tiene 1 factura(s) pagada(s)/validada(s). Esta acción está bloqueada por integridad financiera." }
+{ "code": "INVALID_STATE_TRANSITION", "message": "La obligación tiene 3 factura(s) asociada(s). Use ?force=true para eliminarlas en cascada." }
 ```
 
----
-
-## ⚡ Comportamientos Automáticos
-
-El sistema realiza acciones automáticas que debes tener en cuenta al consumir la API:
-
-| Evento disparador | Acción automática |
-|-------------------|-------------------|
-| Factura con `extraccion_estado: "dudosa"` o `"fallida"` | Crea **revisión admin** pendiente |
-| Recarga reportada | Crea **revisión admin** pendiente |
-| Admin valida factura | Crea notificación `factura_validada` |
-| Admin rechaza factura | Crea notificación `factura_rechazada` |
-| Admin aprueba recarga | Crea notificación `recarga_aprobada` |
-| Admin rechaza recarga | Crea notificación `recarga_rechazada` |
-| Pago confirmado | Crea notificación `pago_confirmado` |
-| Pago confirmado + última factura del periodo | Obligación → `completada` automáticamente |
-| Obligación completada | Crea notificación `obligacion_completada` |
-| Obligación completada | **Auto-crea** obligación del siguiente mes con mismos servicios |
-| Nueva obligación auto-creada | Crea notificación `nueva_obligacion` |
-| Al menos 1 factura pagada en obligación | Obligación cambia a `en_progreso` |
-| Admin aprueba/rechaza recarga | Cierra revisión admin asociada |
-| Admin valida/rechaza factura | Cierra revisión admin asociada |
-
----
-
-## 🎬 Flujo Completo — Caso Real con Datos de Prueba
-
-> Este flujo fue ejecutado el **19 de febrero de 2026** con datos reales contra la base de datos de Supabase.
-
-### Paso 1 — Crear usuario
-```
-POST /api/users/upsert
-→ 201: usuario_id = 7f98125c-fbba-48b7-bc9f-b46e515f25ce
-```
-
-### Paso 2 — Cambiar plan a "tranquilidad"
-```
-PUT /api/users/plan
-→ 200: plan control → tranquilidad
-```
-
-### Paso 3 — Crear obligación "Servicios Febrero 2026"
-```
-POST /api/obligaciones
-→ 201: obligacion_id = 81b23515-aa5e-4566-9adf-fa027db91757
-```
-
-### Paso 4 — Capturar 3 facturas
-```
-POST /api/facturas/captura × 3
-→ EPM Energía $85,000 (ok → extraida)
-→ Agua EPM $45,000 (ok → extraida)
-→ Gas Natural $32,000 (dudosa → en_revision + revisión admin creada)
-```
-
-### Paso 5 — Reportar 2 recargas
-```
-POST /api/recargas/reportar × 2
-→ $200,000 Nequi (en_validacion + revisión admin)
-→ $50,000 Bancolombia (en_validacion + revisión admin)
-```
-
-### Paso 6 — Admin valida/rechaza facturas
-```
-PUT /api/facturas/.../validar → EPM Energía validada ✅ (notificación auto)
-PUT /api/facturas/.../validar → Agua EPM validada ✅ (notificación auto)
-PUT /api/facturas/.../rechazar → Gas rechazada ❌ (notificación auto)
-```
-
-### Paso 7 — Admin gestiona recargas
-```
-PUT /api/recargas/.../aprobar → $200,000 aprobada ✅ (notificación auto)
-PUT /api/recargas/.../rechazar → $50,000 rechazada ❌ (notificación auto)
-```
-
-### Paso 8 — Verificar saldo
-```
-GET /api/disponible?telefono=3001112233&periodo=2026-02-01
-→ recargas: $200,000 | pagos: $0 | disponible: $200,000
-```
-
-### Paso 9 — Crear y confirmar pagos
-```
-POST /api/pagos/crear → EPM $85,000 → en_proceso
-PUT /api/pagos/.../confirmar → pagado ✅ (obligación: en_progreso)
-
-POST /api/pagos/crear → Agua $45,000 → en_proceso
-PUT /api/pagos/.../confirmar → pagado ✅ (obligación: completada!)
-  → Auto-crea obligación de Marzo 2026
-  → Notificaciones: obligacion_completada + nueva_obligacion
-```
-
-### Paso 10 — Saldo final
-```
-GET /api/disponible?telefono=3001112233&periodo=2026-02-01
-→ recargas: $200,000 | pagos: $130,000 | disponible: $70,000
-```
-
-### Paso 11 — Bot consume notificaciones
-```
-GET /api/notificaciones/pendientes/3001112233 → 8 pendientes
-PUT /api/notificaciones/:id → {"estado":"enviada"} (una por una)
-POST /api/notificaciones/batch-enviadas → {"ids":[...]} (o batch)
-```
-
-### ✅ Resultado
-| Concepto | Valor |
-|----------|-------|
-| Facturas pagadas | 2 ($130,000) |
-| Factura rechazada | 1 (Gas Natural) |
-| Saldo disponible | $70,000 |
-| Obligación Feb | ✅ Completada |
-| Obligación Mar | 🆕 Auto-creada |
-| Notificaciones generadas | 8 automáticas |
-
----
-
-## 📊 Tabla Resumen — 34 Endpoints
-
-| # | Método | Endpoint | Auth | Descripción |
-|---|--------|----------|------|-------------|
-| 1 | `GET` | `/api/health` | 🔓 | Health check |
-| 2 | `POST` | `/api/users/upsert` | 🤖👨‍💼 | Crear/actualizar usuario |
-| 3 | `PUT` | `/api/users/plan` | 🤖👨‍💼 | Cambiar plan |
-| 4 | `GET` | `/api/users/by-telefono/:tel` | 👨‍💼 | Buscar usuario por teléfono |
-| 5 | `GET` | `/api/users` | 👨‍💼 | Listar usuarios (paginado) |
-| 6 | `POST` | `/api/obligaciones` | 🤖👨‍💼 | Crear obligación |
-| 7 | `GET` | `/api/obligaciones?telefono=` | 🤖👨‍💼 | Listar obligaciones de usuario |
-| 8 | `GET` | `/api/obligaciones/:id` | 🤖👨‍💼 | Detalle de obligación |
-| 9 | `PUT` | `/api/obligaciones/:id` | 👨‍💼 | Actualizar obligación |
-| 10 | `POST` | `/api/facturas/captura` | 🤖 | Registrar factura |
-| 11 | `GET` | `/api/facturas/obligacion/:id` | 🤖👨‍💼 | Facturas de una obligación |
-| 12 | `PUT` | `/api/facturas/:id/validar` | 👨‍💼 | Validar factura |
-| 13 | `PUT` | `/api/facturas/:id/rechazar` | 👨‍💼 | Rechazar factura |
-| 14 | `POST` | `/api/recargas/reportar` | 🤖 | Reportar recarga |
-| 15 | `PUT` | `/api/recargas/:id/aprobar` | 👨‍💼 | Aprobar recarga |
-| 16 | `PUT` | `/api/recargas/:id/rechazar` | 👨‍💼 | Rechazar recarga |
-| 17 | `GET` | `/api/disponible` | 🤖👨‍💼 | Consultar saldo disponible |
-| 18 | `POST` | `/api/pagos/crear` | 👨‍💼 | Crear pago |
-| 19 | `PUT` | `/api/pagos/:id/confirmar` | 👨‍💼 | Confirmar pago |
-| 20 | `PUT` | `/api/pagos/:id/fallar` | 👨‍💼 | Marcar pago fallido |
-| 21 | `GET` | `/api/revisiones` | 👨‍💼 | Listar revisiones |
-| 22 | `PUT` | `/api/revisiones/:id/tomar` | 👨‍💼 | Tomar revisión |
-| 23 | `PUT` | `/api/revisiones/:id/descartar` | 👨‍💼 | Descartar revisión |
-| 24 | `POST` | `/api/notificaciones` | 👨‍💼 | Crear notificación |
-| 25 | `POST` | `/api/notificaciones/masiva` | 👨‍💼 | Notificación masiva |
-| 26 | `GET` | `/api/notificaciones` | 👨‍💼 | Listar notificaciones |
-| 27 | `GET` | `/api/notificaciones/pendientes/:tel` | 🤖👨‍💼 | Pendientes de usuario |
-| 28 | `PUT` | `/api/notificaciones/:id` | 🤖👨‍💼 | Actualizar notificación |
-| 29 | `POST` | `/api/notificaciones/batch-enviadas` | 🤖👨‍💼 | Batch marcar enviadas |
-| 30 | `GET` | `/api/admin/dashboard` | 👨‍💼 | Dashboard métricas |
-| 31 | `GET` | `/api/admin/clientes` | 👨‍💼 | Listar clientes |
-| 32 | `GET` | `/api/admin/clientes/:tel` | 👨‍💼 | Perfil completo cliente |
-| 33 | `GET` | `/api/admin/pagos` | 👨‍💼 | Historial pagos |
-
-**Leyenda:** 🔓 Sin auth · 🤖 Bot (`x-bot-api-key`) · 👨‍💼 Admin (`x-admin-api-key`) · 🤖👨‍💼 Ambos
+### Auditoría
+Cada eliminación se registra en `audit_log` con `accion = "eliminar_obligacion"` y snapshot completo de la obligación + cantidad de facturas eliminadas.

@@ -14,6 +14,8 @@ import type {
   Obligacion,
   CreateObligacionPayload,
   UpdateObligacionPayload,
+  DeleteObligacionData,
+  DeleteUsuarioData,
   Factura,
   FacturaEnriquecida,
   ListarTodasLasFacturasData,
@@ -128,6 +130,33 @@ export const listUsuarios = (params?: { page?: number; limit?: number; search?: 
   return request<ListUsuariosData>(`/users?${sp.toString()}`);
 };
 
+// DELETE /api/users/:id  ó  /api/users?telefono=XXX
+// Por defecto soft delete; pasar { hard: true } para borrado físico.
+export const deleteUsuario = (
+  identifier: { id?: string; telefono?: string },
+  options?: { hard?: boolean }
+) => {
+  const sp = new URLSearchParams();
+  if (options?.hard) sp.set('hard', 'true');
+  const qs = sp.toString();
+  const suffix = qs ? `?${qs}` : '';
+  if (identifier.id) {
+    return request<DeleteUsuarioData>(`/users/${encodeURIComponent(identifier.id)}${suffix}`, {
+      method: 'DELETE',
+    });
+  }
+  if (identifier.telefono) {
+    const sp2 = new URLSearchParams({ telefono: identifier.telefono });
+    if (options?.hard) sp2.set('hard', 'true');
+    return request<DeleteUsuarioData>(`/users?${sp2.toString()}`, { method: 'DELETE' });
+  }
+  return Promise.resolve({
+    ok: false,
+    data: null,
+    error: { code: 'VALIDATION_ERROR', message: 'Debes indicar id o telefono', details: null },
+  } as ApiResponse<DeleteUsuarioData>);
+};
+
 // ─── 3. Obligaciones (4 endpoints) ───────────────────────────────────────────
 // POST /api/obligaciones
 export const createObligacion = (payload: CreateObligacionPayload) =>
@@ -153,6 +182,16 @@ export const updateObligacion = (id: string, payload: UpdateObligacionPayload) =
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+
+// DELETE /api/obligaciones/:id  (?force=true para cascada en facturas)
+export const deleteObligacion = (id: string, options?: { force?: boolean }) => {
+  const sp = new URLSearchParams();
+  if (options?.force) sp.set('force', 'true');
+  const qs = sp.toString();
+  return request<DeleteObligacionData>(`/obligaciones/${id}${qs ? `?${qs}` : ''}`, {
+    method: 'DELETE',
+  });
+};
 
 // ─── 4. Facturas (4 endpoints) ───────────────────────────────────────────────
 // POST /api/facturas/captura

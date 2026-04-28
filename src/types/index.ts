@@ -156,6 +156,22 @@ export interface UpdateObligacionPayload {
   estado?: 'activa' | 'en_progreso' | 'completada' | 'cancelada';
 }
 
+// DELETE /api/obligaciones/:id
+export interface DeleteObligacionData {
+  id: string;
+  eliminado: boolean;
+  cascada?: boolean;
+  facturas_eliminadas?: number;
+}
+
+// DELETE /api/users/:id  o  /api/users?telefono=XXX
+export interface DeleteUsuarioData {
+  id?: string;
+  telefono?: string;
+  eliminado: boolean;
+  hard?: boolean;
+}
+
 // ─── Factura Captura ──────────────────────────────────────────────────────────
 export interface CapturaFacturaPayload {
   telefono: string;

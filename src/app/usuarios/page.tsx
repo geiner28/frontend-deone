@@ -10,7 +10,7 @@ import Toast, { ToastType } from '@/components/ui/Toast';
 import UpdatePlanModal from '@/components/modals/UpdatePlanModal';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import EmptyState from '@/components/ui/EmptyState';
-import { upsertUsuario, getUsuarioByTelefono } from '@/lib/api';
+import { upsertUsuario, getUsuarioByTelefono, deleteUsuario } from '@/lib/api';
 import type { Usuario, Plan } from '@/types';
 import { formatDateTime, formatDate, getErrorMsg } from '@/lib/utils';
 import { useNotifications, notifFromAction } from '@/contexts/NotificationContext';
@@ -23,6 +23,7 @@ import {
   CalendarDaysIcon,
   ShieldCheckIcon,
   UsersIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 export default function UsuariosPage() {
@@ -43,6 +44,11 @@ export default function UsuariosPage() {
   // Modal actualizar plan
   const [openPlan, setOpenPlan] = useState(false);
   const [planUpdateTelefono, setPlanUpdateTelefono] = useState<string>('');
+
+  // Eliminar usuario
+  const [openDelete, setOpenDelete] = useState(false);
+  const [deleteHard, setDeleteHard] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
@@ -88,6 +94,23 @@ export default function UsuariosPage() {
     }));
     if (usuario?.telefono === planUpdateTelefono) {
       setUsuario((u) => u ? { ...u, plan: data.plan_nuevo } : u);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!usuario) return;
+    setDeleting(true);
+    const res = await deleteUsuario({ id: usuario.id }, { hard: deleteHard });
+    setDeleting(false);
+    if (res.ok) {
+      showToast(`Usuario ${deleteHard ? 'eliminado permanentemente' : 'desactivado'}`, 'success');
+      setOpenDelete(false);
+      setDeleteHard(false);
+      setUsuario(null);
+      setSearched(false);
+      setSearchTel('');
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo eliminar el usuario'), 'error');
     }
   };
 
@@ -181,6 +204,9 @@ export default function UsuariosPage() {
               }}>
                 Editar datos
               </Button>
+              <Button size="sm" variant="danger" onClick={() => setOpenDelete(true)}>
+                <TrashIcon className="h-3.5 w-3.5" /> Eliminar
+              </Button>
             </div>
           </Card>
 
@@ -229,6 +255,42 @@ export default function UsuariosPage() {
         currentPlan={(usuario && usuario.telefono === planUpdateTelefono ? usuario.plan : 'control') as Plan}
         onSuccess={handleUpdatePlan}
       />
+
+      {/* Modal: Eliminar usuario */}
+      <Modal
+        open={openDelete}
+        onClose={() => { if (!deleting) { setOpenDelete(false); setDeleteHard(false); } }}
+        title="Eliminar usuario"
+      >
+        <div className="space-y-4">
+          {usuario && (
+            <p className="text-sm text-gray-700">
+              ¿Seguro que deseas eliminar a <strong>{usuario.nombre} {usuario.apellido}</strong> ({usuario.telefono})?
+            </p>
+          )}
+          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+            Por defecto se realiza un <strong>soft delete</strong> (el usuario se desactiva y conserva su historial).
+            Activa &ldquo;borrado físico&rdquo; solo si necesitas eliminarlo permanentemente.
+          </div>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={deleteHard}
+              onChange={(e) => setDeleteHard(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+            />
+            Borrado físico (irreversible)
+          </label>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" disabled={deleting} onClick={() => { setOpenDelete(false); setDeleteHard(false); }}>
+              Cancelar
+            </Button>
+            <Button variant="danger" loading={deleting} onClick={handleDelete}>
+              <TrashIcon className="h-4 w-4" /> Eliminar
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

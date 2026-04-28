@@ -9,7 +9,7 @@ import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
 import EmptyState from '@/components/ui/EmptyState';
 import { FullPageSpinner } from '@/components/ui/Spinner';
-import { createObligacion, getObligaciones } from '@/lib/api';
+import { createObligacion, getObligaciones, deleteObligacion } from '@/lib/api';
 import type { Obligacion } from '@/types';
 import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
 import { useNotifications, notifFromAction } from '@/contexts/NotificationContext';
@@ -19,6 +19,7 @@ import {
   DocumentTextIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 export default function ObligacionesPage() {
@@ -68,6 +69,26 @@ export default function ObligacionesPage() {
   const totalMonto = obligaciones.reduce((s, o) => s + o.monto_total, 0);
   const totalPagado = obligaciones.reduce((s, o) => s + o.monto_pagado, 0);
   const totalFacturas = obligaciones.reduce((s, o) => s + o.total_facturas, 0);
+
+  // Eliminar obligación
+  const [deleteTarget, setDeleteTarget] = useState<Obligacion | null>(null);
+  const [deleteForce, setDeleteForce] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const res = await deleteObligacion(deleteTarget.id, { force: deleteForce });
+    setDeleting(false);
+    if (res.ok) {
+      showToast('Obligación eliminada', 'success');
+      setObligaciones((prev) => prev.filter((o) => o.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      setDeleteForce(false);
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo eliminar la obligación'), 'error');
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -120,7 +141,7 @@ export default function ObligacionesPage() {
       {obligaciones.length > 0 && !searchLoading && (
         <div className="space-y-3 stagger-children">
           {obligaciones.map((o) => (
-            <ObligacionCard key={o.id} obligacion={o} />
+            <ObligacionCard key={o.id} obligacion={o} onDelete={() => setDeleteTarget(o)} />
           ))}
         </div>
       )}
@@ -136,11 +157,47 @@ export default function ObligacionesPage() {
           </div>
         </div>
       </Modal>
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => { if (!deleting) { setDeleteTarget(null); setDeleteForce(false); } }}
+        title="Eliminar obligación"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-700">
+            ¿Seguro que deseas eliminar la obligación
+            {deleteTarget ? <> <strong>{deleteTarget.descripcion || deleteTarget.servicio}</strong></> : ''}?
+          </p>
+          {deleteTarget && deleteTarget.total_facturas > 0 && (
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+              Esta obligación tiene <strong>{deleteTarget.total_facturas}</strong> factura{deleteTarget.total_facturas !== 1 ? 's' : ''} asociadas.
+              Si alguna está pagada o validada, el backend bloqueará la eliminación a menos que actives “forzar cascada”.
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={deleteForce}
+              onChange={(e) => setDeleteForce(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+            />
+            Forzar cascada (elimina también las facturas asociadas)
+          </label>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" disabled={deleting} onClick={() => { setDeleteTarget(null); setDeleteForce(false); }}>
+              Cancelar
+            </Button>
+            <Button variant="danger" loading={deleting} onClick={handleDelete}>
+              <TrashIcon className="h-4 w-4" /> Eliminar
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
-function ObligacionCard({ obligacion: o }: { obligacion: Obligacion }) {
+function ObligacionCard({ obligacion: o, onDelete }: { obligacion: Obligacion; onDelete?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const pct = o.monto_total > 0 ? Math.round((o.monto_pagado / o.monto_total) * 100) : 0;
   const isComplete = o.estado === 'completada' || pct === 100;
@@ -155,7 +212,18 @@ function ObligacionCard({ obligacion: o }: { obligacion: Obligacion }) {
               {o.periodicidad} · Periodo: {formatDate(o.periodo)}
             </p>
           </div>
-          <Badge label={o.estado} variant={variantFromEstado(o.estado)} />
+          <div className="flex items-center gap-2">
+            <Badge label={o.estado} variant={variantFromEstado(o.estado)} />
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                title="Eliminar obligación"
+                className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <TrashIcon className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
