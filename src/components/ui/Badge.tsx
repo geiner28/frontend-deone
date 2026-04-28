@@ -27,21 +27,31 @@ export function variantFromEstado(estado: string): Variant {
     case 'activa':
     case 'aprobada':
     case 'pagada':
+    case 'completada':
     case 'running':
     case 'ok':
       return 'success';
     case 'en_validacion':
+    case 'en_progreso':
     case 'pendiente':
     case 'extraida':
       return 'warning';
     case 'inactiva':
     case 'rechazada':
+    case 'cancelada':
     case 'vencida':
       return 'error';
     default:
       return 'neutral';
   }
 }
+
+export const ESTADOS_OBLIGACION: { value: string; label: string }[] = [
+  { value: 'activa', label: 'Activa' },
+  { value: 'en_progreso', label: 'En progreso' },
+  { value: 'completada', label: 'Completada' },
+  { value: 'cancelada', label: 'Cancelada' },
+];
 
 export default function Badge({ label, variant = 'neutral', dot = true }: BadgeProps) {
   return (

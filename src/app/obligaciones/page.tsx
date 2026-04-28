@@ -9,7 +9,7 @@ import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
 import EmptyState from '@/components/ui/EmptyState';
 import { FullPageSpinner } from '@/components/ui/Spinner';
-import { createObligacion, getObligaciones, deleteObligacion } from '@/lib/api';
+import { createObligacion, getObligaciones, deleteObligacion, updateObligacion } from '@/lib/api';
 import type { Obligacion } from '@/types';
 import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
 import { useNotifications, notifFromAction } from '@/contexts/NotificationContext';
@@ -21,6 +21,7 @@ import {
   ChevronUpIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
+import { ESTADOS_OBLIGACION } from '@/components/ui/Badge';
 
 export default function ObligacionesPage() {
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
@@ -197,10 +198,22 @@ export default function ObligacionesPage() {
   );
 }
 
-function ObligacionCard({ obligacion: o, onDelete }: { obligacion: Obligacion; onDelete?: () => void }) {
+function ObligacionCard({ obligacion: initialObligacion, onDelete }: { obligacion: Obligacion; onDelete?: () => void }) {
+  const [o, setO] = useState(initialObligacion);
   const [expanded, setExpanded] = useState(false);
+  const [changingEstado, setChangingEstado] = useState(false);
   const pct = o.monto_total > 0 ? Math.round((o.monto_pagado / o.monto_total) * 100) : 0;
   const isComplete = o.estado === 'completada' || pct === 100;
+
+  const handleEstadoChange = async (nuevoEstado: string) => {
+    if (nuevoEstado === o.estado) return;
+    setChangingEstado(true);
+    const res = await updateObligacion(o.id, { estado: nuevoEstado as 'activa' | 'en_progreso' | 'completada' | 'cancelada' });
+    setChangingEstado(false);
+    if (res.ok && res.data) {
+      setO(res.data);
+    }
+  };
 
   return (
     <Card className="!p-0 overflow-hidden">
@@ -213,6 +226,17 @@ function ObligacionCard({ obligacion: o, onDelete }: { obligacion: Obligacion; o
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <select
+              value={o.estado}
+              disabled={changingEstado}
+              onChange={(e) => handleEstadoChange(e.target.value)}
+              title="Cambiar estado de la obligación"
+              className="text-xs border border-gray-200 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#ff8d2d] disabled:opacity-50 cursor-pointer"
+            >
+              {ESTADOS_OBLIGACION.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
             <Badge label={o.estado} variant={variantFromEstado(o.estado)} />
             {onDelete && (
               <button

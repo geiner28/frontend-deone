@@ -149,11 +149,18 @@ export interface CreateObligacionPayload {
   telefono: string;
   descripcion: string;
   periodo: string;
+  servicio?: string;
+  tipo_referencia?: string;
+  numero_referencia?: string;
+  pagina_pago?: string;
+  periodicidad?: string;
 }
 
 export interface UpdateObligacionPayload {
   descripcion?: string;
   estado?: 'activa' | 'en_progreso' | 'completada' | 'cancelada';
+  pagina_pago?: string;
+  periodicidad?: string;
 }
 
 // DELETE /api/obligaciones/:id
@@ -208,6 +215,7 @@ export interface ValidarFacturaPayload {
   referencia_pago: string;
   tipo_referencia: string;
   etiqueta: string;
+  periodo?: string;
   archivo_url?: string;
   observaciones_admin?: string;
 }
@@ -412,6 +420,7 @@ export interface NotificacionAPI {
   usuario_id: string;
   tipo: string;
   canal: string;
+  destinatario?: 'admin' | 'usuario';
   payload: Record<string, unknown>;
   estado: 'pendiente' | 'enviada' | 'fallida' | 'leida';
   ultimo_error: string | null;

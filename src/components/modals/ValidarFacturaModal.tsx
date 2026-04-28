@@ -6,7 +6,7 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import NotificationDisplay from '@/components/NotificationDisplay';
-import { validarFactura } from '@/lib/api';
+import { validarFactura, getEtiquetasDistinct } from '@/lib/api';
 import { formatCurrency, getErrorMsg } from '@/lib/utils';
 import type { Factura } from '@/types';
 import Toast, { ToastType } from '@/components/ui/Toast';
@@ -45,6 +45,19 @@ const ValidarFacturaModal = ({
   const [successData, setSuccessData] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [etiquetasCatalog, setEtiquetasCatalog] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const res = await getEtiquetasDistinct();
+      if (!cancelled && res.ok && res.data) {
+        setEtiquetasCatalog(res.data.etiquetas || []);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
 
   useEffect(() => {
     if (factura && open) {
@@ -125,6 +138,7 @@ const ValidarFacturaModal = ({
     const res = await validarFactura(factura.id, {
       monto: Number(form.monto),
       servicio: form.servicio,
+      // periodo se hereda de la obligación; no se envía aquí
       fecha_vencimiento: form.fecha_vencimiento,
       fecha_emision: form.fecha_emision,
       referencia_pago: form.referencia_pago,
@@ -268,7 +282,18 @@ const ValidarFacturaModal = ({
               label="Servicio"
               required
               value={form.servicio}
-              onChange={(e) => setForm((f) => ({ ...f, servicio: e.target.value }))}
+              onChange={(e) => {
+                const servicio = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  servicio,
+                  // Auto-fill etiqueta only when it matches the previous servicio slug or is empty
+                  etiqueta:
+                    !f.etiqueta || f.etiqueta === f.servicio.toLowerCase().replace(/\s+/g, '_')
+                      ? servicio.toLowerCase().replace(/\s+/g, '_')
+                      : f.etiqueta,
+                }));
+              }}
               error={fieldErrors.servicio}
             />
 
@@ -308,11 +333,17 @@ const ValidarFacturaModal = ({
             <Input
               label="Etiqueta"
               required
+              list="etiquetas-catalog-validar"
               value={form.etiqueta}
               onChange={(e) => setForm((f) => ({ ...f, etiqueta: e.target.value }))}
               placeholder="Ej: Factura Marzo"
               error={fieldErrors.etiqueta}
             />
+            <datalist id="etiquetas-catalog-validar">
+              {etiquetasCatalog.map((et) => (
+                <option key={et} value={et} />
+              ))}
+            </datalist>
 
             <div className="grid grid-cols-2 gap-3">
               <Input

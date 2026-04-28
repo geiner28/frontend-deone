@@ -105,6 +105,8 @@ const PagarFacturaModal = ({
       const data = confRes.data as any;
       setSuccessData(data);
       showToast('Pago confirmado exitosamente', 'success');
+      // El backend dispara automáticamente la campaña `obligacion_cumplida`
+      // cuando obligacion_estado pasa a 'completada' (PUT /pagos/:id/confirmar).
       await onSuccess();
     } else {
       const error = getErrorMsg(confRes, 'Error al confirmar pago');

@@ -219,6 +219,10 @@ export const capturaFactura = (payload: CapturaFacturaPayload) =>
     body: JSON.stringify(payload),
   });
 
+// GET /api/facturas/etiquetas-distinct — Catálogo de etiquetas existentes
+export const getEtiquetasDistinct = () =>
+  request<{ total: number; etiquetas: string[] }>('/facturas/etiquetas-distinct');
+
 // GET /api/facturas/obligacion/:obligacion_id
 export const getFacturasByObligacion = (obligacionId: string) =>
   request<Factura[]>(`/facturas/obligacion/${obligacionId}`);
@@ -484,6 +488,9 @@ export const getAdminNotificaciones = (filters?: {
   periodo?: string;
   desde?: string;
   hasta?: string;
+  canal?: string;
+  canal_grupo?: 'bot' | 'admin';
+  destinatario?: 'admin' | 'usuario';
   page?: number;
   limit?: number;
 }) => {
@@ -494,6 +501,9 @@ export const getAdminNotificaciones = (filters?: {
   if (filters?.periodo) sp.set('periodo', filters.periodo);
   if (filters?.desde) sp.set('desde', filters.desde);
   if (filters?.hasta) sp.set('hasta', filters.hasta);
+  if (filters?.canal) sp.set('canal', filters.canal);
+  if (filters?.canal_grupo) sp.set('canal_grupo', filters.canal_grupo);
+  if (filters?.destinatario) sp.set('destinatario', filters.destinatario);
   if (filters?.page) sp.set('page', String(filters.page));
   if (filters?.limit) sp.set('limit', String(filters.limit));
   return request<{
@@ -511,12 +521,18 @@ export const getAdminNotificacionesEstadisticas = (filters?: {
   periodo?: string;
   desde?: string;
   hasta?: string;
+  canal?: string;
+  canal_grupo?: 'bot' | 'admin';
+  destinatario?: 'admin' | 'usuario';
 }) => {
   const sp = new URLSearchParams();
   if (filters?.usuario_id) sp.set('usuario_id', filters.usuario_id);
   if (filters?.periodo) sp.set('periodo', filters.periodo);
   if (filters?.desde) sp.set('desde', filters.desde);
   if (filters?.hasta) sp.set('hasta', filters.hasta);
+  if (filters?.canal) sp.set('canal', filters.canal);
+  if (filters?.canal_grupo) sp.set('canal_grupo', filters.canal_grupo);
+  if (filters?.destinatario) sp.set('destinatario', filters.destinatario);
   return request<{
     estadisticas: {
       total: number;
@@ -574,12 +590,18 @@ export const generarNotificacionesMock = () =>
 export const getAdminAlertasAdmin = (filters?: {
   desde?: string;
   hasta?: string;
+  canal?: string;
+  canal_grupo?: 'bot' | 'admin';
+  destinatario?: 'admin' | 'usuario';
   page?: number;
   limit?: number;
 }) => {
   const sp = new URLSearchParams();
   if (filters?.desde) sp.set('desde', filters.desde);
   if (filters?.hasta) sp.set('hasta', filters.hasta);
+  if (filters?.canal) sp.set('canal', filters.canal);
+  if (filters?.canal_grupo) sp.set('canal_grupo', filters.canal_grupo);
+  if (filters?.destinatario) sp.set('destinatario', filters.destinatario);
   if (filters?.page) sp.set('page', String(filters.page));
   if (filters?.limit) sp.set('limit', String(filters.limit));
   return request<{

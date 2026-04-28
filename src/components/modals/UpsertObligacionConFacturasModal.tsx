@@ -9,7 +9,8 @@ import Badge from '@/components/ui/Badge';
 import { 
   createObligacion, 
   getUsuarioByTelefono, 
-  capturaFactura 
+  capturaFactura,
+  getEtiquetasDistinct,
 } from '@/lib/api';
 import type { 
   Obligacion, 
@@ -67,7 +68,15 @@ export default function UpsertObligacionConFacturasModal({
   const [obligacionForm, setObligacionForm] = useState({
     descripcion: '',
     periodo: '',
+    servicio: '',
+    tipo_referencia: '',
+    numero_referencia: '',
+    pagina_pago: '',
+    periodicidad: '',
   });
+
+  // Catálogo de etiquetas existentes (autocompletar)
+  const [etiquetasCatalog, setEtiquetasCatalog] = useState<string[]>([]);
 
   // ─── Sección 3: Facturas ──────────────────────────────────────────────────────
   const [section3Expandido, setSection3Expandido] = useState(false);
@@ -138,6 +147,30 @@ export default function UpsertObligacionConFacturasModal({
       setTelefono(initialTelefono);
     }
   }, [open, mode, initialTelefono]);
+
+  // ─── Catálogo de etiquetas (autocompletar) ──────────────────────────────────
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const res = await getEtiquetasDistinct();
+      if (!cancelled && res.ok && res.data) {
+        setEtiquetasCatalog(res.data.etiquetas || []);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
+  // Auto-fill etiqueta from servicio when etiqueta hasn't been manually changed
+  const handleServicioChange = (servicio: string) => {
+    setFacturaForm((f) => ({
+      ...f,
+      servicio,
+      etiqueta: f.etiqueta && f.etiqueta !== f.servicio.toLowerCase().replace(/\s+/g, '_')
+        ? f.etiqueta
+        : servicio.toLowerCase().replace(/\s+/g, '_'),
+    }));
+  };
 
   // ─── Funciones de Sección 3 ───────────────────────────────────────────────────
   const handleAgregarFactura = () => {
@@ -230,6 +263,11 @@ export default function UpsertObligacionConFacturasModal({
         telefono: telefono.trim(),
         descripcion: obligacionForm.descripcion.trim(),
         periodo: obligacionForm.periodo,
+        servicio: obligacionForm.servicio.trim() || undefined,
+        tipo_referencia: obligacionForm.tipo_referencia.trim() || undefined,
+        numero_referencia: obligacionForm.numero_referencia.trim() || undefined,
+        pagina_pago: obligacionForm.pagina_pago.trim() || undefined,
+        periodicidad: obligacionForm.periodicidad.trim() || undefined,
       });
 
       if (!resObligacion.ok || !resObligacion.data) {
@@ -282,7 +320,7 @@ export default function UpsertObligacionConFacturasModal({
     setMensajeErrorUsuario('');
 
     setSection2Expandido(false);
-    setObligacionForm({ descripcion: '', periodo: '' });
+    setObligacionForm({ descripcion: '', periodo: '', servicio: '', tipo_referencia: '', numero_referencia: '', pagina_pago: '', periodicidad: '' });
 
     setSection3Expandido(false);
     setFacturasAgregadas([]);
@@ -445,6 +483,53 @@ export default function UpsertObligacionConFacturasModal({
                   
                 />
 
+                {/* Campos opcionales agregados (backend 005) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Servicio (opcional)"
+                    placeholder="Ej: EPM Energía"
+                    value={obligacionForm.servicio}
+                    onChange={(e) => setObligacionForm((f) => ({ ...f, servicio: e.target.value }))}
+                  />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Periodicidad (opcional)</label>
+                    <select
+                      value={obligacionForm.periodicidad}
+                      onChange={(e) => setObligacionForm((f) => ({ ...f, periodicidad: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                    >
+                      <option value="">— Sin definir —</option>
+                      <option value="mensual">Mensual</option>
+                      <option value="bimestral">Bimestral</option>
+                      <option value="trimestral">Trimestral</option>
+                      <option value="anual">Anual</option>
+                      <option value="unica">Única</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Tipo de referencia (opcional)"
+                    placeholder="factura"
+                    value={obligacionForm.tipo_referencia}
+                    onChange={(e) => setObligacionForm((f) => ({ ...f, tipo_referencia: e.target.value }))}
+                  />
+                  <Input
+                    label="Número de referencia (opcional)"
+                    placeholder="EPM-2026-04"
+                    value={obligacionForm.numero_referencia}
+                    onChange={(e) => setObligacionForm((f) => ({ ...f, numero_referencia: e.target.value }))}
+                  />
+                </div>
+
+                <Input
+                  label="Página de pago (opcional)"
+                  placeholder="https://..."
+                  value={obligacionForm.pagina_pago}
+                  onChange={(e) => setObligacionForm((f) => ({ ...f, pagina_pago: e.target.value }))}
+                />
+
                 {isSection2Valid && (
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
                     <p className="text-sm font-medium text-emerald-700">
@@ -549,9 +634,7 @@ export default function UpsertObligacionConFacturasModal({
                         required
                         placeholder="Ej: EPM Energía"
                         value={facturaForm.servicio}
-                        onChange={(e) =>
-                          setFacturaForm((f) => ({ ...f, servicio: e.target.value }))
-                        }
+                        onChange={(e) => handleServicioChange(e.target.value)}
                       />
 
                       <div className="grid grid-cols-2 gap-3">
@@ -589,11 +672,17 @@ export default function UpsertObligacionConFacturasModal({
                         label="Etiqueta"
                         required
                         placeholder="Ej: Factura Marzo"
+                        list="etiquetas-catalog"
                         value={facturaForm.etiqueta}
                         onChange={(e) =>
                           setFacturaForm((f) => ({ ...f, etiqueta: e.target.value }))
                         }
                       />
+                      <datalist id="etiquetas-catalog">
+                        {etiquetasCatalog.map((et) => (
+                          <option key={et} value={et} />
+                        ))}
+                      </datalist>
 
                       <div className="grid grid-cols-2 gap-3">
                         <Input
