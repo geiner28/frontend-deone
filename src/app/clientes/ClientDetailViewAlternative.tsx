@@ -23,7 +23,7 @@ import PagarFacturaModal from '@/components/modals/PagarFacturaModal';
 import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import type { AdminClientePerfilData, Factura, Plan, ProgramacionRecargas } from '@/types';
 import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
-import { getAdminClientePerfil, validarFactura, rechazarFactura, deleteUsuario, deleteObligacion } from '@/lib/api';
+import { getAdminClientePerfil, validarFactura, rechazarFactura, deleteUsuario, deleteObligacion, deleteFactura } from '@/lib/api';
 import Toast from '@/components/ui/Toast';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -170,6 +170,8 @@ export default function ClientDetailViewAlternative({
   const [openDeleteObligacionModal, setOpenDeleteObligacionModal] = useState(false);
   const [deleteObligacionForce, setDeleteObligacionForce] = useState<Record<string, boolean>>({});
   const [deletingObligacionId, setDeletingObligacionId] = useState<string | null>(null);
+  const [facturaToDelete, setFacturaToDelete] = useState<Factura | null>(null);
+  const [deletingFactura, setDeletingFactura] = useState(false);
 
   // ─── FACTURA ACTION STATES ────────────────────────────────────────────────────
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -265,6 +267,27 @@ export default function ClientDetailViewAlternative({
       showToast(getErrorMsg(res, 'No se pudo eliminar la obligación'), 'error');
     }
   }, [deleteObligacionForce, perfil?.usuario.telefono, selectedMonth]);
+
+  // ─── HANDLER: Eliminar Factura ─────────────────────────────────────────────
+  const handleDeleteFactura = useCallback(async () => {
+    if (!facturaToDelete?.id) return;
+    setDeletingFactura(true);
+    const res = await deleteFactura(facturaToDelete.id);
+    setDeletingFactura(false);
+    if (res.ok) {
+      const pagos = res.data?.pagos_eliminados;
+      showToast(
+        pagos
+          ? `Factura eliminada (${pagos} pago${pagos !== 1 ? 's' : ''} revertido${pagos !== 1 ? 's' : ''})`
+          : 'Factura eliminada',
+        'success'
+      );
+      setFacturaToDelete(null);
+      await refreshFacturas();
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo eliminar la factura'), 'error');
+    }
+  }, [facturaToDelete, refreshFacturas]);
 
   // Manejar cambio de mes
   const handleMonthChange = useCallback(
@@ -581,14 +604,14 @@ export default function ClientDetailViewAlternative({
                       perfil?.programacion_recargas?.cantidad_recargas
                     );
 
-                    const hasActions = factura.estado === 'extraida' || factura.estado === 'validada' || factura.estado === 'pendiente';
+                    const hasActions = true; // Eliminar siempre disponible
 
-                    let actionCount = 0;
+                    let actionCount = 1; // +1 por Eliminar
                     if (factura.estado === 'extraida') {
-                      actionCount = 2;
+                      actionCount += 2;
                       if (factura.origen === 'auto') actionCount++;
                     } else if (factura.estado === 'validada' || factura.estado === 'pendiente') {
-                      actionCount = 1;
+                      actionCount += 1;
                     }
 
                     const getEstadoClasses = (estado: string) => {
@@ -744,6 +767,17 @@ export default function ClientDetailViewAlternative({
                                         Pagar
                                       </button>
                                     )}
+                                    <div className="border-t border-gray-100 my-1" />
+                                    <button
+                                      onClick={() => {
+                                        setFacturaToDelete(factura);
+                                        setOpenMenuId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <TrashIcon className="w-4 h-4" />
+                                      Eliminar
+                                    </button>
                                   </div>
                                 </div>
                               )}
@@ -957,6 +991,39 @@ export default function ClientDetailViewAlternative({
                   className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─ DELETE FACTURA MODAL ──────────────────────────────────────────── */}
+        {facturaToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!deletingFactura) setFacturaToDelete(null); }}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-semibold text-gray-900">Eliminar factura</h3>
+              <p className="text-sm text-gray-700">
+                ¿Seguro que deseas eliminar la factura
+                {facturaToDelete.etiqueta ? <> <strong>{facturaToDelete.etiqueta}</strong></> : ''}
+                {facturaToDelete.referencia_pago ? <> (ref. {facturaToDelete.referencia_pago})</> : ''}?
+              </p>
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                Estado actual: <strong>{facturaToDelete.estado}</strong>. Si tiene pagos asociados se eliminarán y se devolverá el saldo. Los contadores de la obligación se recalcularán automáticamente.
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  disabled={deletingFactura}
+                  onClick={() => setFacturaToDelete(null)}
+                  className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={deletingFactura}
+                  onClick={handleDeleteFactura}
+                  className="px-4 py-2 text-sm rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  {deletingFactura ? 'Eliminando…' : (<><TrashIcon className="h-4 w-4" /> Eliminar</>)}
                 </button>
               </div>
             </div>

@@ -196,6 +196,15 @@ export const deleteObligacion = (id: string, options?: { force?: boolean }) => {
   });
 };
 
+// DELETE /api/facturas/:id
+// Elimina una factura en cualquier estado. El backend maneja la cascada
+// (pagos asociados + revisiones) y recalcula contadores de la obligación.
+export const deleteFactura = (id: string) =>
+  request<{ id: string; eliminado: boolean; pagos_eliminados?: number }>(
+    `/facturas/${encodeURIComponent(id)}`,
+    { method: 'DELETE' }
+  );
+
 // ─── 4. Facturas (4 endpoints) ───────────────────────────────────────────────
 // POST /api/facturas/captura
 export const capturaFactura = (payload: CapturaFacturaPayload) =>
