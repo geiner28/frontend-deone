@@ -9,6 +9,7 @@ import {
   MapPinIcon,
   PlusIcon,
   DocumentTextIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 import Badge from '@/components/ui/Badge';
 import UpdatePlanModal from '@/components/modals/UpdatePlanModal';
@@ -21,8 +22,8 @@ import RechazarFacturaModal from '@/components/modals/RechazarFacturaModal';
 import PagarFacturaModal from '@/components/modals/PagarFacturaModal';
 import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import type { AdminClientePerfilData, Factura, Plan, ProgramacionRecargas } from '@/types';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { getAdminClientePerfil, validarFactura, rechazarFactura } from '@/lib/api';
+import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
+import { getAdminClientePerfil, validarFactura, rechazarFactura, deleteUsuario, deleteObligacion } from '@/lib/api';
 import Toast from '@/components/ui/Toast';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -162,6 +163,14 @@ export default function ClientDetailViewAlternative({
   const [openObligacionModal, setOpenObligacionModal] = useState(false);
   const [openReportarRecargaModal, setOpenReportarRecargaModal] = useState(false);
 
+  // ─── DELETE STATES ────────────────────────────────────────────────────────────
+  const [openDeleteUserModal, setOpenDeleteUserModal] = useState(false);
+  const [deleteUserHard, setDeleteUserHard] = useState(false);
+  const [deletingUser, setDeletingUser] = useState(false);
+  const [openDeleteObligacionModal, setOpenDeleteObligacionModal] = useState(false);
+  const [deleteObligacionForce, setDeleteObligacionForce] = useState<Record<string, boolean>>({});
+  const [deletingObligacionId, setDeletingObligacionId] = useState<string | null>(null);
+
   // ─── FACTURA ACTION STATES ────────────────────────────────────────────────────
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null);
@@ -222,6 +231,41 @@ export default function ClientDetailViewAlternative({
   const handleAproximarSuccess = useCallback(async () => {
     await refreshFacturas();
   }, [refreshFacturas]);
+
+  // ─── HANDLER: Eliminar Usuario ─────────────────────────────────────────────
+  const handleDeleteUsuario = useCallback(async () => {
+    if (!perfil) return;
+    setDeletingUser(true);
+    const res = await deleteUsuario({ id: perfil.usuario.id }, { hard: deleteUserHard });
+    setDeletingUser(false);
+    if (res.ok) {
+      showToast(`Cliente ${deleteUserHard ? 'eliminado permanentemente' : 'desactivado'}`, 'success');
+      setOpenDeleteUserModal(false);
+      setDeleteUserHard(false);
+      onBack();
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo eliminar el cliente'), 'error');
+    }
+  }, [perfil, deleteUserHard, onBack]);
+
+  // ─── HANDLER: Eliminar Obligación ──────────────────────────────────────────
+  const handleDeleteObligacion = useCallback(async (obligacionId: string) => {
+    setDeletingObligacionId(obligacionId);
+    const res = await deleteObligacion(obligacionId, { force: !!deleteObligacionForce[obligacionId] });
+    setDeletingObligacionId(null);
+    if (res.ok) {
+      showToast('Obligación eliminada', 'success');
+      try {
+        const r2 = await getAdminClientePerfil(perfil?.usuario.telefono || '', selectedMonth);
+        if (r2.ok && r2.data) setPerfil(r2.data);
+      } catch (err) {
+        console.error('Error recargando perfil tras eliminar obligación:', err);
+      }
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo eliminar la obligación'), 'error');
+    }
+  }, [deleteObligacionForce, perfil?.usuario.telefono, selectedMonth]);
+
   // Manejar cambio de mes
   const handleMonthChange = useCallback(
     async (newMonth: string) => {
@@ -416,6 +460,20 @@ export default function ClientDetailViewAlternative({
             >
               <DocumentTextIcon className="h-4 w-4" />
               Registrar recarga
+            </button>
+            <button
+              onClick={() => setOpenDeleteObligacionModal(true)}
+              className="mt-2 bg-transparent border border-red-700/50 text-red-300 hover:border-red-500 hover:text-red-200 px-3 py-2 rounded-md text-sm text-left transition-all flex items-center gap-2"
+            >
+              <TrashIcon className="h-4 w-4" />
+              Eliminar obligación
+            </button>
+            <button
+              onClick={() => setOpenDeleteUserModal(true)}
+              className="mt-2 bg-transparent border border-red-700/50 text-red-300 hover:border-red-500 hover:text-red-200 px-3 py-2 rounded-md text-sm text-left transition-all flex items-center gap-2"
+            >
+              <TrashIcon className="h-4 w-4" />
+              Eliminar cliente
             </button>
           </div>
         </div>
@@ -803,6 +861,105 @@ export default function ClientDetailViewAlternative({
             }
           }}
         />
+
+        {/* ─ DELETE USER MODAL ──────────────────────────────────────────────── */}
+        {openDeleteUserModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!deletingUser) { setOpenDeleteUserModal(false); setDeleteUserHard(false); } }}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-semibold text-gray-900">Eliminar cliente</h3>
+              <p className="text-sm text-gray-700">
+                ¿Seguro que deseas eliminar a <strong>{u.nombre} {u.apellido}</strong> ({u.telefono})?
+              </p>
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                Por defecto se realiza un <strong>soft delete</strong> (el cliente se desactiva y conserva su historial).
+                Activa &ldquo;borrado físico&rdquo; solo si necesitas eliminarlo permanentemente.
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={deleteUserHard}
+                  onChange={(e) => setDeleteUserHard(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                />
+                Borrado físico (irreversible)
+              </label>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  disabled={deletingUser}
+                  onClick={() => { setOpenDeleteUserModal(false); setDeleteUserHard(false); }}
+                  className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={deletingUser}
+                  onClick={handleDeleteUsuario}
+                  className="px-4 py-2 text-sm rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  {deletingUser ? 'Eliminando…' : (<><TrashIcon className="h-4 w-4" /> Eliminar</>)}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─ DELETE OBLIGACION MODAL ────────────────────────────────────────── */}
+        {openDeleteObligacionModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!deletingObligacionId) { setOpenDeleteObligacionModal(false); } }}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Eliminar obligación</h3>
+                <button
+                  onClick={() => { if (!deletingObligacionId) setOpenDeleteObligacionModal(false); }}
+                  className="text-gray-400 hover:text-gray-600"
+                >✕</button>
+              </div>
+              <p className="text-sm text-gray-600">
+                Selecciona la obligación del mes que deseas eliminar. Activa &ldquo;forzar cascada&rdquo; si necesitas eliminar también las facturas asociadas.
+              </p>
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                {(perfil?.obligaciones_mes || []).length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No hay obligaciones para este mes.</p>
+                )}
+                {(perfil?.obligaciones_mes || []).map((ob) => (
+                  <div key={ob.id} className="border border-gray-200 rounded-lg p-3 flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{ob.descripcion || ob.servicio}</p>
+                      <p className="text-xs text-gray-500">
+                        {ob.total_facturas} factura{ob.total_facturas !== 1 ? 's' : ''} · {formatCurrency(ob.monto_total)} · Estado: {ob.estado}
+                      </p>
+                      <label className="flex items-center gap-2 text-xs text-gray-600 mt-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!deleteObligacionForce[ob.id]}
+                          onChange={(e) => setDeleteObligacionForce((prev) => ({ ...prev, [ob.id]: e.target.checked }))}
+                          className="h-3.5 w-3.5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                        Forzar cascada (elimina facturas)
+                      </label>
+                    </div>
+                    <button
+                      disabled={!!deletingObligacionId}
+                      onClick={() => handleDeleteObligacion(ob.id)}
+                      className="shrink-0 px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    >
+                      {deletingObligacionId === ob.id ? 'Eliminando…' : (<><TrashIcon className="h-3.5 w-3.5" /> Eliminar</>)}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end pt-2">
+                <button
+                  disabled={!!deletingObligacionId}
+                  onClick={() => setOpenDeleteObligacionModal(false)}
+                  className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ─ FACTURA ACTION MODALS ─────────────────────────────────────────────── */}
         {selectedFactura && perfil && (
