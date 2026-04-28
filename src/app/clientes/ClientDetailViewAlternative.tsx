@@ -873,6 +873,8 @@ export default function ClientDetailViewAlternative({
               <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
                 Por defecto se realiza un <strong>soft delete</strong> (el cliente se desactiva y conserva su historial).
                 Activa &ldquo;borrado físico&rdquo; solo si necesitas eliminarlo permanentemente.
+                <br />
+                <strong>Cascada automática:</strong> se eliminarán también sus obligaciones, facturas, recargas y pagos.
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                 <input

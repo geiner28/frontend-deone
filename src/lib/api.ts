@@ -132,15 +132,17 @@ export const listUsuarios = (params?: { page?: number; limit?: number; search?: 
 
 // DELETE /api/users/:id  ó  /api/users?telefono=XXX
 // Por defecto soft delete; pasar { hard: true } para borrado físico.
+// { force: true } ignora restricciones (obligaciones activas / pagos confirmados).
 export const deleteUsuario = (
   identifier: { id?: string; telefono?: string },
-  options?: { hard?: boolean }
+  options?: { hard?: boolean; force?: boolean }
 ) => {
   const sp = new URLSearchParams();
   if (options?.hard) sp.set('hard', 'true');
-  const qs = sp.toString();
-  const suffix = qs ? `?${qs}` : '';
+  if (options?.force) sp.set('force', 'true');
   if (identifier.id) {
+    const qs = sp.toString();
+    const suffix = qs ? `?${qs}` : '';
     return request<DeleteUsuarioData>(`/users/${encodeURIComponent(identifier.id)}${suffix}`, {
       method: 'DELETE',
     });
@@ -148,6 +150,7 @@ export const deleteUsuario = (
   if (identifier.telefono) {
     const sp2 = new URLSearchParams({ telefono: identifier.telefono });
     if (options?.hard) sp2.set('hard', 'true');
+    if (options?.force) sp2.set('force', 'true');
     return request<DeleteUsuarioData>(`/users?${sp2.toString()}`, { method: 'DELETE' });
   }
   return Promise.resolve({
