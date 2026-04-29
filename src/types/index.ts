@@ -41,6 +41,10 @@ export interface Usuario {
   plan: Plan;
   activo: boolean;
   ajustes_usuario: AjustesUsuario;
+  // 🆕 Backend pendiente (BACKEND_REQUIREMENTS.md §7)
+  tipo_identificacion?: 'CC' | 'NIT' | null;
+  numero_identificacion?: string | null;
+  ciudad?: string | null;
 }
 
 export interface UpsertUsuarioPayload {
@@ -87,6 +91,10 @@ export interface UpsertUsuarioAdminPayload {
   correo?: string;
   direccion?: string;
   plan?: Plan;
+  // 🆕 Backend pendiente (BACKEND_REQUIREMENTS.md §7)
+  tipo_identificacion?: 'CC' | 'NIT';
+  numero_identificacion?: string;
+  ciudad?: string;
 }
 
 export interface UpsertUsuarioAdminData {
@@ -154,6 +162,9 @@ export interface CreateObligacionPayload {
   numero_referencia?: string;
   pagina_pago?: string;
   periodicidad?: string;
+  // 🆕 Backend pendiente (BACKEND_REQUIREMENTS.md §7)
+  receptor?: string;
+  grupo?: 1 | 2;
 }
 
 export interface UpdateObligacionPayload {

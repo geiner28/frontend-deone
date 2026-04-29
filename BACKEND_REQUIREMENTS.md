@@ -170,4 +170,35 @@ GET /api/facturas/etiquetas-distinct
 
 ---
 
+## 7. Campos adicionales para nuevos modales (mockup 2026-04)
+
+> Estos campos ya están enviados desde el frontend (rediseño de los modales **Agregar usuario** y **Agregar obligación**) marcados como `🆕 Backend pendiente`. El backend debe persistirlos y devolverlos en los endpoints correspondientes.
+
+### 7.1 Tabla `usuarios`
+| Campo | Tipo | Notas |
+|---|---|---|
+| `tipo_identificacion` | `enum('CC','NIT')` o `varchar(8)` | Selector en UI: `CC` / `NIT`. Opcional al inicio. |
+| `numero_identificacion` | `varchar(32)` | Número del documento. Opcional al inicio. |
+| `ciudad` | `varchar(80)` | Ciudad de residencia (la UI envía datalist con catálogo de ciudades colombianas). |
+
+**Endpoints afectados:**
+- `POST /api/usuarios/admin-upsert` → aceptar `tipo_identificacion`, `numero_identificacion`, `ciudad` y persistirlos.
+- `GET /api/usuarios/:telefono` → devolverlos en el objeto usuario.
+
+### 7.2 Tabla `obligaciones`
+| Campo | Tipo | Notas |
+|---|---|---|
+| `receptor` | `varchar(120)` | Distinto de `servicio`. Es el **proveedor/empresa al que se le paga** (p. ej. "EPM"). El frontend lo separa de la etiqueta. Requerido en el nuevo flujo. |
+| `grupo` | `smallint` (1 o 2) | Clasificación interna de la obligación. Opcional. UI: select "Grupo 1" / "Grupo 2". |
+
+**Endpoints afectados:**
+- `POST /api/obligaciones` → aceptar `receptor` y `grupo`, persistirlos.
+- `GET /api/obligaciones/...` y `GET /api/clientes/:telefono` → incluirlos en la respuesta para que la UI pueda mostrarlos.
+
+### 7.3 Comportamiento esperado
+- Si los campos llegan vacíos / null el backend debe permitirlo (no romper compatibilidad con obligaciones/usuarios ya existentes).
+- `descripcion` y `periodo` de la obligación siguen siendo derivados automáticamente por el frontend a partir de la primera factura (`receptor — Mes Año` y `YYYY-MM-01`); no se piden al usuario en el nuevo modal.
+
+---
+
 **Acción requerida:** Confirmar cuáles puntos se aprueban del backend y un estimado para ajustar el frontend a medida que se liberen.

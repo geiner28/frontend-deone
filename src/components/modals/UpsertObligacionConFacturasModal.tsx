@@ -29,13 +29,13 @@ import {
 interface Factura {
   id: string; // temporal para UI
   servicio: string;
-  monto: string;
-  referencia_pago: string;
-  tipo_referencia: string;
-  etiqueta: string;
+  monto: number;
+  etiqueta?: string;
+  referencia_pago?: string;
+  tipo_referencia?: string;
   fecha_emision: string;
   fecha_vencimiento: string;
-  archivo_url: string;
+  estado?: string;
 }
 
 interface UpsertObligacionConFacturasModalProps {
@@ -66,31 +66,25 @@ export default function UpsertObligacionConFacturasModal({
   // ─── Sección 2: Obligación ────────────────────────────────────────────────────
   const [section2Expandido, setSection2Expandido] = useState(false);
   const [obligacionForm, setObligacionForm] = useState({
-    descripcion: '',
-    periodo: '',
-    servicio: '',
+    etiqueta: '',
+    receptor: '',
     tipo_referencia: '',
     numero_referencia: '',
-    pagina_pago: '',
-    periodicidad: '',
+    pagina_pago: '', // "Portal de pago" en UI
+    grupo: '' as '' | '1' | '2',
   });
 
   // Catálogo de etiquetas existentes (autocompletar)
   const [etiquetasCatalog, setEtiquetasCatalog] = useState<string[]>([]);
 
-  // ─── Sección 3: Facturas ──────────────────────────────────────────────────────
+  // ─── Sección 3: Factura (única) ──────────────────────────────────────────────
   const [section3Expandido, setSection3Expandido] = useState(false);
   const [facturasAgregadas, setFacturasAgregadas] = useState<Factura[]>([]);
   const [facturaFormVisible, setFacturaFormVisible] = useState(true);
   const [facturaForm, setFacturaForm] = useState({
-    servicio: '',
     monto: '',
-    referencia_pago: '',
-    tipo_referencia: '',
-    etiqueta: '',
     fecha_emision: '',
     fecha_vencimiento: '',
-    archivo_url: '',
   });
 
   const showToast = (message: string, type: ToastType) => {
@@ -161,34 +155,10 @@ export default function UpsertObligacionConFacturasModal({
     return () => { cancelled = true; };
   }, [open]);
 
-  // Auto-fill etiqueta from servicio when etiqueta hasn't been manually changed
-  const handleServicioChange = (servicio: string) => {
-    setFacturaForm((f) => ({
-      ...f,
-      servicio,
-      etiqueta: f.etiqueta && f.etiqueta !== f.servicio.toLowerCase().replace(/\s+/g, '_')
-        ? f.etiqueta
-        : servicio.toLowerCase().replace(/\s+/g, '_'),
-    }));
-  };
-
   // ─── Funciones de Sección 3 ───────────────────────────────────────────────────
   const handleAgregarFactura = () => {
-    // Validaciones
-    if (!facturaForm.servicio.trim()) {
-      showToast('Ingresa el nombre del servicio', 'error');
-      return;
-    }
     if (!facturaForm.monto || Number(facturaForm.monto) <= 0) {
       showToast('Ingresa un monto válido (> 0)', 'error');
-      return;
-    }
-    if (!facturaForm.referencia_pago.trim()) {
-      showToast('Ingresa la referencia de pago', 'error');
-      return;
-    }
-    if (!facturaForm.etiqueta.trim()) {
-      showToast('Ingresa una etiqueta', 'error');
       return;
     }
     if (!facturaForm.fecha_emision) {
@@ -200,25 +170,26 @@ export default function UpsertObligacionConFacturasModal({
       return;
     }
 
-    // Agregar a lista temporal (sin guardar aún en la BD)
+    // Servicio/etiqueta/referencias se heredan de la obligación
     const newFactura: Factura = {
       id: `temp-${Date.now()}`,
-      ...facturaForm,
+      servicio: obligacionForm.receptor || obligacionForm.etiqueta || 'Factura',
+      monto: Number(facturaForm.monto),
+      etiqueta: obligacionForm.etiqueta || undefined,
+      referencia_pago: obligacionForm.numero_referencia || undefined,
+      tipo_referencia: obligacionForm.tipo_referencia || undefined,
+      fecha_emision: facturaForm.fecha_emision,
+      fecha_vencimiento: facturaForm.fecha_vencimiento,
+      estado: 'pendiente',
     };
 
     setFacturasAgregadas([...facturasAgregadas, newFactura]);
     showToast('Factura agregada al listado', 'success');
 
-    // Limpiar formulario y ocultar inputs
     setFacturaForm({
-      servicio: '',
       monto: '',
-      referencia_pago: '',
-      tipo_referencia: '',
-      etiqueta: '',
       fecha_emision: '',
       fecha_vencimiento: '',
-      archivo_url: '',
     });
     setFacturaFormVisible(false);
   };
@@ -240,16 +211,18 @@ export default function UpsertObligacionConFacturasModal({
       return;
     }
 
-    if (!obligacionForm.descripcion.trim()) {
-      showToast('Ingresa una descripción para la obligación', 'error');
+    if (!obligacionForm.etiqueta.trim()) {
+      showToast('Ingresa la etiqueta', 'error');
       return;
     }
-
-    if (!obligacionForm.periodo) {
-      showToast('Selecciona el período de la obligación', 'error');
+    if (!obligacionForm.receptor.trim()) {
+      showToast('Ingresa el receptor', 'error');
       return;
     }
-
+    if (!obligacionForm.tipo_referencia.trim() || !obligacionForm.numero_referencia.trim()) {
+      showToast('Completa el tipo y número de referencia', 'error');
+      return;
+    }
     if (facturasAgregadas.length === 0) {
       showToast('Debes agregar al menos una factura', 'error');
       return;
@@ -258,16 +231,26 @@ export default function UpsertObligacionConFacturasModal({
     setLoading(true);
 
     try {
+      // Derivar periodo (YYYY-MM-01) y descripción automáticamente desde la primera factura
+      const primeraFactura = facturasAgregadas[0];
+      const fechaRef = primeraFactura.fecha_emision || new Date().toISOString().split('T')[0];
+      const [y, m] = fechaRef.split('-');
+      const periodoDerivado = `${y}-${m}-01`;
+      const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+      const descripcionDerivada = `${obligacionForm.receptor.trim()} — ${meses[Number(m)-1]} ${y}`;
+
       // PASO 1: Crear obligación
       const resObligacion = await createObligacion({
         telefono: telefono.trim(),
-        descripcion: obligacionForm.descripcion.trim(),
-        periodo: obligacionForm.periodo,
-        servicio: obligacionForm.servicio.trim() || undefined,
+        descripcion: descripcionDerivada,
+        periodo: periodoDerivado,
+        servicio: obligacionForm.receptor.trim() || undefined,
         tipo_referencia: obligacionForm.tipo_referencia.trim() || undefined,
         numero_referencia: obligacionForm.numero_referencia.trim() || undefined,
         pagina_pago: obligacionForm.pagina_pago.trim() || undefined,
-        periodicidad: obligacionForm.periodicidad.trim() || undefined,
+        // 🆕 Backend pendiente (BACKEND_REQUIREMENTS.md §7)
+        receptor: obligacionForm.receptor.trim() || undefined,
+        grupo: obligacionForm.grupo ? (Number(obligacionForm.grupo) as 1 | 2) : undefined,
       });
 
       if (!resObligacion.ok || !resObligacion.data) {
@@ -276,25 +259,24 @@ export default function UpsertObligacionConFacturasModal({
 
       const obligacionCreada = resObligacion.data;
 
-      // PASO 2: Crear todas las facturas en orden
+      // PASO 2: Crear todas las facturas en orden (servicio/etiqueta/referencias se heredan de la obligación)
       for (const factura of facturasAgregadas) {
         const resFactura = await capturaFactura({
           telefono: telefono.trim(),
           obligacion_id: obligacionCreada.id,
-          servicio: factura.servicio,
+          servicio: obligacionForm.receptor.trim(),
           monto: Number(factura.monto),
-          referencia_pago: factura.referencia_pago || undefined,
-          tipo_referencia: factura.tipo_referencia || undefined,
-          etiqueta: factura.etiqueta || undefined,
+          referencia_pago: obligacionForm.numero_referencia.trim() || undefined,
+          tipo_referencia: obligacionForm.tipo_referencia.trim() || undefined,
+          etiqueta: obligacionForm.etiqueta.trim() || undefined,
           fecha_emision: factura.fecha_emision || undefined,
           fecha_vencimiento: factura.fecha_vencimiento || undefined,
-          archivo_url: factura.archivo_url || undefined,
           origen: 'manual',
           extraccion_estado: 'ok',
         });
 
         if (!resFactura.ok) {
-          throw new Error(`Error al guardar factura ${factura.servicio}: ${getErrorMsg(resFactura)}`);
+          throw new Error(`Error al guardar factura: ${getErrorMsg(resFactura)}`);
         }
       }
 
@@ -320,27 +302,27 @@ export default function UpsertObligacionConFacturasModal({
     setMensajeErrorUsuario('');
 
     setSection2Expandido(false);
-    setObligacionForm({ descripcion: '', periodo: '', servicio: '', tipo_referencia: '', numero_referencia: '', pagina_pago: '', periodicidad: '' });
+    setObligacionForm({ etiqueta: '', receptor: '', tipo_referencia: '', numero_referencia: '', pagina_pago: '', grupo: '' });
 
     setSection3Expandido(false);
     setFacturasAgregadas([]);
     setFacturaFormVisible(true);
     setFacturaForm({
-      servicio: '',
       monto: '',
-      referencia_pago: '',
-      tipo_referencia: '',
-      etiqueta: '',
       fecha_emision: '',
       fecha_vencimiento: '',
-      archivo_url: '',
     });
 
     onClose();
   };
 
   const isSection1Valid = section1Estado === 'exito' && usuarioEncontrado;
-  const isSection2Valid = obligacionForm.descripcion.trim() && obligacionForm.periodo;
+  const isSection2Valid = !!(
+    obligacionForm.etiqueta.trim() &&
+    obligacionForm.receptor.trim() &&
+    obligacionForm.tipo_referencia.trim() &&
+    obligacionForm.numero_referencia.trim()
+  );
   const isSection3Valid = facturasAgregadas.length > 0;
 
   return (
@@ -462,73 +444,84 @@ export default function UpsertObligacionConFacturasModal({
 
             {section2Expandido && isSection1Valid && (
               <div className="px-4 py-4 border-t border-[#e5e7eb] space-y-3">
-                <Input
-                  label="Descripción"
-                  required
-                  placeholder="Ej: Pagos Febrero 2026"
-                  value={obligacionForm.descripcion}
-                  onChange={(e) =>
-                    setObligacionForm((f) => ({ ...f, descripcion: e.target.value }))
-                  }
-                />
-
-                <Input
-                  label="Período (Mes/Año)"
-                  required
-                  type="month"
-                  value={obligacionForm.periodo}
-                  onChange={(e) =>
-                    setObligacionForm((f) => ({ ...f, periodo: e.target.value }))
-                  }
-                  
-                />
-
-                {/* Campos opcionales agregados (backend 005) */}
+                {/* Etiqueta + Receptor */}
                 <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="Servicio (opcional)"
-                    placeholder="Ej: EPM Energía"
-                    value={obligacionForm.servicio}
-                    onChange={(e) => setObligacionForm((f) => ({ ...f, servicio: e.target.value }))}
-                  />
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Periodicidad (opcional)</label>
-                    <select
-                      value={obligacionForm.periodicidad}
-                      onChange={(e) => setObligacionForm((f) => ({ ...f, periodicidad: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
-                    >
-                      <option value="">— Sin definir —</option>
-                      <option value="mensual">Mensual</option>
-                      <option value="bimestral">Bimestral</option>
-                      <option value="trimestral">Trimestral</option>
-                      <option value="anual">Anual</option>
-                      <option value="unica">Única</option>
-                    </select>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-[#1d212b]">
+                      Etiqueta <span className="text-[#ef4444] ml-1">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      list="etiquetas-catalog-obligacion"
+                      placeholder="Seleccione"
+                      value={obligacionForm.etiqueta}
+                      onChange={(e) => setObligacionForm((f) => ({ ...f, etiqueta: e.target.value }))}
+                      className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
+                    />
+                    <datalist id="etiquetas-catalog-obligacion">
+                      {etiquetasCatalog.map((et) => <option key={et} value={et} />)}
+                    </datalist>
                   </div>
+                  <Input
+                    label="Receptor"
+                    required
+                    placeholder="Placeholder"
+                    value={obligacionForm.receptor}
+                    onChange={(e) => setObligacionForm((f) => ({ ...f, receptor: e.target.value }))}
+                  />
                 </div>
 
+                {/* Tipo de referencia + Número de referencia */}
                 <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-[#1d212b]">
+                      Tipo de referencia <span className="text-[#ef4444] ml-1">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      list="tipos-referencia-sugeridos"
+                      placeholder="Seleccione"
+                      value={obligacionForm.tipo_referencia}
+                      onChange={(e) => setObligacionForm((f) => ({ ...f, tipo_referencia: e.target.value }))}
+                      className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
+                    />
+                    <datalist id="tipos-referencia-sugeridos">
+                      <option value="factura" />
+                      <option value="contrato" />
+                      <option value="pedido" />
+                      <option value="convenio" />
+                    </datalist>
+                  </div>
                   <Input
-                    label="Tipo de referencia (opcional)"
-                    placeholder="factura"
-                    value={obligacionForm.tipo_referencia}
-                    onChange={(e) => setObligacionForm((f) => ({ ...f, tipo_referencia: e.target.value }))}
-                  />
-                  <Input
-                    label="Número de referencia (opcional)"
-                    placeholder="EPM-2026-04"
+                    label="Número de referencia"
+                    required
+                    placeholder="Placeholder"
                     value={obligacionForm.numero_referencia}
                     onChange={(e) => setObligacionForm((f) => ({ ...f, numero_referencia: e.target.value }))}
                   />
                 </div>
 
-                <Input
-                  label="Página de pago (opcional)"
-                  placeholder="https://..."
-                  value={obligacionForm.pagina_pago}
-                  onChange={(e) => setObligacionForm((f) => ({ ...f, pagina_pago: e.target.value }))}
-                />
+                {/* Portal de pago + Grupo */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Portal de pago"
+                    placeholder="Seleccione"
+                    value={obligacionForm.pagina_pago}
+                    onChange={(e) => setObligacionForm((f) => ({ ...f, pagina_pago: e.target.value }))}
+                  />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-[#1d212b]">Grupo</label>
+                    <select
+                      value={obligacionForm.grupo}
+                      onChange={(e) => setObligacionForm((f) => ({ ...f, grupo: e.target.value as '' | '1' | '2' }))}
+                      className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="1">Grupo 1</option>
+                      <option value="2">Grupo 2</option>
+                    </select>
+                  </div>
+                </div>
 
                 {isSection2Valid && (
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
@@ -625,68 +618,13 @@ export default function UpsertObligacionConFacturasModal({
                 {facturaFormVisible && (
                   <div className="pt-2 border-t border-[#e5e7eb]">
                     <p className="text-sm font-medium text-[#1d212b] mb-3">
-                      {facturasAgregadas.length > 0 ? 'Nueva factura' : 'Primera factura'}
+                      {facturasAgregadas.length > 0 ? 'Nueva factura' : 'Datos de la factura'}
                     </p>
 
                     <div className="space-y-3">
-                      <Input
-                        label="Servicio"
-                        required
-                        placeholder="Ej: EPM Energía"
-                        value={facturaForm.servicio}
-                        onChange={(e) => handleServicioChange(e.target.value)}
-                      />
-
                       <div className="grid grid-cols-2 gap-3">
                         <Input
-                          label="Monto (COP)"
-                          required
-                          type="number"
-                          placeholder="150000"
-                          value={facturaForm.monto}
-                          onChange={(e) =>
-                            setFacturaForm((f) => ({ ...f, monto: e.target.value }))
-                          }
-                        />
-                        <Input
-                          label="Referencia de Pago"
-                          required
-                          placeholder="TX-PSE-123456"
-                          value={facturaForm.referencia_pago}
-                          onChange={(e) =>
-                            setFacturaForm((f) => ({ ...f, referencia_pago: e.target.value }))
-                          }
-                        />
-                      </div>
-
-                      <Input
-                        label="Tipo de Referencia"
-                        placeholder="Ej: PSE, Bancolombia, Nequi..."
-                        value={facturaForm.tipo_referencia}
-                        onChange={(e) =>
-                          setFacturaForm((f) => ({ ...f, tipo_referencia: e.target.value }))
-                        }
-                      />
-
-                      <Input
-                        label="Etiqueta"
-                        required
-                        placeholder="Ej: Factura Marzo"
-                        list="etiquetas-catalog"
-                        value={facturaForm.etiqueta}
-                        onChange={(e) =>
-                          setFacturaForm((f) => ({ ...f, etiqueta: e.target.value }))
-                        }
-                      />
-                      <datalist id="etiquetas-catalog">
-                        {etiquetasCatalog.map((et) => (
-                          <option key={et} value={et} />
-                        ))}
-                      </datalist>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input
-                          label="Fecha Emisión"
+                          label="Fecha de emisión"
                           required
                           type="date"
                           value={facturaForm.fecha_emision}
@@ -695,7 +633,7 @@ export default function UpsertObligacionConFacturasModal({
                           }
                         />
                         <Input
-                          label="Fecha Vencimiento"
+                          label="Fecha de vencimiento"
                           required
                           type="date"
                           value={facturaForm.fecha_vencimiento}
@@ -706,14 +644,14 @@ export default function UpsertObligacionConFacturasModal({
                       </div>
 
                       <Input
-                        label="URL Archivo"
-                        type="url"
-                        placeholder="https://example.com/factura.pdf"
-                        value={facturaForm.archivo_url}
+                        label="Monto"
+                        required
+                        type="number"
+                        placeholder="$ 0.00"
+                        value={facturaForm.monto}
                         onChange={(e) =>
-                          setFacturaForm((f) => ({ ...f, archivo_url: e.target.value }))
+                          setFacturaForm((f) => ({ ...f, monto: e.target.value }))
                         }
-                        hint="Opcional"
                       />
 
                       <Button
@@ -721,7 +659,7 @@ export default function UpsertObligacionConFacturasModal({
                         variant="secondary"
                         className="w-full"
                       >
-                        {facturasAgregadas.length > 0 ? 'Agregar factura' : 'Agregar factura'}
+                        {facturasAgregadas.length > 0 ? 'Agregar otra factura' : 'Agregar factura'}
                       </Button>
                     </div>
                   </div>

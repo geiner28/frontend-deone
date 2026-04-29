@@ -42,10 +42,21 @@ export default function UpsertUsuarioAdminModal({
     telefono: '',
     nombre: '',
     apellido: '',
+    tipo_identificacion: 'CC' as 'CC' | 'NIT',
+    numero_identificacion: '',
     correo: '',
+    ciudad: '',
     direccion: '',
     plan: 'control' as Plan,
   });
+
+  // Sugerencias de ciudades para autocomplete (catálogo básico Colombia)
+  const CIUDADES_SUGERIDAS = [
+    'Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena', 'Cúcuta',
+    'Bucaramanga', 'Pereira', 'Santa Marta', 'Ibagué', 'Manizales',
+    'Villavicencio', 'Pasto', 'Montería', 'Neiva', 'Armenia', 'Popayán',
+    'Sincelejo', 'Valledupar', 'Tunja',
+  ];
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
@@ -56,7 +67,10 @@ export default function UpsertUsuarioAdminModal({
         telefono: initialData.telefono,
         nombre: initialData.nombre,
         apellido: initialData.apellido,
+        tipo_identificacion: 'CC',
+        numero_identificacion: '',
         correo: initialData.correo,
+        ciudad: '',
         direccion: initialData.direccion || '',
         plan: 'control',
       });
@@ -119,7 +133,7 @@ export default function UpsertUsuarioAdminModal({
   }, [form.telefono, open, mode]);
 
   const handleClose = () => {
-    setForm({ telefono: '', nombre: '', apellido: '', correo: '', direccion: '', plan: 'control' });
+    setForm({ telefono: '', nombre: '', apellido: '', tipo_identificacion: 'CC', numero_identificacion: '', correo: '', ciudad: '', direccion: '', plan: 'control' });
     setExistingUser(null);
     setShowConfirmation(false);
     setToast(null);
@@ -175,12 +189,18 @@ export default function UpsertUsuarioAdminModal({
       correo?: string;
       direccion?: string;
       plan?: Plan;
+      tipo_identificacion?: 'CC' | 'NIT';
+      numero_identificacion?: string;
+      ciudad?: string;
     } = {
       telefono: form.telefono.trim(),
       nombre: form.nombre.trim(),
       apellido: form.apellido.trim(),
       correo: form.correo.trim() || undefined,
       direccion: form.direccion.trim() || undefined,
+      tipo_identificacion: form.tipo_identificacion,
+      numero_identificacion: form.numero_identificacion.trim() || undefined,
+      ciudad: form.ciudad.trim() || undefined,
     };
 
     // Incluir usuario_id si viene de initialData (permite cambiar teléfono)
@@ -222,24 +242,13 @@ export default function UpsertUsuarioAdminModal({
       <Modal
         open={open}
         onClose={handleClose}
-        title={existingUser ? ' Actualizar Usuario' : ' Nuevo Usuario'}
+        title={existingUser ? 'Actualizar usuario' : 'Agregar usuario'}
       >
         <div className="space-y-4">
-          {/* Teléfono - Primary identifier with fetch indicator */}
-          <div className="relative">
-            <Input
-              label="Teléfono"
-              required
-              placeholder="Ej: 3001234567"
-              value={form.telefono}
-              onChange={(e) => setForm(f => ({ ...f, telefono: e.target.value }))}
-            />
-            {fetchingUser && (
-              <div className="absolute right-3 top-9 text-sm text-gray-400">
-                <span className="animate-pulse">Buscando...</span>
-              </div>
-            )}
-          </div>
+          {/* Estado de búsqueda y avisos */}
+          {fetchingUser && (
+            <div className="text-xs text-gray-500 animate-pulse">Buscando usuario por celular…</div>
+          )}
 
           {/* Visual indicator de cliente existente */}
           {existingUser && mode === 'upsert' && (
@@ -259,54 +268,114 @@ export default function UpsertUsuarioAdminModal({
             </div>
           )}
 
-      
-
-          {/* Nombre + Apellido */}
+          {/* Nombres + Apellidos */}
           <div className="grid grid-cols-2 gap-3">
             <Input
-              label="Nombre"
+              label="Nombres"
               required
-              placeholder="Ej: Juan"
+              placeholder="Nombres"
               value={form.nombre}
               onChange={(e) => setForm(f => ({ ...f, nombre: e.target.value }))}
             />
             <Input
-              label="Apellido"
-              placeholder="Ej: Pérez"
+              label="Apellidos"
+              required
+              placeholder="Apellidos"
               value={form.apellido}
               onChange={(e) => setForm(f => ({ ...f, apellido: e.target.value }))}
             />
           </div>
 
-          {/* Correo */}
-          <Input
-            label="Correo"
-            type="email"
-            placeholder="Ej: juan@example.com"
-            value={form.correo}
-            onChange={(e) => setForm(f => ({ ...f, correo: e.target.value }))}
-          />
+          {/* Tipo + Identificación */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-[#1d212b]">
+                Tipo <span className="text-[#ef4444] ml-1">*</span>
+              </label>
+              <select
+                value={form.tipo_identificacion}
+                onChange={(e) => setForm(f => ({ ...f, tipo_identificacion: e.target.value as 'CC' | 'NIT' }))}
+                className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#1d212b] bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
+              >
+                <option value="CC">CC — Cédula de Ciudadanía</option>
+                <option value="NIT">NIT</option>
+              </select>
+            </div>
+            <Input
+              label="Identificación"
+              required
+              placeholder="Número de identificación"
+              value={form.numero_identificacion}
+              onChange={(e) => setForm(f => ({ ...f, numero_identificacion: e.target.value }))}
+            />
+          </div>
 
-          {/* Dirección */}
-          <Input
-            label="Dirección"
-            placeholder="Ej: Calle 1 #10, Apartamento 5"
-            value={form.direccion}
-            onChange={(e) => setForm(f => ({ ...f, direccion: e.target.value }))}
-          />
+          {/* Celular + Correo */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-[#1d212b]">
+                Celular <span className="text-[#ef4444] ml-1">*</span>
+              </label>
+              <div className="flex items-stretch rounded-lg border border-[#e5e7eb] focus-within:ring-2 focus-within:ring-[#ff8d2d]/50 focus-within:border-[#ff8d2d] overflow-hidden">
+                <span className="px-3 py-2 text-sm text-gray-600 bg-gray-50 border-r border-[#e5e7eb] flex items-center">+57</span>
+                <input
+                  type="tel"
+                  placeholder="3182321536"
+                  value={form.telefono}
+                  onChange={(e) => setForm(f => ({ ...f, telefono: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                  className="flex-1 px-3 py-2 text-sm text-[#1d212b] placeholder-[#737780] focus:outline-none"
+                />
+              </div>
+            </div>
+            <Input
+              label="Correo"
+              required
+              type="email"
+              placeholder="Correo electrónico"
+              value={form.correo}
+              onChange={(e) => setForm(f => ({ ...f, correo: e.target.value }))}
+            />
+          </div>
+
+          {/* Ciudad + Dirección */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-[#1d212b]">
+                Ciudad <span className="text-[#ef4444] ml-1">*</span>
+              </label>
+              <input
+                type="text"
+                list="ciudades-suggested"
+                placeholder="Ciudad de residencia"
+                value={form.ciudad}
+                onChange={(e) => setForm(f => ({ ...f, ciudad: e.target.value }))}
+                className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#1d212b] placeholder-[#737780] bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
+              />
+              <datalist id="ciudades-suggested">
+                {CIUDADES_SUGERIDAS.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+            <Input
+              label="Dirección"
+              required
+              placeholder="Dirección de residencia"
+              value={form.direccion}
+              onChange={(e) => setForm(f => ({ ...f, direccion: e.target.value }))}
+            />
+          </div>
 
           {/* Plan - Solo en modo 'upsert' */}
           {mode === 'upsert' && (
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-gray-700">
-                Plan <span className="text-red-500">*</span>
+              <label className="text-sm font-medium text-[#1d212b]">
+                Plan <span className="text-[#ef4444] ml-1">*</span>
               </label>
               <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#1d212b] bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
                 value={form.plan}
                 onChange={(e) => setForm(f => ({ ...f, plan: e.target.value as Plan }))}
               >
-                <option value="control">Control </option>
+                <option value="control">Control</option>
                 <option value="tranquilidad">Tranquilidad</option>
                 <option value="respaldo">Respaldo</option>
               </select>
