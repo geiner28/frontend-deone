@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { ChevronDownIcon, ExclamationCircleIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
 import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
-import { reportarRecarga, getUsuarioByTelefono } from '@/lib/api';
-import type { RecargaData, Usuario } from '@/types';
-import { formatCurrency, getErrorMsg } from '@/lib/utils';
-import { CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { reportarRecarga, getAdminClientes } from '@/lib/api';
+import type { RecargaData } from '@/types';
+import { getErrorMsg } from '@/lib/utils';
 
 interface ReportarRecargaModalProps {
   open: boolean;
@@ -17,15 +16,14 @@ interface ReportarRecargaModalProps {
   onError?: (error: string) => void;
   mode?: 'create' | 'from-profile';
   initialTelefono?: string;
+  usuarioNombre?: string;
 }
 
-const initialForm = {
-  telefono: '',
-  periodo: '',
-  monto: '',
-  comprobante_url: '',
-  referencia_tx: '',
-};
+interface UsuarioOpt {
+  telefono: string;
+  nombre: string;
+  apellido: string;
+}
 
 export default function ReportarRecargaModal({
   open,
@@ -34,261 +32,191 @@ export default function ReportarRecargaModal({
   onError,
   mode = 'create',
   initialTelefono,
+  usuarioNombre,
 }: ReportarRecargaModalProps) {
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState(initialForm);
-  const [telefonoValidado, setTelefonoValidado] = useState(false);
-  const [validandoTelefono, setValidandoTelefono] = useState(false);
-  const [usuarioActual, setUsuarioActual] = useState<Usuario | null>(null);
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
-  const toastTimer = useRef<NodeJS.Timeout | null>(null);
+  const [telefono, setTelefono] = useState('');
+  const [monto, setMonto] = useState('');
+  const [grupo, setGrupo] = useState<'' | '1' | '2'>('');
+  const [usuarios, setUsuarios] = useState<UsuarioOpt[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [sectionOpen, setSectionOpen] = useState(true);
 
-  const showToast = (message: string, type: ToastType) => {
-    setToast({ message, type });
-    // Limpiar timer anterior si existe
-    if (toastTimer.current) {
-      clearTimeout(toastTimer.current);
-    }
-    // El toast se limpia automáticamente después de 4 segundos
-    toastTimer.current = setTimeout(() => {
-      setToast(null);
-    }, 4000);
-  };
+  const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
-  // ─── Auto-precarga de Teléfono en modo 'from-profile' ────────────────────────
+  // Cargar usuarios cuando se abre en modo create
   useEffect(() => {
-    if (open && mode === 'from-profile' && initialTelefono && form.telefono !== initialTelefono) {
-      const newTelefono = initialTelefono;
-      setForm((f) => ({ ...f, telefono: newTelefono }));
-      // Validar inmediatamente cuando se precarga
-      validarTelefono(newTelefono);
+    if (!open || mode !== 'create') return;
+    setLoadingUsers(true);
+    getAdminClientes({ page: 1, limit: 200 }).then((res) => {
+      setLoadingUsers(false);
+      if (res.ok && res.data) {
+        const items = (res.data.clientes || []).map((u) => ({
+          telefono: u.telefono,
+          nombre: u.nombre || '',
+          apellido: u.apellido || '',
+        }));
+        setUsuarios(items);
+      }
+    });
+  }, [open, mode]);
+
+  // Pre-llenar teléfono en modo from-profile
+  useEffect(() => {
+    if (open && mode === 'from-profile' && initialTelefono) {
+      setTelefono(initialTelefono);
     }
   }, [open, mode, initialTelefono]);
 
-  // ─── Validar teléfono con debounce ────────────────────────────────────────
-  const validarTelefono = useCallback(async (telefono: string) => {
-    if (!telefono.trim()) {
-      setTelefonoValidado(false);
-      setUsuarioActual(null);
-      return;
-    }
+  // Validar campos requeridos según modo
+  const isComplete = useMemo(() => {
+    const usuarioOk = mode === 'from-profile' ? Boolean(initialTelefono) : Boolean(telefono);
+    const montoOk = Boolean(monto && Number(monto) > 0);
+    const grupoOk = Boolean(grupo);
+    return usuarioOk && montoOk && grupoOk;
+  }, [mode, initialTelefono, telefono, monto, grupo]);
 
-    setValidandoTelefono(true);
-    try {
-      const res = await getUsuarioByTelefono(telefono);
-      if (res.ok && res.data) {
-        setTelefonoValidado(true);
-        setUsuarioActual(res.data);
-      } else {
-        setTelefonoValidado(false);
-        setUsuarioActual(null);
-      }
-    } catch (error) {
-      console.error('Error validando teléfono:', error);
-      setTelefonoValidado(false);
-      setUsuarioActual(null);
-    } finally {
-      setValidandoTelefono(false);
-    }
-  }, []);
+  const handleClose = () => {
+    setTelefono('');
+    setMonto('');
+    setGrupo('');
+    setSectionOpen(true);
+    setToast(null);
+    onClose();
+  };
 
-  // ─── Efecto para monitorear cambios en el teléfono y aplicar debounce ─────
-  useEffect(() => {
-    // Limpiar timer anterior
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
-    }
-
-    // Invalidar si el teléfono cambia
-    setTelefonoValidado(false);
-    setUsuarioActual(null);
-
-    // Solo validar si tiene al menos 6 dígitos
-    const soloNumeros = form.telefono.replace(/\D/g, '');
-    if (soloNumeros.length >= 6) {
-      setValidandoTelefono(true);
-      debounceTimer.current = setTimeout(() => {
-        validarTelefono(form.telefono);
-      }, 800);
-    } else {
-      setValidandoTelefono(false);
-    }
-
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-    };
-  }, [form.telefono, validarTelefono]);
-
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
-
-  const handleReportar = async () => {
-    if (!telefonoValidado || !usuarioActual) {
-      showToast('Por favor, valida el teléfono primero', 'error');
+  const handleSubmit = async () => {
+    if (!isComplete) {
+      showToast('Por favor completa todos los campos requeridos', 'error');
       return;
     }
 
     setLoading(true);
-    const res = await reportarRecarga({ ...form, monto: Number(form.monto) });
+    const payload = {
+      telefono: mode === 'from-profile' ? (initialTelefono || telefono) : telefono,
+      periodo: new Date().toISOString().split('T')[0],
+      monto: Number(monto),
+      referencia_tx: `RECARGA-${Date.now()}`,
+      grupo: Number(grupo) as 1 | 2,
+    };
+    const res = await reportarRecarga(payload);
     setLoading(false);
 
     if (res.ok && res.data) {
-      showToast('✓ Recarga reportada correctamente', 'success');
-      if (onSuccess) {
-        onSuccess(res.data);
-      }
-      // Cerrar el modal inmediatamente en caso de éxito
-      // El toast se mantiene visible independientemente (tiene su propio timeout de 4s)
-      handleClose();
+      showToast('Recarga registrada correctamente', 'success');
+      onSuccess?.(res.data);
+      setTimeout(() => handleClose(), 800);
     } else {
-      const errorMsg = getErrorMsg(res, 'Error al reportar recarga');
+      const errorMsg = getErrorMsg(res, 'Error al registrar recarga');
       showToast(errorMsg, 'error');
-      if (onError) {
-        onError(errorMsg);
-      }
-      // En caso de error, el modal se mantiene abierto para que corrija los datos
+      onError?.(errorMsg);
     }
   };
 
-  const handleClose = () => {
-    setForm(initialForm);
-    // NO limpiar el toast aquí - déjalo que se desvanezca por su propio timer (4s)
-    // setToast(null);
-    setTelefonoValidado(false);
-    setValidandoTelefono(false);
-    setUsuarioActual(null);
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
-    }
-    if (toastTimer.current) {
-      clearTimeout(toastTimer.current);
-    }
-    onClose();
-  };
+  const sectionFilled = isComplete;
 
   return (
     <>
       {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
+        <div className="fixed top-4 right-4 z-[9999] animate-fade-in">
+          <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+        </div>
       )}
 
-      <Modal
-        open={open}
-        onClose={handleClose}
-        title="Registrar Recarga"
-      >
+      <Modal open={open} onClose={handleClose} title="Registrar recarga" maxWidth="md">
         <div className="space-y-4">
-          
-          <div className="relative">
-            <Input
-              label="Teléfono"
-              required
-              placeholder="3001234567"
-              value={form.telefono}
-              onChange={set('telefono')}
-              disabled={mode === 'from-profile'}
-            />
-            {form.telefono && (
-              <div className="absolute right-3 top-9 flex items-center gap-2">
-                {form.telefono.replace(/\D/g, '').length < 6 && (
-                  <div className="text-xs text-gray-400">
-                    {form.telefono.replace(/\D/g, '').length}/6
-                  </div>
-                )}
-                {form.telefono.replace(/\D/g, '').length >= 6 && validandoTelefono && (
-                  <div className="flex items-center gap-1 text-xs text-blue-500">
-                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                    Validando...
-                  </div>
-                )}
-                {form.telefono.replace(/\D/g, '').length >= 6 && !validandoTelefono && telefonoValidado && (
-                  <div className="flex items-center gap-1 text-xs text-green-500">
-                    <CheckCircleIcon className="h-4 w-4" />
-                    Válido
-                  </div>
-                )}
-                {form.telefono.replace(/\D/g, '').length >= 6 && !validandoTelefono && !telefonoValidado && (
-                  <div className="flex items-center gap-1 text-xs text-red-500">
-                    <ExclamationCircleIcon className="h-4 w-4" />
-                    No existe
-                  </div>
+          {/* Sección Recarga colapsable */}
+          <div className="border-b border-[#e5e7eb] pb-4">
+            <button
+              type="button"
+              onClick={() => setSectionOpen((v) => !v)}
+              className="w-full flex items-center justify-between gap-2 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <h4 className="text-base font-bold text-[#1d212b]">Recarga</h4>
+                {sectionFilled ? (
+                  <CheckCircleIcon className="h-5 w-5 text-[#ff8d2d]" />
+                ) : (
+                  <ExclamationCircleIcon className="h-5 w-5 text-[#ff8d2d]" />
                 )}
               </div>
-            )}
-            {telefonoValidado && usuarioActual && (
-              <p className="text-xs text-gray-400 mt-1">
-                {`${usuarioActual.nombre || ''}
-                  ${usuarioActual.apellido || 'Usuario encontrado'}`}
-              </p>
+              <ChevronDownIcon
+                className={`h-4 w-4 text-[#737780] transition-transform ${sectionOpen ? '' : '-rotate-90'}`}
+              />
+            </button>
+
+            {sectionOpen && (
+              <div className="space-y-4 mt-4">
+                {mode === 'create' ? (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-[#1d212b]">
+                      Usuario <span className="text-[#ef4444]">*</span>
+                    </label>
+                    <select
+                      value={telefono}
+                      onChange={(e) => setTelefono(e.target.value)}
+                      disabled={loadingUsers}
+                      className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 text-sm text-[#1d212b] focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
+                    >
+                      <option value="">{loadingUsers ? 'Cargando…' : 'Seleccione'}</option>
+                      {usuarios.map((u) => (
+                        <option key={u.telefono} value={u.telefono}>
+                          {u.nombre} {u.apellido} — {u.telefono}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  usuarioNombre && (
+                    <div className="rounded-lg bg-[#fff4e6] border border-[#ff8d2d]/30 px-3 py-2 text-sm text-[#1d212b]">
+                      <span className="font-medium">Usuario:</span> {usuarioNombre}
+                    </div>
+                  )
+                )}
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-[#1d212b]">
+                    Monto <span className="text-[#ef4444]">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="$ 0.00"
+                    value={monto}
+                    onChange={(e) => setMonto(e.target.value)}
+                    className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 text-sm text-[#1d212b] placeholder-[#737780] focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-[#1d212b]">
+                    Grupo <span className="text-[#ef4444]">*</span>
+                  </label>
+                  <select
+                    value={grupo}
+                    onChange={(e) => setGrupo(e.target.value as '' | '1' | '2')}
+                    className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 text-sm text-[#1d212b] focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
+                  >
+                    <option value="">Seleccione</option>
+                    <option value="1">Grupo 1</option>
+                    <option value="2">Grupo 2</option>
+                  </select>
+                </div>
+              </div>
             )}
           </div>
 
-          {telefonoValidado && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="Periodo"
-                  required
-                  type="date"
-                  value={form.periodo}
-                  onChange={set('periodo')}
-                  hint="Fecha de realización de la recarga"
-                />
-                <Input
-                  label="Monto (COP)"
-                  required
-                  type="number"
-                  value={form.monto}
-                  onChange={set('monto')}
-                  placeholder="500000"
-                />
-              </div>
-
-              <Input
-                label="Referencia TX"
-                required
-                value={form.referencia_tx}
-                onChange={set('referencia_tx')}
-                placeholder="TX123456789"
-                hint="Referencia de la transacción bancaria"
-              />
-
-              <Input
-                label="URL Comprobante"
-                type="url"
-                value={form.comprobante_url}
-                onChange={set('comprobante_url')}
-                placeholder="https://example.com/comprobante.jpg"
-                hint="Link al comprobante de la transferencia"
-              />
-            </>
-          )}
-
-          {!telefonoValidado && form.telefono && (
-            <div className="p-3 bg-orange-400/10 border border-orange-400/30 rounded-lg">
-              <p className="text-xs text-orange-600">
-                Digíta el teléfono del usuario para continuar con el registro
-              </p>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={handleClose}>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <Button variant="secondary" onClick={handleClose} className="w-full" disabled={loading}>
               Cancelar
             </Button>
-            <Button 
-              loading={loading} 
-              onClick={handleReportar}
-              disabled={!telefonoValidado || validandoTelefono}
+            <Button
+              loading={loading}
+              onClick={handleSubmit}
+              disabled={!isComplete}
+              className="w-full"
             >
-              Reportar
+              Registrar
             </Button>
           </div>
         </div>

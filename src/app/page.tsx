@@ -124,16 +124,16 @@ export default function DashboardPage() {
             label="Reservado"
           />
           <MetricCard
-            title="Deuda Pendiente"
+            title="Total Pendiente"
             value={metricas.deudaPendiente}
             isCurrency={true}
             label="En obligaciones por pagar"
           />
           
           <MetricCard
-            title="Transacciones Realizadas"
+            title="Transacciones"
             value={metricas.cantidadTransacciones}
-            label="En este período"
+            label="Cash in"
           />
         </div>
 
@@ -167,18 +167,16 @@ export default function DashboardPage() {
             <div className="flex-shrink-0">
               <FacturesCard
                 indicators={[
-                  { label: 'Pagadas', count: distribucionFacturas.pagadas, color: '#FF8D2D' },
-                  { label: 'Pendientes', count: distribucionFacturas.pendientes, color: '#52596B' },
-                  { label: 'Vencidas', count: distribucionFacturas.vencidas, color: '#DC2626' },
-                  { label: 'En Revisión', count: distribucionFacturas.enRevision, color: '#F59E0B' },
-                  { label: 'Rechazadas', count: distribucionFacturas.rechazadas, color: '#6B7280' },
+                  { label: 'Pagadas', count: distribucionFacturas.pagadas ?? 0, color: '#10B981' },
+                  { label: 'Pendientes', count: distribucionFacturas.pendientes ?? 0, color: '#F59E0B' },
+                  { label: 'Vencidas', count: distribucionFacturas.vencidas ?? 0, color: '#DC2626' },
+                  { label: 'Sin factura', count: (distribucionFacturas as { sinFactura?: number }).sinFactura ?? 0, color: '#9CA3AF' },
                 ]}
                 total={
-                  distribucionFacturas.pagadas +
-                  distribucionFacturas.pendientes +
-                  distribucionFacturas.vencidas +
-                  distribucionFacturas.enRevision +
-                  distribucionFacturas.rechazadas
+                  (distribucionFacturas.pagadas ?? 0) +
+                  (distribucionFacturas.pendientes ?? 0) +
+                  (distribucionFacturas.vencidas ?? 0) +
+                  ((distribucionFacturas as { sinFactura?: number }).sinFactura ?? 0)
                 }
               />
             </div>

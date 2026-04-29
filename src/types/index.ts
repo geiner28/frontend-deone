@@ -41,7 +41,6 @@ export interface Usuario {
   plan: Plan;
   activo: boolean;
   ajustes_usuario: AjustesUsuario;
-  // 🆕 Backend pendiente (BACKEND_REQUIREMENTS.md §7)
   tipo_identificacion?: 'CC' | 'NIT' | null;
   numero_identificacion?: string | null;
   ciudad?: string | null;
@@ -52,6 +51,10 @@ export interface UpsertUsuarioPayload {
   nombre?: string;
   apellido?: string;
   correo?: string;
+  direccion?: string;
+  tipo_identificacion?: 'CC' | 'NIT';
+  numero_identificacion?: string;
+  ciudad?: string;
 }
 
 // API devuelve { usuario, ajustes, es_nuevo }
@@ -91,7 +94,6 @@ export interface UpsertUsuarioAdminPayload {
   correo?: string;
   direccion?: string;
   plan?: Plan;
-  // 🆕 Backend pendiente (BACKEND_REQUIREMENTS.md §7)
   tipo_identificacion?: 'CC' | 'NIT';
   numero_identificacion?: string;
   ciudad?: string;
@@ -106,6 +108,11 @@ export interface UpsertUsuarioAdminData {
 }
 
 // ─── Factura ──────────────────────────────────────────────────────────────────
+// Estados visibles al usuario:
+export type FacturaEstado = 'pendiente' | 'pagada' | 'sin_factura' | 'aproximada';
+// Estados internos (admin) de validación:
+export type FacturaValidacionEstado = 'sin_validar' | 'validada' | 'rechazada';
+
 export interface Factura {
   id: string;
   creado_en?: string;
@@ -113,19 +120,24 @@ export interface Factura {
   monto: number;
   fecha_vencimiento?: string;
   fecha_emision?: string;
-  estado: string;
+  fecha_recordatorio?: string;
+  estado: FacturaEstado | string;
+  validacion_estado?: FacturaValidacionEstado | string;
   requiere_revision?: boolean;
   periodo?: string;
   origen?: string;
   archivo_url?: string;
+  pagina_pago?: string;
   extraccion_estado?: string;
   extraccion_confianza?: number;
   obligacion_id?: string;
   motivo_rechazo?: string;
+  observaciones_admin?: string;
   etiqueta?: string;
   referencia_pago?: string;
   tipo_referencia?: string;
-  grupo?: number;
+  grupo?: 1 | 2 | number;
+  aproximacion_porcentaje?: number | null;
 }
 
 // ─── Obligación ───────────────────────────────────────────────────────────────
@@ -162,8 +174,9 @@ export interface CreateObligacionPayload {
   numero_referencia?: string;
   pagina_pago?: string;
   periodicidad?: string;
-  // 🆕 Backend pendiente (BACKEND_REQUIREMENTS.md §7)
   receptor?: string;
+  // 'grupo' a nivel obligación se conserva como compatibilidad,
+  // pero el grupo definitivo se asigna por factura.
   grupo?: 1 | 2;
 }
 
@@ -219,22 +232,26 @@ export interface CapturaFacturaData {
 
 // ─── Factura Validación ───────────────────────────────────────────────────────
 export interface ValidarFacturaPayload {
-  monto: number;
-  servicio: string;
-  fecha_vencimiento: string;
-  fecha_emision: string;
-  referencia_pago: string;
-  tipo_referencia: string;
-  etiqueta: string;
+  monto?: number;
+  servicio?: string;
+  fecha_vencimiento?: string;
+  fecha_emision?: string;
+  fecha_recordatorio?: string;
+  referencia_pago?: string;
+  tipo_referencia?: string;
+  etiqueta?: string;
   periodo?: string;
   archivo_url?: string;
+  pagina_pago?: string;
   observaciones_admin?: string;
+  grupo?: 1 | 2;
 }
 
 export interface ValidarFacturaData {
   factura_id: string;
   servicio: string;
   estado: string;
+  validacion_estado?: string;
 }
 
 // ─── Factura Rechazo ──────────────────────────────────────────────────────────
@@ -249,8 +266,10 @@ export interface RechazarFacturaData {
 }
 
 // ─── Factura Aproximar ────────────────────────────────────────────────────────
+// Acepta `monto` directo o `porcentaje` (10 = 10% sobre el monto previo)
 export interface AproximarFacturaPayload {
-  monto: number;
+  monto?: number;
+  porcentaje?: number;
   observaciones_admin?: string;
 }
 
@@ -260,6 +279,35 @@ export interface AproximarFacturaData {
   monto_anterior: number;
   monto_nuevo: number;
   estado: string;
+  porcentaje_aplicado?: number;
+}
+
+// ─── Factura Edición libre (admin) ────────────────────────────────────────────
+// PUT /api/facturas/:id — todos los campos opcionales
+export interface ActualizarFacturaPayload {
+  servicio?: string;
+  monto?: number;
+  periodo?: string;
+  fecha_emision?: string;
+  fecha_vencimiento?: string;
+  fecha_recordatorio?: string;
+  referencia_pago?: string;
+  tipo_referencia?: string;
+  etiqueta?: string;
+  archivo_url?: string;
+  pagina_pago?: string;
+  observaciones_admin?: string;
+  motivo_rechazo?: string;
+  grupo?: 1 | 2;
+  estado?: FacturaEstado;
+  validacion_estado?: FacturaValidacionEstado;
+}
+
+export interface ActualizarFacturaData {
+  factura_id: string;
+  estado: string;
+  validacion_estado?: string;
+  cambios?: string[];
 }
 
 // ─── Listar todas las facturas (Admin Panel) ──────────────────────────────────
@@ -267,7 +315,7 @@ export interface FacturaEnriquecida extends Factura {
   factura_id: string;
   usuario_id: string;
   usuario?: { id: string; nombre: string; apellido: string; telefono: string; plan?: string };
-  obligacion?: { id: string; descripcion: string; numero_referencia?: string; tipo_referencia?: string; pagina_pago?: string };
+  obligacion?: { id: string; descripcion: string; numero_referencia?: string; tipo_referencia?: string; pagina_pago?: string; grupo?: number; receptor?: string };
   usuario_nombre: string;
   badge_color: string;
 }
@@ -323,8 +371,9 @@ export interface ReportarRecargaPayload {
   telefono: string;
   periodo: string;
   monto: number;
-  comprobante_url: string;
+  comprobante_url?: string;
   referencia_tx?: string;
+  grupo?: 1 | 2;
 }
 
 export interface RecargaData {

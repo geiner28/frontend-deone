@@ -27,6 +27,8 @@ import type {
   RechazarFacturaData,
   AproximarFacturaPayload,
   AproximarFacturaData,
+  ActualizarFacturaPayload,
+  ActualizarFacturaData,
   ReportarRecargaPayload,
   RecargaData,
   AprobarRecargaPayload,
@@ -244,6 +246,13 @@ export const rechazarFactura = (facturaId: string, payload: RechazarFacturaPaylo
 // PUT /api/facturas/:id/aproximar
 export const aproximarFactura = (facturaId: string, payload: AproximarFacturaPayload) =>
   request<AproximarFacturaData>(`/facturas/${facturaId}/aproximar`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+
+// PUT /api/facturas/:id — Edición libre de campos (admin)
+export const actualizarFactura = (facturaId: string, payload: ActualizarFacturaPayload) =>
+  request<ActualizarFacturaData>(`/facturas/${facturaId}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });

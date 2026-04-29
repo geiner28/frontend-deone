@@ -27,6 +27,7 @@ interface TableViewProps {
   onRechazar: () => void;
   onPagar: () => void;
   onAproximar: () => void;
+  onEditar: () => void;
   actionLoading: boolean;
 }
 
@@ -52,6 +53,7 @@ export default function TableView({
   onRechazar,
   onPagar,
   onAproximar,
+  onEditar,
   actionLoading,
 }: TableViewProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -84,6 +86,12 @@ export default function TableView({
     switch (estado) {
       case 'pagada':
         return 'bg-green-100 text-green-800 border-green-300';
+      case 'pendiente':
+        return 'bg-amber-100 text-amber-800 border-amber-300';
+      case 'aproximada':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'sin_factura':
+        return 'bg-gray-100 text-gray-700 border-gray-300';
       case 'validada':
         return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'rechazada':
@@ -96,20 +104,23 @@ export default function TableView({
   const startIndex = (currentPage - 1) * 50;
   const endIndex = startIndex + 50;
 
+  const isSinValidar = (factura: FacturaEnriquecida) => factura.validacion_estado === 'sin_validar' && factura.estado !== 'pagada';
+  const isValidada = (factura: FacturaEnriquecida) => factura.validacion_estado === 'validada' && factura.estado !== 'pagada';
+
   // Función para determinar si una factura tiene acciones disponibles
   const hasAvailableActions = (factura: FacturaEnriquecida): boolean => {
-    return factura.estado === 'extraida' || factura.estado === 'validada' || factura.estado === 'pendiente';
+    return isSinValidar(factura) || isValidada(factura);
   };
 
   // Función para obtener las acciones disponibles para una factura
   const getAvailableActionCount = (factura: FacturaEnriquecida): number => {
-    if (factura.estado === 'extraida') {
-      let count = 2; // Validar + Rechazar
-      if (factura.origen === 'auto') count++; // Aproximar
-      return count;
+    let count = 0;
+    if (isSinValidar(factura)) {
+      count += 2;
+      if (factura.origen === 'auto') count++;
     }
-    if (factura.estado === 'validada' || factura.estado === 'pendiente') return 1; // Pagar
-    return 0;
+    if (isValidada(factura)) count += 1;
+    return count;
   };
 
   return (
@@ -285,7 +296,22 @@ export default function TableView({
                             {openMenuId === factura.id && (
                               <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-max">
                                 <div className="py-1">
-                                  {factura.estado === 'extraida' && (
+                                  <button
+                                    onClick={() => {
+                                      console.log('Editar clicked', factura);
+                                      onSelectFactura(factura);
+                                      onEditar();
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 flex items-center gap-2 transition-colors cursor-pointer border-b border-gray-100"
+                                  >
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                    </svg>
+                                    Editar
+                                  </button>
+
+                                  {isSinValidar(factura) && (
                                     <>
                                       <button
                                         onClick={() => {
@@ -336,7 +362,7 @@ export default function TableView({
                                     </>
                                   )}
 
-                                  {(factura.estado === 'validada' || factura.estado === 'pendiente') && (
+                                  {isValidada(factura) && (
                                     <button
                                       onClick={() => {
                                         console.log('Pagar clicked', factura);

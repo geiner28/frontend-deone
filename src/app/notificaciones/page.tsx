@@ -380,62 +380,37 @@ export default function NotificacionesPage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header */}
-      <div className="mb-2">
-        <h1 className="text-2xl font-bold text-gray-900">Notificaciones</h1>
-        <p className="text-sm text-gray-500 mt-1">Gestiona alertas y notificaciones del sistema</p>
-        <div className="h-px bg-gray-200 w-full mt-4" />
-      </div>
+      <div className="mb-2 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Notificaciones</h1>
+          <p className="text-sm text-gray-500 mt-1">Gestiona alertas y notificaciones del sistema</p>
+        </div>
 
-      {/* ═══ Selector PRINCIPAL: Bot vs Admin (siempre separadas) ═══ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <button
-          onClick={() => { setVistaCanal('bot'); setPage(1); setSelectedIds(new Set()); }}
-          className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
-            vistaCanal === 'bot'
-              ? 'border-emerald-500 bg-emerald-50 shadow-sm'
-              : 'border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40'
-          }`}
-        >
-          <div className={`p-2.5 rounded-lg ${vistaCanal === 'bot' ? 'bg-emerald-500 text-white' : 'bg-emerald-100 text-emerald-600'}`}>
-            <ChatBubbleLeftRightIcon className="h-6 w-6" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className={`text-sm font-bold ${vistaCanal === 'bot' ? 'text-emerald-900' : 'text-gray-900'}`}>
-              🤖 Bot · WhatsApp / Telegram
-            </div>
-            <div className="text-xs text-gray-600 mt-0.5">
-              Notificaciones que el bot envía a los <strong>clientes</strong> (destinatario = usuario)
-            </div>
-          </div>
-          {vistaCanal === 'bot' && (
-            <div className="text-[10px] font-bold text-white bg-emerald-500 px-2 py-1 rounded-full">ACTIVO</div>
-          )}
-        </button>
-
-        <button
-          onClick={() => { setVistaCanal('admin'); setPage(1); setSelectedIds(new Set()); if (activeTab === 'acciones') setActiveTab('todas'); }}
-          className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
-            vistaCanal === 'admin'
-              ? 'border-indigo-500 bg-indigo-50 shadow-sm'
-              : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/40'
-          }`}
-        >
-          <div className={`p-2.5 rounded-lg ${vistaCanal === 'admin' ? 'bg-indigo-500 text-white' : 'bg-indigo-100 text-indigo-600'}`}>
-            <ShieldCheckIcon className="h-6 w-6" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className={`text-sm font-bold ${vistaCanal === 'admin' ? 'text-indigo-900' : 'text-gray-900'}`}>
-              🛡️ Admin · Dashboard interno
-            </div>
-            <div className="text-xs text-gray-600 mt-0.5">
-              Alertas y avisos para el <strong>equipo</strong> (destinatario = admin)
-            </div>
-          </div>
-          {vistaCanal === 'admin' && (
-            <div className="text-[10px] font-bold text-white bg-indigo-500 px-2 py-1 rounded-full">ACTIVO</div>
-          )}
-        </button>
+        {/* Toggle ADMIN / BOT (mockup) */}
+        <div className="inline-flex rounded-lg bg-[#f3f4f6] p-1 border border-[#e5e7eb]">
+          <button
+            onClick={() => { setVistaCanal('admin'); setPage(1); setSelectedIds(new Set()); if (activeTab === 'acciones') setActiveTab('todas'); }}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+              vistaCanal === 'admin'
+                ? 'bg-[#ff8d2d] text-white shadow-sm'
+                : 'text-[#1d212b] hover:bg-white/60'
+            }`}
+          >
+            ADMIN
+          </button>
+          <button
+            onClick={() => { setVistaCanal('bot'); setPage(1); setSelectedIds(new Set()); }}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+              vistaCanal === 'bot'
+                ? 'bg-[#ff8d2d] text-white shadow-sm'
+                : 'text-[#1d212b] hover:bg-white/60'
+            }`}
+          >
+            BOT
+          </button>
+        </div>
       </div>
+      <div className="h-px bg-gray-200 w-full" />
 
       {/* Tabs */}
       <div className="flex items-center justify-between flex-wrap gap-4">

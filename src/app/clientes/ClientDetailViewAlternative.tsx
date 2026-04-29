@@ -10,6 +10,7 @@ import {
   PlusIcon,
   DocumentTextIcon,
   TrashIcon,
+  PencilSquareIcon,
 } from '@heroicons/react/24/outline';
 import Badge from '@/components/ui/Badge';
 import UpdatePlanModal from '@/components/modals/UpdatePlanModal';
@@ -21,6 +22,7 @@ import ValidarFacturaModal from '@/components/modals/ValidarFacturaModal';
 import RechazarFacturaModal from '@/components/modals/RechazarFacturaModal';
 import PagarFacturaModal from '@/components/modals/PagarFacturaModal';
 import AproximarValorModal from '@/components/modals/AproximarValorModal';
+import EditarFacturaModal from '@/components/modals/EditarFacturaModal';
 import type { AdminClientePerfilData, Factura, Plan, ProgramacionRecargas } from '@/types';
 import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
 import { getAdminClientePerfil, validarFactura, rechazarFactura, deleteUsuario, deleteObligacion, deleteFactura } from '@/lib/api';
@@ -42,18 +44,18 @@ const getPlanColor = (plan: string): string => {
 const getFacturaCountByTab = (facturas: Factura[], tab: FacturaFilterTab): number => {
   if (tab === 'todas') return facturas.length;
   if (tab === 'pagadas') return facturas.filter(f => f.estado === 'pagada').length;
-  // Pendientes = validadas pero NO pagadas (estado validada o pendiente)
-  if (tab === 'pendientes') return facturas.filter(f => ['validada', 'pendiente'].includes(f.estado)).length;
-  if (tab === 'sin-validar') return facturas.filter(f => f.estado === 'extraida').length;
+  // Pendientes = todas las facturas no pagadas (incluye aproximadas y sin_factura)
+  if (tab === 'pendientes') return facturas.filter(f => f.estado !== 'pagada').length;
+  // Sin validar = validacion_estado='sin_validar'
+  if (tab === 'sin-validar') return facturas.filter(f => f.validacion_estado === 'sin_validar').length;
   return 0;
 };
 
 const filterFacturasByTab = (facturas: Factura[], tab: FacturaFilterTab): Factura[] => {
   if (tab === 'todas') return facturas;
   if (tab === 'pagadas') return facturas.filter(f => f.estado === 'pagada');
-  // Pendientes = validadas pero NO pagadas (estado validada o pendiente)
-  if (tab === 'pendientes') return facturas.filter(f => ['validada', 'pendiente'].includes(f.estado));
-  if (tab === 'sin-validar') return facturas.filter(f => f.estado === 'extraida');
+  if (tab === 'pendientes') return facturas.filter(f => f.estado !== 'pagada');
+  if (tab === 'sin-validar') return facturas.filter(f => f.validacion_estado === 'sin_validar');
   return facturas;
 };
 
@@ -72,7 +74,7 @@ const calcularGrupoFactura = (
   
   // Si cantidad_recargas es 1: TODAS van a grupo 1
   if (cantidad === 1) {
-    return factura.estado === 'validada' ? 1 : null;
+    return factura.validacion_estado === 'validada' ? 1 : null;
   }
 
   // Si cantidad_recargas es 2:
@@ -96,9 +98,12 @@ const calcularGrupoFactura = (
 };
 
 const getEstadoBadgeContent = (estado: string) => {
-  const estadoLower = estado.toLowerCase();
+  const estadoLower = (estado || '').toLowerCase();
   if (estadoLower === 'pagada') return 'Pagado';
   if (estadoLower === 'pendiente') return 'Pendiente';
+  if (estadoLower === 'aproximada') return 'Aproximada';
+  if (estadoLower === 'sin_factura') return 'Sin factura';
+  // Compatibilidad con datos legados
   if (estadoLower === 'extraida') return 'Sin Validar';
   if (estadoLower === 'validada') return 'Validada';
   if (estadoLower === 'rechazada') return 'Rechazada';
@@ -183,6 +188,7 @@ export default function ClientDetailViewAlternative({
   const [openRechazarModal, setOpenRechazarModal] = useState(false);
   const [openPagarModal, setOpenPagarModal] = useState(false);
   const [openAproximarModal, setOpenAproximarModal] = useState(false);
+  const [openEditarFacturaModal, setOpenEditarFacturaModal] = useState(false);
 
   // Toast notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -604,20 +610,28 @@ export default function ClientDetailViewAlternative({
                       perfil?.programacion_recargas?.cantidad_recargas
                     );
 
-                    const hasActions = true; // Eliminar siempre disponible
+                    const hasActions = true; // Eliminar/Editar siempre disponible
 
-                    let actionCount = 1; // +1 por Eliminar
-                    if (factura.estado === 'extraida') {
-                      actionCount += 2;
-                      if (factura.origen === 'auto') actionCount++;
-                    } else if (factura.estado === 'validada' || factura.estado === 'pendiente') {
-                      actionCount += 1;
+                    const sinValidar = factura.validacion_estado === 'sin_validar';
+                    const validada = factura.validacion_estado === 'validada';
+                    const pagada = factura.estado === 'pagada';
+
+                    let actionCount = 2; // Editar + Eliminar
+                    if (sinValidar && !pagada) {
+                      actionCount += 2; // Validar + Rechazar
+                      if (factura.origen === 'auto') actionCount++; // Aproximar
+                    }
+                    if (validada && !pagada) {
+                      actionCount += 1; // Pagar
                     }
 
                     const getEstadoClasses = (estado: string) => {
                       switch (estado) {
                         case 'pagada': return 'text-green-600 border-green-200 bg-green-50';
                         case 'pendiente': return 'text-amber-600 border-amber-200 bg-amber-50';
+                        case 'aproximada': return 'text-yellow-600 border-yellow-200 bg-yellow-50';
+                        case 'sin_factura': return 'text-gray-500 border-gray-200 bg-gray-50';
+                        // Compat
                         case 'extraida': return 'text-gray-500 border-gray-200 bg-gray-50';
                         case 'validada': return 'text-indigo-600 border-indigo-200 bg-indigo-50';
                         case 'rechazada': return 'text-red-600 border-red-200 bg-red-50';
@@ -707,7 +721,7 @@ export default function ClientDetailViewAlternative({
                               {openMenuId === factura.id && (
                                 <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-max">
                                   <div className="py-1">
-                                    {factura.estado === 'extraida' && (
+                                    {sinValidar && !pagada && (
                                       <>
                                         <button
                                           onClick={() => {
@@ -752,7 +766,7 @@ export default function ClientDetailViewAlternative({
                                         </button>
                                       </>
                                     )}
-                                    {(factura.estado === 'validada' || factura.estado === 'pendiente') && (
+                                    {validada && !pagada && (
                                       <button
                                         onClick={() => {
                                           setSelectedFactura(factura);
@@ -767,6 +781,17 @@ export default function ClientDetailViewAlternative({
                                         Pagar
                                       </button>
                                     )}
+                                    <button
+                                      onClick={() => {
+                                        setSelectedFactura(factura);
+                                        setOpenEditarFacturaModal(true);
+                                        setOpenMenuId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <PencilSquareIcon className="w-4 h-4" />
+                                      Editar
+                                    </button>
                                     <div className="border-t border-gray-100 my-1" />
                                     <button
                                       onClick={() => {
@@ -865,6 +890,7 @@ export default function ClientDetailViewAlternative({
           onClose={() => setOpenObligacionModal(false)}
           mode="from-profile"
           initialTelefono={u.telefono}
+          usuarioNombre={`${u.nombre || ''} ${u.apellido || ''}`.trim()}
           onSuccess={async () => {
             // Recargar los datos del perfil para actualizar la lista de obligaciones
             try {
@@ -883,6 +909,7 @@ export default function ClientDetailViewAlternative({
           onClose={() => setOpenReportarRecargaModal(false)}
           mode="from-profile"
           initialTelefono={u.telefono}
+          usuarioNombre={`${u.nombre || ''} ${u.apellido || ''}`.trim()}
           onSuccess={async () => {
             // Recargar los datos del perfil para actualizar las recargas
             try {
@@ -1063,6 +1090,23 @@ export default function ClientDetailViewAlternative({
               factura={selectedFactura}
               perfil={perfil}
               onSuccess={handlePagarSuccess}
+              showToast={showToast}
+            />
+
+            <EditarFacturaModal
+              open={openEditarFacturaModal}
+              factura={selectedFactura}
+              onClose={() => { setOpenEditarFacturaModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
+              onSuccess={async () => {
+                if (perfil) {
+                  try {
+                    const res = await getAdminClientePerfil(u.telefono, selectedMonth);
+                    if (res.ok && res.data) setPerfil(res.data);
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }
+              }}
               showToast={showToast}
             />
           </>

@@ -17,19 +17,19 @@ interface QuickAction {
 const defaultActions: QuickAction[] = [
   {
     id: 'new-user',
-    label: 'Crear / Actualizar Usuario',
+    label: 'Nuevo usuario',
     icon: <UserPlusIcon className="h-5 w-5" />,
     href: '/usuarios',
   },
   {
     id: 'new-obligation',
-    label: 'Añadir Obligación',
+    label: 'Agregar obligación',
     icon: <DocumentPlusIcon className="h-5 w-5" />,
     href: '/obligaciones',
   },
   {
     id: 'register-recharge',
-    label: 'Registrar Recarga',
+    label: 'Registrar recarga',
     icon: <ArrowPathIcon className="h-5 w-5" />,
     href: '/recargas',
   },
@@ -60,7 +60,7 @@ export function QuickActionsPanel({ actions = defaultActions }: QuickActionsPane
   return (
     <>
       <div className="rounded-[11.5px] border border-[#C9C9C9] bg-gray-950 p-3 h-full flex flex-col">
-        <h3 className="text-xs font-semibold text-white mb-2 flex-shrink-0">⚡ Acciones Rápidas</h3>
+        <h3 className="text-xs font-semibold text-white mb-2 flex-shrink-0">Acciones rápidas</h3>
         <div className="grid grid-cols-1 gap-2 flex-1 content-start">
           {actions.map((action) => {
             // Para 'new-user', renderizar como button sin Link

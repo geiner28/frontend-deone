@@ -42,14 +42,13 @@ export function MetricCard({ title, value, label, color = '#FF8D2D', isCurrency 
         <div>
           {isCurrency ? (
             <div className="flex items-baseline gap-1 mb-2 flex-wrap">
-              <span className="text-sm font-bold text-[#6D7382] flex-shrink-0">$COP</span>
               <p
                 className="font-bold text-[#1D212B] break-words"
                 style={{
                   fontSize: fontSize,
                 }}
               >
-                {displayValue}
+                ${displayValue}
               </p>
             </div>
           ) : (

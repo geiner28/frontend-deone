@@ -66,6 +66,13 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
     switch (estado) {
       case 'pagada':
         return 'bg-green-500';
+      case 'pendiente':
+        return 'bg-blue-500';
+      case 'aproximada':
+        return 'bg-yellow-500';
+      case 'sin_factura':
+        return 'bg-gray-400';
+      // Compat
       case 'validada':
         return 'bg-blue-500';
       case 'extraida':
@@ -81,6 +88,13 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
     switch (estado) {
       case 'pagada':
         return 'Pagada';
+      case 'pendiente':
+        return 'Pendiente';
+      case 'aproximada':
+        return 'Aproximada';
+      case 'sin_factura':
+        return 'Sin factura';
+      // Compat
       case 'validada':
         return 'Validada';
       case 'extraida':

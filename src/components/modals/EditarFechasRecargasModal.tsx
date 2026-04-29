@@ -133,7 +133,7 @@ export default function EditarFechasRecargasModal({
         maxWidth="lg"
         open={open && !showConfirmation}
         onClose={handleClose}
-        title="Editar Fechas de Recargas"
+        title="Editar fechas de recarga"
       >
         <div className="space-y-5 w-full">
           {/* Cantidad de Recargas - Select estilo plan */}

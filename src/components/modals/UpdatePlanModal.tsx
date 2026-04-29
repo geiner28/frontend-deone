@@ -62,7 +62,7 @@ export default function UpdatePlanModal({ open, onClose, telefono, currentPlan, 
       <Modal
         open={open && !showConfirmation}
         onClose={handleClose}
-        title="Actualizar Plan"
+        title="Editar plan"
       >
         <div className="space-y-4">
           <div className="flex flex-col gap-1">
@@ -80,16 +80,17 @@ export default function UpdatePlanModal({ open, onClose, telefono, currentPlan, 
             </select>
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={handleClose} disabled={loading}>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <Button variant="secondary" onClick={handleClose} disabled={loading} className="w-full">
               Cancelar
             </Button>
             <Button
               loading={loading}
               onClick={handleOpenConfirmation}
               disabled={selectedPlan === currentPlan}
+              className="w-full"
             >
-              Actualizar
+              Guardar cambios
             </Button>
           </div>
         </div>

@@ -194,6 +194,7 @@ const [listLoading, setListLoading] = useState(true);
   <div className="flex flex-wrap items-center gap-3 justify-between">
     
     {/* Contenedor del Select (Izquierda) */}
+    <div className="flex items-center gap-3 flex-wrap">
     <div className="filter-select flex items-center border border-gray-200 rounded-md bg-white px-3 py-2 hover:bg-gray-50 focus-within:ring-2 focus-within:ring-[var(--table-header)]/50">
       <i className="fa-regular fa-building text-gray-500" style={{ marginRight: '6px' }} />
       <select 
@@ -206,6 +207,20 @@ const [listLoading, setListLoading] = useState(true);
         <option value="tranquilidad">Tranquilidad</option>
         <option value="respaldo">Respaldo</option>
       </select>
+    </div>
+
+    <div className="filter-select flex items-center border border-gray-200 rounded-md bg-white px-3 py-2 hover:bg-gray-50 focus-within:ring-2 focus-within:ring-[var(--table-header)]/50">
+      <i className="fa-regular fa-file-lines text-gray-500" style={{ marginRight: '6px' }} />
+      <select
+        value={filterFactura}
+        onChange={(e) => { setFilterFactura(e.target.value); setPage(1); }}
+        className="bg-transparent border-none outline-none flex-1 text-sm text-gray-700"
+      >
+        <option value="">Facturas: Todas</option>
+        <option value="con_factura">Con factura</option>
+        <option value="sin_factura">Sin factura</option>
+      </select>
+    </div>
     </div>
 
     <div className="relative ml-auto w-[300px] flex-shrink-0">
@@ -245,6 +260,7 @@ const [listLoading, setListLoading] = useState(true);
                     <th className="p-4 text-left font-medium">Facturas</th>
                     <th className="p-4 text-center font-medium">Pagadas</th>
 <th className="p-4 text-center font-medium">Pendientes</th>
+                    <th className="p-4 text-center font-medium">Sin factura</th>
                     <th className="p-4 text-right font-medium">Saldo</th>
                     <th className="p-4 text-left font-medium">Plan</th>
                   </tr>
@@ -274,6 +290,13 @@ const [listLoading, setListLoading] = useState(true);
                       <td className="p-4 font-medium text-[var(--table-header)]">{totalF}</td>
                       <td className="p-4 text-center text-emerald-600 font-medium">{pagadas}</td>
                       <td className="p-4 text-center text-amber-600 font-medium">{pendientes}</td>
+                      <td className="p-4 text-center">
+                        {totalF === 0 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Sí</span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
                       <td className="p-4 text-right font-bold text-emerald-600">{formatCurrency(c.saldo || 0)}</td>
                       <td className="p-4">
                         <span className={getPlanVariant(c.plan)} style={{fontSize: '0.75rem', fontWeight: 500}}>

@@ -31,7 +31,7 @@ export function UtilitiesCard({
 
   return (
     <div className="rounded-[11.5px] border border-[#C9C9C9] bg-[#F9F9F9] p-3 flex flex-col h-full overflow-hidden">
-      <h3 className="text-xs font-semibold text-[#1D212B] mb-2">Balance</h3>
+      <h3 className="text-xs font-semibold text-[#1D212B] mb-2">Utilidades</h3>
 
       {/* Grid de dos métricas */}
       <div className="grid grid-cols-2 gap-2 flex-1 overflow-hidden">

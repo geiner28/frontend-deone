@@ -35,9 +35,12 @@ const ValidarFacturaModal = ({
     etiqueta: '',
     fecha_emision: '',
     fecha_vencimiento: '',
+    fecha_recordatorio: '',
     origen: '',
     extraccion_estado: '',
     archivo_url: '',
+    pagina_pago: '',
+    grupo: 1 as 1 | 2,
     observaciones_admin: '',
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -70,9 +73,12 @@ const ValidarFacturaModal = ({
         etiqueta: factura.etiqueta ?? '',
         fecha_emision: factura.fecha_emision ?? '',
         fecha_vencimiento: factura.fecha_vencimiento ?? '',
+        fecha_recordatorio: factura.fecha_recordatorio ?? '',
         origen: factura.origen ?? '',
         extraccion_estado: factura.extraccion_estado ?? '',
         archivo_url: factura.archivo_url ?? '',
+        pagina_pago: factura.pagina_pago ?? '',
+        grupo: (factura.grupo === 2 ? 2 : 1) as 1 | 2,
         observaciones_admin: '',
       });
       setSuccessData(null);
@@ -141,10 +147,13 @@ const ValidarFacturaModal = ({
       // periodo se hereda de la obligación; no se envía aquí
       fecha_vencimiento: form.fecha_vencimiento,
       fecha_emision: form.fecha_emision,
+      fecha_recordatorio: form.fecha_recordatorio || undefined,
       referencia_pago: form.referencia_pago,
       tipo_referencia: form.tipo_referencia,
       etiqueta: form.etiqueta,
       archivo_url: form.archivo_url || undefined,
+      pagina_pago: form.pagina_pago || undefined,
+      grupo: form.grupo,
       observaciones_admin: form.observaciones_admin || undefined,
     });
     setLoading(false);
@@ -365,15 +374,44 @@ const ValidarFacturaModal = ({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Fecha recordatorio (opcional)"
+                type="date"
+                value={form.fecha_recordatorio}
+                onChange={(e) => setForm((f) => ({ ...f, fecha_recordatorio: e.target.value }))}
+              />
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-[#1d212b]">Grupo de pago</label>
+                <select
+                  value={form.grupo}
+                  onChange={(e) => setForm((f) => ({ ...f, grupo: (Number(e.target.value) as 1 | 2) }))}
+                  className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm bg-white"
+                >
+                  <option value={1}>Grupo 1 (1 al 15)</option>
+                  <option value={2}>Grupo 2 (16 al fin de mes)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <Input label="Origen" value={form.origen} disabled />
               <Input label="Estado extracción" value={form.extraccion_estado} disabled />
             </div>
 
             <Input
-              label="URL Archivo (opcional)"
+              label="Archivo (URL del comprobante o factura)"
               type="url"
               value={form.archivo_url}
               onChange={(e) => setForm((f) => ({ ...f, archivo_url: e.target.value }))}
+              placeholder="https://..."
+            />
+
+            <Input
+              label="Portal de pago (URL)"
+              type="url"
+              value={form.pagina_pago}
+              onChange={(e) => setForm((f) => ({ ...f, pagina_pago: e.target.value }))}
+              placeholder="https://portal-de-pago.com"
             />
 
             <Input

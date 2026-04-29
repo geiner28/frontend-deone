@@ -27,6 +27,7 @@ export function variantFromEstado(estado: string): Variant {
     case 'activa':
     case 'aprobada':
     case 'pagada':
+    case 'validada':
     case 'completada':
     case 'running':
     case 'ok':
@@ -34,6 +35,7 @@ export function variantFromEstado(estado: string): Variant {
     case 'en_validacion':
     case 'en_progreso':
     case 'pendiente':
+    case 'aproximada':
     case 'extraida':
       return 'warning';
     case 'inactiva':
@@ -41,6 +43,9 @@ export function variantFromEstado(estado: string): Variant {
     case 'cancelada':
     case 'vencida':
       return 'error';
+    case 'sin_factura':
+    case 'sin_validar':
+      return 'neutral';
     default:
       return 'neutral';
   }

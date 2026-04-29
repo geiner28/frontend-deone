@@ -20,6 +20,9 @@ interface UpsertUsuarioAdminModalProps {
     apellido: string;
     correo: string;
     direccion: string | null;
+    tipo_identificacion?: 'CC' | 'NIT' | null;
+    numero_identificacion?: string | null;
+    ciudad?: string | null;
   };
   onSuccess?: (data: { usuario_id: string; creado: boolean; nombre: string; telefono: string; plan?: Plan }) => void;
 }
@@ -67,10 +70,10 @@ export default function UpsertUsuarioAdminModal({
         telefono: initialData.telefono,
         nombre: initialData.nombre,
         apellido: initialData.apellido,
-        tipo_identificacion: 'CC',
-        numero_identificacion: '',
+        tipo_identificacion: (initialData.tipo_identificacion as 'CC' | 'NIT') || 'CC',
+        numero_identificacion: initialData.numero_identificacion || '',
         correo: initialData.correo,
-        ciudad: '',
+        ciudad: initialData.ciudad || '',
         direccion: initialData.direccion || '',
         plan: 'control',
       });
@@ -242,7 +245,7 @@ export default function UpsertUsuarioAdminModal({
       <Modal
         open={open}
         onClose={handleClose}
-        title={existingUser ? 'Actualizar usuario' : 'Agregar usuario'}
+        title={mode === 'edit-profile' ? 'Editar datos personales' : (existingUser ? 'Actualizar usuario' : 'Agregar usuario')}
       >
         <div className="space-y-4">
           {/* Estado de búsqueda y avisos */}
@@ -268,19 +271,19 @@ export default function UpsertUsuarioAdminModal({
             </div>
           )}
 
-          {/* Nombres + Apellidos */}
+          {/* Nombre + Apellido */}
           <div className="grid grid-cols-2 gap-3">
             <Input
-              label="Nombres"
+              label="Nombre"
               required
-              placeholder="Nombres"
+              placeholder="Placeholder"
               value={form.nombre}
               onChange={(e) => setForm(f => ({ ...f, nombre: e.target.value }))}
             />
             <Input
-              label="Apellidos"
+              label="Apellido"
               required
-              placeholder="Apellidos"
+              placeholder="Placeholder"
               value={form.apellido}
               onChange={(e) => setForm(f => ({ ...f, apellido: e.target.value }))}
             />
@@ -383,16 +386,17 @@ export default function UpsertUsuarioAdminModal({
           )}
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={handleClose} disabled={loading}>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <Button variant="secondary" onClick={handleClose} disabled={loading} className="w-full">
               Cancelar
             </Button>
             <Button 
               loading={loading} 
               onClick={handleSaveClick}
               disabled={!form.telefono.trim() || !form.nombre.trim() || fetchingUser}
+              className="w-full"
             >
-              {existingUser ? 'Actualizar' : 'Crear'}
+              {mode === 'edit-profile' ? 'Guardar cambios' : (existingUser ? 'Actualizar' : 'Crear')}
             </Button>
           </div>
         </div>

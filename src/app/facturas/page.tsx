@@ -11,9 +11,10 @@ import ValidarFacturaModal from '@/components/modals/ValidarFacturaModal';
 import RechazarFacturaModal from '@/components/modals/RechazarFacturaModal';
 import PagarFacturaModal from '@/components/modals/PagarFacturaModal';
 import AproximarValorModal from '@/components/modals/AproximarValorModal';
+import EditarFacturaModal from '@/components/modals/EditarFacturaModal';
 
 type ViewType = 'timeline' | 'table';
-type EstadoFilter = 'todas' | 'pagada' | 'pendiente' | 'sin_factura' | 'sin_validar';
+type EstadoFilter = 'todas' | 'pagada' | 'pendiente' | 'sin_factura' | 'aproximada';
 
 export default function FacturasPage() {
   const [currentView, setCurrentView] = useState<ViewType>('table');
@@ -37,6 +38,7 @@ export default function FacturasPage() {
   const [openRechazarModal, setOpenRechazarModal] = useState(false);
   const [openPagarModal, setOpenPagarModal] = useState(false);
   const [openAproximarModal, setOpenAproximarModal] = useState(false);
+  const [openEditarModal, setOpenEditarModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
@@ -75,6 +77,10 @@ export default function FacturasPage() {
     setOpenAproximarModal(true);
   }, []);
 
+  const handleEditar = useCallback(() => {
+    setOpenEditarModal(true);
+  }, []);
+
   // Handlers para éxito de acciones
   // NO cerrar el modal ni limpiar la factura aquí — el modal muestra NotificationDisplay
   // y el usuario cierra manualmente con el botón "Cerrar" (onClose)
@@ -91,6 +97,10 @@ export default function FacturasPage() {
   }, [currentEstado]);
 
   const handleAproximarSuccess = useCallback(async () => {
+    await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
+  }, [currentEstado]);
+
+  const handleEditarSuccess = useCallback(async () => {
     await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
   }, [currentEstado]);
 
@@ -192,7 +202,7 @@ export default function FacturasPage() {
 
       {/* Estado Filter Tabs */}
       <div className="bg-white rounded-lg border border-gray-200 p-1 inline-flex gap-1 flex-wrap">
-        {(['todas', 'pagada', 'pendiente', 'sin_factura', 'sin_validar'] as const).map((estado) => (
+        {(['todas', 'pagada', 'pendiente', 'aproximada', 'sin_factura'] as const).map((estado) => (
           <button
             key={estado}
             onClick={() => {
@@ -210,11 +220,11 @@ export default function FacturasPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
             )}
-            {estado === 'todas' && 'Todas'}
+            {estado === 'todas' && 'Todos'}
             {estado === 'pagada' && 'Pagadas'}
             {estado === 'pendiente' && 'Pendientes'}
-            {estado === 'sin_factura' && 'Sin Factura'}
-            {estado === 'sin_validar' && 'Sin Validar'}
+            {estado === 'aproximada' && 'Aproximadas'}
+            {estado === 'sin_factura' && 'Sin factura'}
             {estado === 'todas' && total > 0 && (
               <span className="bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
                 {total > 99 ? '99+' : total}
@@ -257,6 +267,7 @@ export default function FacturasPage() {
           onRechazar={handleRechazar}
           onPagar={handlePagar}
           onAproximar={handleAproximar}
+          onEditar={handleEditar}
           actionLoading={actionLoading}
         />
       )}
@@ -291,6 +302,13 @@ export default function FacturasPage() {
             onClose={() => { setOpenAproximarModal(false); setSelectedFactura(null); }}
             factura={selectedFactura}
             onSuccess={handleAproximarSuccess}
+            showToast={showToast}
+          />
+          <EditarFacturaModal
+            open={openEditarModal}
+            onClose={() => { setOpenEditarModal(false); setSelectedFactura(null); }}
+            factura={selectedFactura}
+            onSuccess={() => { handleEditarSuccess(); setSelectedFactura(null); }}
             showToast={showToast}
           />
         </>

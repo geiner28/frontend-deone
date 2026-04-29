@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { aproximarFactura } from '@/lib/api';
 import { formatCurrency, getErrorMsg } from '@/lib/utils';
 import type { Factura } from '@/types';
-import Toast, { ToastType } from '@/components/ui/Toast';
+import type { ToastType } from '@/components/ui/Toast';
 
 interface AproximarValorModalProps {
   open: boolean;
@@ -18,21 +17,21 @@ interface AproximarValorModalProps {
 }
 
 const ADJUSTMENT_OPTIONS = [
-  { label: '-30% (Reducción importante)', value: -30 },
+  { label: '-30%', value: -30 },
   { label: '-25%', value: -25 },
   { label: '-20%', value: -20 },
   { label: '-15%', value: -15 },
   { label: '-10%', value: -10 },
   { label: '-5%', value: -5 },
-  { label: '0% (Sin ajuste)', value: 0 },
-  { label: '+5%', value: 5 },
-  { label: '+10%', value: 10 },
-  { label: '+15%', value: 15 },
-  { label: '+20%', value: 20 },
-  { label: '+25%', value: 25 },
-  { label: '+30%', value: 30 },
-  { label: '+40%', value: 40 },
-  { label: '+50% (Aumento importante)', value: 50 },
+  { label: '0%', value: 0 },
+  { label: '5%', value: 5 },
+  { label: '10%', value: 10 },
+  { label: '15%', value: 15 },
+  { label: '20%', value: 20 },
+  { label: '25%', value: 25 },
+  { label: '30%', value: 30 },
+  { label: '40%', value: 40 },
+  { label: '50%', value: 50 },
 ];
 
 const AproximarValorModal = ({
@@ -62,14 +61,14 @@ const AproximarValorModal = ({
 
     setLoading(true);
     const res = await aproximarFactura(factura.id, {
-      monto: montoAproximado,
+      porcentaje: adjustment,
       observaciones_admin: `Aproximado con ajuste ${adjustment > 0 ? '+' : ''}${adjustment}%`,
     });
     setLoading(false);
 
     if (res.ok) {
       showToast(
-        `Factura aproximada: ${formatCurrency(montoBase)} × (1 ${adjustment > 0 ? '+' : ''}${adjustment}%) = ${formatCurrency(montoAproximado)}`,
+        `Factura aproximada: ${formatCurrency(montoBase)} → ${formatCurrency(montoAproximado)}`,
         'success'
       );
       onClose();
@@ -80,34 +79,16 @@ const AproximarValorModal = ({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Aproximar Valor" maxWidth="md">
-      <div className="space-y-4">
-        <div className="bg-[var(--table-header)]/5 border border-[var(--table-header)]/20 rounded-xl p-3">
-          <p className="text-sm font-bold text-[var(--table-header)]">
-            <strong>{factura?.servicio}</strong> — Factura del mes anterior
-          </p>
-          <p className="text-xs text-[var(--table-header)] mt-1">
-            Ajusta el monto heredado según cambios tarifarios o de consumo. Esto no valida la factura aún.
-          </p>
-        </div>
-
-        {/* Información del monto base */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-blue-700 font-medium">Monto base (mes anterior):</span>
-            <span className="text-lg font-bold text-blue-900">{formatCurrency(montoBase)}</span>
-          </div>
-        </div>
-
-        {/* Selector de ajuste */}
-        <div>
-          <label className="block text-sm font-medium text-[var(--table-header)] mb-2">
-            Porcentaje
+    <Modal open={open} onClose={onClose} title="Aproximar" maxWidth="md">
+      <div className="space-y-5">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-[#1d212b]">
+            Porcentaje <span className="text-[#ef4444]">*</span>
           </label>
           <select
             value={adjustment}
             onChange={(e) => setAdjustment(Number(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff8d2d] text-sm"
+            className="w-full px-3 py-2.5 border border-[#e5e7eb] rounded-lg bg-white text-sm text-[#1d212b] focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
           >
             {ADJUSTMENT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -117,24 +98,12 @@ const AproximarValorModal = ({
           </select>
         </div>
 
-        
-
-        {/* Monto final */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-green-700 font-medium">Monto aproximado:</span>
-            <span className="text-2xl font-bold text-green-900">{formatCurrency(montoAproximado)}</span>
-          </div>
-          
-        </div>
-
-        {/* Botones */}
-        <div className="grid grid-cols-2 gap-3 pt-4">
+        <div className="grid grid-cols-2 gap-3 pt-2">
           <Button variant="secondary" onClick={onClose} className="w-full">
             Cancelar
           </Button>
           <Button loading={loading} onClick={handleAproximar} className="w-full">
-            <ArrowPathIcon className="h-4 w-4" /> Guardar Aproximación
+            Guardar cambios
           </Button>
         </div>
       </div>
@@ -143,3 +112,4 @@ const AproximarValorModal = ({
 };
 
 export default AproximarValorModal;
+
