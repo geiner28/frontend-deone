@@ -73,8 +73,8 @@ import type {
 //   No defines NEXT_PUBLIC_*, y el frontend usa el proxy /api/proxy
 //   que lee DEONE_API_KEY / ADMIN_API_KEY del servidor.
 // ══════════════════════════════════════════════════════════════════════════════
-const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_DEONE_API_BASE_URL || '';
-const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_DEONE_API_KEY || '';
+const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_DEONE_API_BASE_URL || 'https://prueba-supabase.onrender.com/api';
+const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_DEONE_API_KEY || 'TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3';
 const API_PREFIX = PUBLIC_API_BASE ? PUBLIC_API_BASE.replace(/\/$/, '') : '/api/proxy';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
