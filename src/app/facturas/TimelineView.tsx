@@ -6,9 +6,30 @@ import { formatCurrency } from '@/lib/utils';
 
 interface TimelineViewProps {
   facturas: FacturaEnriquecida[];
+  selectedUser: string;
+  onUserChange: (userId: string) => void;
+  users: FacturaEnriquecida[];
+  selectedPlan: string;
+  onPlanChange: (plan: string) => void;
 }
 
-export default function TimelineView({ facturas }: TimelineViewProps) {
+export default function TimelineView({
+  facturas: facturasRaw,
+  selectedUser,
+  onUserChange,
+  users,
+  selectedPlan,
+  onPlanChange,
+}: TimelineViewProps) {
+  // Aplicar filtros de user y plan
+  const planDisabled = selectedUser !== 'todos';
+  const facturas = facturasRaw.filter((f) => {
+    const matchUser = selectedUser === 'todos' || f.usuario_id === selectedUser;
+    const userPlan = f.usuario?.plan || 'sin_plan';
+    const matchPlan = selectedUser !== 'todos' || selectedPlan === 'todos' || userPlan === selectedPlan;
+    return matchUser && matchPlan;
+  });
+
   const ahora = new Date();
   const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -117,9 +138,35 @@ export default function TimelineView({ facturas }: TimelineViewProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex flex-wrap items-center justify-between mb-2 gap-3">
         <h2 className="text-xl font-bold text-gray-900">Cronograma de Vencimientos</h2>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedUser}
+            onChange={(e) => {
+              onUserChange(e.target.value);
+              if (e.target.value !== 'todos') onPlanChange('todos');
+            }}
+            className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            <option value="todos">User: Todos</option>
+            {users.map((u) => (
+              <option key={u.usuario_id} value={u.usuario_id}>
+                User: {u.usuario?.nombre}
+              </option>
+            ))}
+          </select>
+          <select
+            value={selectedPlan}
+            onChange={(e) => onPlanChange(e.target.value)}
+            disabled={planDisabled}
+            title={planDisabled ? 'Quita el filtro de Usuario para filtrar por plan' : ''}
+            className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <option value="todos">Plan: Todos</option>
+            <option value="tranquilidad">Plan: Tranquilidad</option>
+            <option value="respaldo">Plan: Respaldo</option>
+          </select>
           <select
             value={mesSeleccionado}
             onChange={(e) => setMesSeleccionado(parseInt(e.target.value))}

@@ -22,13 +22,13 @@ export function MetricCard({ title, value, label, color = '#FF8D2D', isCurrency 
     displayValue = value.replace('$COP ', '').trim();
   }
 
-  // Calcular tamaño de fuente basado en longitud del número
-  let fontSize = '1.875rem'; // base
+  // Calcular tamaño de fuente basado en longitud del número (escala aumentada)
+  let fontSize = '2.25rem'; // base (antes 1.875rem)
   const valueLength = displayValue.length;
-  if (valueLength > 30) fontSize = '0.75rem';
-  else if (valueLength > 25) fontSize = '0.875rem';
-  else if (valueLength > 20) fontSize = '1.125rem';
-  else if (valueLength > 15) fontSize = '1.5rem';
+  if (valueLength > 30) fontSize = '1rem';
+  else if (valueLength > 25) fontSize = '1.125rem';
+  else if (valueLength > 20) fontSize = '1.5rem';
+  else if (valueLength > 15) fontSize = '1.875rem';
 
   return (
     <div
@@ -37,13 +37,13 @@ export function MetricCard({ title, value, label, color = '#FF8D2D', isCurrency 
     >
       <div className="flex flex-col h-full justify-between">
         <div>
-          <p className="text-xs font-medium text-[#6D7382] mb-2">{title}</p>
+          <p className="text-sm font-medium text-[#6D7382] mb-2">{title}</p>
         </div>
         <div>
           {isCurrency ? (
             <div className="flex items-baseline gap-1 mb-2 flex-wrap">
               <p
-                className="font-bold text-[#1D212B] break-words"
+                className="font-bold text-[#1D212B] break-words leading-tight"
                 style={{
                   fontSize: fontSize,
                 }}
@@ -53,7 +53,7 @@ export function MetricCard({ title, value, label, color = '#FF8D2D', isCurrency 
             </div>
           ) : (
             <p
-              className="font-bold text-[#1D212B] mb-2"
+              className="font-bold text-[#1D212B] mb-2 leading-tight"
               style={{
                 fontSize: fontSize,
               }}
@@ -61,7 +61,7 @@ export function MetricCard({ title, value, label, color = '#FF8D2D', isCurrency 
               {displayValue}
             </p>
           )}
-          {label && <p className="text-xs text-[#C7C7C7]">{label}</p>}
+          {label && <p className="text-sm text-[#6D7382]">{label}</p>}
         </div>
       </div>
     </div>

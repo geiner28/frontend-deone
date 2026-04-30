@@ -30,6 +30,10 @@ export default function FacturasPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<string>('todos');
   const [selectedPlan, setSelectedPlan] = useState<string>('todos');
+  // Filtro de mes: 'YYYY-MM' o 'todos'. Default = mes actual.
+  const now = new Date();
+  const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [selectedMes, setSelectedMes] = useState<string>(defaultMes);
   const [sortProximos, setSortProximos] = useState(true);
 
   // Modal states
@@ -111,24 +115,35 @@ export default function FacturasPage() {
   // Reset to page 1 when search, user filter, or plan filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedUser, selectedPlan, sortProximos]);
+  }, [searchTerm, selectedUser, selectedPlan, selectedMes, sortProximos]);
 
   // Filter and search facturas for table view
   // Nota: El filtrado por estado ya se hace en el backend
   const filteredFacturas = facturas.filter(f => {
-    const matchSearch = 
-      !searchTerm || 
-      (f.servicio && f.servicio.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (f.usuario_nombre && f.usuario_nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (f.referencia_pago && f.referencia_pago.includes(searchTerm));
-    
+    const term = searchTerm.trim().toLowerCase();
+    const matchSearch =
+      !term ||
+      (f.usuario_nombre && f.usuario_nombre.toLowerCase().includes(term)) ||
+      (f.etiqueta && f.etiqueta.toLowerCase().includes(term)) ||
+      (f.servicio && f.servicio.toLowerCase().includes(term));
+
     const matchUser = selectedUser === 'todos' || f.usuario_id === selectedUser;
-    
-    // Filtrar por plan - obtener el plan del usuario
+
+    // Filtrar por plan - obtener el plan del usuario (deshabilitado si user seleccionado)
     const userPlan = f.usuario?.plan || 'sin_plan';
-    const matchPlan = selectedPlan === 'todos' || userPlan === selectedPlan;
-    
-    return matchSearch && matchUser && matchPlan;
+    const matchPlan = selectedUser !== 'todos' || selectedPlan === 'todos' || userPlan === selectedPlan;
+
+    // Filtrar por mes (basado en fecha_vencimiento)
+    let matchMes = true;
+    if (selectedMes !== 'todos' && f.fecha_vencimiento) {
+      const d = new Date(f.fecha_vencimiento);
+      const fMes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      matchMes = fMes === selectedMes;
+    } else if (selectedMes !== 'todos' && !f.fecha_vencimiento) {
+      matchMes = false;
+    }
+
+    return matchSearch && matchUser && matchPlan && matchMes;
   });
 
   // Sort by fecha de vencimiento
@@ -154,6 +169,33 @@ export default function FacturasPage() {
   const uniquePlans = Array.from(new Set(
     facturas.map(f => f.usuario?.plan || 'sin_plan')
   )).sort();
+
+  // Construir opciones de mes a partir de las fechas de vencimiento existentes
+  // Asegura incluir mes actual y mes anterior por defecto.
+  const mesesOptions = (() => {
+    const labels = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const set = new Set<string>();
+    // Mes actual y anterior siempre presentes
+    const cur = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    [cur, prev].forEach((d) => {
+      set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    });
+    facturas.forEach((f) => {
+      if (f.fecha_vencimiento) {
+        const d = new Date(f.fecha_vencimiento);
+        set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+    });
+    const arr = Array.from(set).sort().reverse();
+    return [
+      { value: 'todos', label: 'Todos' },
+      ...arr.map((v) => {
+        const [y, m] = v.split('-');
+        return { value: v, label: `${labels[parseInt(m, 10) - 1]} ${y}` };
+      }),
+    ];
+  })();
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -243,7 +285,14 @@ export default function FacturasPage() {
           </div>
         </div>
       ) : currentView === 'timeline' ? (
-        <TimelineView facturas={facturas} />
+        <TimelineView
+          facturas={facturas}
+          selectedUser={selectedUser}
+          onUserChange={(u) => { setSelectedUser(u); if (u !== 'todos') setSelectedPlan('todos'); }}
+          users={uniqueUsers}
+          selectedPlan={selectedPlan}
+          onPlanChange={setSelectedPlan}
+        />
       ) : (
         <TableView
           facturas={paginatedFacturas}
@@ -258,6 +307,9 @@ export default function FacturasPage() {
           selectedPlan={selectedPlan}
           onPlanChange={setSelectedPlan}
           plans={uniquePlans}
+          selectedMes={selectedMes}
+          onMesChange={setSelectedMes}
+          mesesOptions={mesesOptions}
           sortProximos={sortProximos}
           onToggleSort={() => setSortProximos(v => !v)}
           onPageChange={setCurrentPage}

@@ -55,6 +55,11 @@ export default function HistorialPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('todos');
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState('');
+  // Filtro de mes (YYYY-MM o 'todos'). Por defecto: mes actual.
+  const _now = new Date();
+  const [selectedMes, setSelectedMes] = useState<string>(
+    `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`
+  );
   const [sortNewest, setSortNewest] = useState(true);
   const limit = 8;
 
@@ -107,6 +112,38 @@ export default function HistorialPage() {
 
   // Sort locally (already sorted by API, but toggle for UX)
   const sorted = sortNewest ? entries : [...entries].reverse();
+
+  // Filtro local por mes
+  const filteredByMes = selectedMes === 'todos'
+    ? sorted
+    : sorted.filter((e) => {
+        if (!e.fecha) return false;
+        const d = new Date(e.fecha);
+        const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return m === selectedMes;
+      });
+
+  // Construir opciones de mes
+  const mesesOptions = (() => {
+    const labels = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const set = new Set<string>();
+    const cur = new Date(_now.getFullYear(), _now.getMonth(), 1);
+    const prev = new Date(_now.getFullYear(), _now.getMonth() - 1, 1);
+    [cur, prev].forEach((d) => set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`));
+    entries.forEach((e) => {
+      if (e.fecha) {
+        const d = new Date(e.fecha);
+        set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+    });
+    return [
+      { value: 'todos', label: 'Todos' },
+      ...Array.from(set).sort().reverse().map((v) => {
+        const [y, m] = v.split('-');
+        return { value: v, label: `${labels[parseInt(m, 10) - 1]} ${y}` };
+      }),
+    ];
+  })();
 
   // Pagination helpers
   const startIndex = (page - 1) * limit + 1;
@@ -192,12 +229,23 @@ export default function HistorialPage() {
             ))}
           </select>
 
+          {/* Month filter */}
+          <select
+            value={selectedMes}
+            onChange={(e) => setSelectedMes(e.target.value)}
+            className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            {mesesOptions.map((m) => (
+              <option key={m.value} value={m.value}>Mes: {m.label}</option>
+            ))}
+          </select>
+
           {/* Search */}
           <div className="relative ml-auto w-[300px] flex-shrink-0">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por nombre, celular.."
+              placeholder="Buscar por nombre..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleSearchKey}
@@ -216,6 +264,10 @@ export default function HistorialPage() {
         ) : sorted.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             No hay registros en el historial
+          </div>
+        ) : filteredByMes.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">
+            No hay registros en el mes seleccionado
           </div>
         ) : (
           <>
@@ -241,7 +293,7 @@ export default function HistorialPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((entry, idx) => (
+                  {filteredByMes.map((entry, idx) => (
                     <tr
                       key={entry.id}
                       className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}

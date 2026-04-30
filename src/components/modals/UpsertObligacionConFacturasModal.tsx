@@ -9,6 +9,7 @@ import {
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
+import UserCombobox from '@/components/ui/UserCombobox';
 import {
   createObligacion,
   capturaFactura,
@@ -31,6 +32,12 @@ interface UpsertObligacionConFacturasModalProps {
   mode?: 'create' | 'from-profile';
   initialTelefono?: string;
   usuarioNombre?: string;
+  /**
+   * Periodo en formato 'YYYY-MM' — cuando se crea desde la sección de un mes
+   * específico del usuario, se pre-llenan las fechas con ese mes y no se pide
+   * el periodo manualmente.
+   */
+  initialPeriodo?: string;
 }
 
 export default function UpsertObligacionConFacturasModal({
@@ -40,6 +47,7 @@ export default function UpsertObligacionConFacturasModal({
   mode = 'create',
   initialTelefono,
   usuarioNombre,
+  initialPeriodo,
 }: UpsertObligacionConFacturasModalProps) {
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -78,33 +86,56 @@ export default function UpsertObligacionConFacturasModal({
       setNumeroReferencia('');
       setPortalPago('');
       setGrupo('');
-      setFechaEmision('');
-      setFechaVencimiento('');
+      // Si viene initialPeriodo (YYYY-MM), pre-poblar fechas con primer día / fin de ese mes
+      if (initialPeriodo && /^\d{4}-\d{2}$/.test(initialPeriodo)) {
+        const [yStr, mStr] = initialPeriodo.split('-');
+        const y = parseInt(yStr, 10);
+        const m = parseInt(mStr, 10);
+        const first = `${yStr}-${mStr}-01`;
+        // Último día del mes
+        const last = new Date(y, m, 0);
+        const lastStr = `${y}-${String(m).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`;
+        setFechaEmision(first);
+        setFechaVencimiento(lastStr);
+      } else {
+        setFechaEmision('');
+        setFechaVencimiento('');
+      }
       setMonto('');
       setSec1Open(true);
       setSec2Open(true);
       setSec3Open(true);
       setToast(null);
     }
-  }, [open, mode, initialTelefono]);
+  }, [open, mode, initialTelefono, initialPeriodo]);
 
   // Load catalogs
   useEffect(() => {
     if (!open) return;
     if (mode === 'create') {
-      setLoadingUsers(true);
-      getAdminClientes({ page: 1, limit: 200 }).then((res) => {
-        setLoadingUsers(false);
-        if (res.ok && res.data) {
-          setUsuarios(
-            (res.data.clientes || []).map((u) => ({
-              telefono: u.telefono,
-              nombre: u.nombre || '',
-              apellido: u.apellido || '',
-            }))
-          );
+      const loadUsers = async () => {
+        setLoadingUsers(true);
+        try {
+          const res = await getAdminClientes({ page: 1, limit: 100 });
+          if (res.ok && res.data) {
+            setUsuarios(
+              (res.data.clientes || []).map((u) => ({
+                telefono: u.telefono,
+                nombre: u.nombre || '',
+                apellido: u.apellido || '',
+              }))
+            );
+          } else {
+            setUsuarios([]);
+          }
+        } catch {
+          setUsuarios([]);
+          showToast('No se pudo cargar la lista de usuarios', 'error');
+        } finally {
+          setLoadingUsers(false);
         }
-      });
+      };
+      loadUsers();
     }
     getEtiquetasDistinct().then((res) => {
       if (res.ok && res.data) setEtiquetas(res.data.etiquetas || []);
@@ -117,13 +148,15 @@ export default function UpsertObligacionConFacturasModal({
   }, [mode, initialTelefono, telefono]);
 
   const sec2Filled = useMemo(() => {
-    return Boolean(
-      etiqueta.trim() && receptor.trim() && tipoReferencia.trim() && numeroReferencia.trim()
-    );
-  }, [etiqueta, receptor, tipoReferencia, numeroReferencia]);
+    // "Datos de la obligación": entidad + tipo y número de referencia
+    return Boolean(receptor.trim() && tipoReferencia.trim() && numeroReferencia.trim());
+  }, [receptor, tipoReferencia, numeroReferencia]);
 
   const sec3Filled = useMemo(() => {
-    return Boolean(fechaEmision && fechaVencimiento && monto && Number(monto) > 0);
+    // "Datos de la factura": fechas + monto
+    return Boolean(
+      fechaEmision && fechaVencimiento && monto && Number(monto) > 0
+    );
   }, [fechaEmision, fechaVencimiento, monto]);
 
   const canSubmit = sec1Filled && sec2Filled && sec3Filled;
@@ -242,44 +275,34 @@ export default function UpsertObligacionConFacturasModal({
 
       <Modal open={open} onClose={handleClose} title="Agregar obligación" maxWidth="md">
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-          {/* Sección 1 - Usuario */}
-          <div className="border-b border-[#e5e7eb] pb-4">
-            <SectionHeader
-              title="Usuario"
-              open={sec1Open}
-              filled={sec1Filled}
-              onToggle={() => setSec1Open((v) => !v)}
-            />
-            {sec1Open && (
-              <div className="mt-4">
-                {mode === 'from-profile' ? (
-                  <div className="rounded-lg bg-[#fff4e6] border border-[#ff8d2d]/30 px-3 py-2 text-sm text-[#1d212b]">
-                    <span className="font-medium">Usuario:</span>{' '}
-                    {usuarioNombre || initialTelefono}
-                  </div>
-                ) : (
+          {/* Sección 1 - Usuario (solo visible cuando se crea desde el dashboard).
+              En modo from-profile, el usuario ya está en contexto y se envía por detrás. */}
+          {mode === 'create' && (
+            <div className="border-b border-[#e5e7eb] pb-4">
+              <SectionHeader
+                title="Usuario"
+                open={sec1Open}
+                filled={sec1Filled}
+                onToggle={() => setSec1Open((v) => !v)}
+              />
+              {sec1Open && (
+                <div className="mt-4">
                   <div className="flex flex-col gap-1">
                     {labelReq('Usuario')}
-                    <select
+                    <UserCombobox
+                      options={usuarios}
                       value={telefono}
-                      onChange={(e) => setTelefono(e.target.value)}
-                      disabled={loadingUsers}
-                      className={inputCls}
-                    >
-                      <option value="">{loadingUsers ? 'Cargando…' : 'Seleccione'}</option>
-                      {usuarios.map((u) => (
-                        <option key={u.telefono} value={u.telefono}>
-                          {u.nombre} {u.apellido} — {u.telefono}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setTelefono}
+                      loading={loadingUsers}
+                      placeholder="Buscar por nombre o celular…"
+                    />
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Sección 2 - Datos de la obligación */}
+          {/* Sección - Datos de la obligación */}
           <div className="border-b border-[#e5e7eb] pb-4">
             <SectionHeader
               title="Datos de la obligación"
@@ -289,79 +312,85 @@ export default function UpsertObligacionConFacturasModal({
             />
             {sec2Open && (
               <div className="mt-4 space-y-3">
-                <div className="flex flex-col gap-1">
-                  {labelReq('Etiqueta')}
-                  <input
-                    list="etiquetas-list"
-                    value={etiqueta}
-                    onChange={(e) => setEtiqueta(e.target.value)}
-                    placeholder="Placeholder"
-                    className={inputCls}
-                  />
-                  <datalist id="etiquetas-list">
-                    {etiquetas.map((et) => (
-                      <option key={et} value={et} />
-                    ))}
-                  </datalist>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    {labelReq('Etiqueta')}
+                    <input
+                      list="etiquetas-list"
+                      value={etiqueta}
+                      onChange={(e) => setEtiqueta(e.target.value)}
+                      placeholder="Seleccione"
+                      className={inputCls}
+                    />
+                    <datalist id="etiquetas-list">
+                      {etiquetas.map((et) => (
+                        <option key={et} value={et} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {labelReq('Entidad')}
+                    <input
+                      value={receptor}
+                      onChange={(e) => setReceptor(e.target.value)}
+                      placeholder="Placeholder"
+                      className={inputCls}
+                    />
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1">
-                  {labelReq('Receptor')}
-                  <input
-                    value={receptor}
-                    onChange={(e) => setReceptor(e.target.value)}
-                    placeholder="Placeholder"
-                    className={inputCls}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    {labelReq('Tipo de referencia')}
+                    <select
+                      value={tipoReferencia}
+                      onChange={(e) => setTipoReferencia(e.target.value)}
+                      className={inputCls}
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="numero_cuenta">Número de cuenta</option>
+                      <option value="cedula">Cédula</option>
+                      <option value="codigo_barras">Código de barras</option>
+                      <option value="referencia">Referencia</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {labelReq('Número de referencia')}
+                    <input
+                      value={numeroReferencia}
+                      onChange={(e) => setNumeroReferencia(e.target.value)}
+                      placeholder="Placeholder"
+                      className={inputCls}
+                    />
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1">
-                  {labelReq('Tipo de referencia')}
-                  <select
-                    value={tipoReferencia}
-                    onChange={(e) => setTipoReferencia(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">Seleccione</option>
-                    <option value="numero_cuenta">Número de cuenta</option>
-                    <option value="cedula">Cédula</option>
-                    <option value="codigo_barras">Código de barras</option>
-                    <option value="referencia">Referencia</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  {labelReq('Número de referencia')}
-                  <input
-                    value={numeroReferencia}
-                    onChange={(e) => setNumeroReferencia(e.target.value)}
-                    placeholder="Placeholder"
-                    className={inputCls}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  {labelOpt('Portal de pago')}
-                  <input
-                    value={portalPago}
-                    onChange={(e) => setPortalPago(e.target.value)}
-                    placeholder="Placeholder"
-                    className={inputCls}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  {labelOpt('Grupo')}
-                  <select
-                    value={grupo}
-                    onChange={(e) => setGrupo(e.target.value as '' | '1' | '2')}
-                    className={inputCls}
-                  >
-                    <option value="">Seleccione</option>
-                    <option value="1">Grupo 1</option>
-                    <option value="2">Grupo 2</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    {labelOpt('Portal de pago')}
+                    <input
+                      value={portalPago}
+                      onChange={(e) => setPortalPago(e.target.value)}
+                      placeholder="Seleccione"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {labelOpt('Grupo')}
+                    <select
+                      value={grupo}
+                      onChange={(e) => setGrupo(e.target.value as '' | '1' | '2')}
+                      className={inputCls}
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="1">Grupo 1</option>
+                      <option value="2">Grupo 2</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Sección 3 - Datos de la factura */}
+          {/* Sección - Datos de la factura */}
           <div className="pb-2">
             <SectionHeader
               title="Datos de la factura"
@@ -371,23 +400,25 @@ export default function UpsertObligacionConFacturasModal({
             />
             {sec3Open && (
               <div className="mt-4 space-y-3">
-                <div className="flex flex-col gap-1">
-                  {labelReq('Fecha de emisión')}
-                  <input
-                    type="date"
-                    value={fechaEmision}
-                    onChange={(e) => setFechaEmision(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  {labelReq('Fecha de vencimiento')}
-                  <input
-                    type="date"
-                    value={fechaVencimiento}
-                    onChange={(e) => setFechaVencimiento(e.target.value)}
-                    className={inputCls}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    {labelReq('Fecha de emisión')}
+                    <input
+                      type="date"
+                      value={fechaEmision}
+                      onChange={(e) => setFechaEmision(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {labelReq('Fecha de vencimiento')}
+                    <input
+                      type="date"
+                      value={fechaVencimiento}
+                      onChange={(e) => setFechaVencimiento(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   {labelReq('Monto')}
@@ -399,6 +430,11 @@ export default function UpsertObligacionConFacturasModal({
                     className={inputCls}
                   />
                 </div>
+                {initialPeriodo && (
+                  <p className="text-xs text-[#737780]">
+                    Periodo prellenado a partir del mes seleccionado. Puedes ajustar las fechas si es necesario.
+                  </p>
+                )}
               </div>
             )}
           </div>

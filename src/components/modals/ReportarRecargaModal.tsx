@@ -5,6 +5,7 @@ import { ChevronDownIcon, ExclamationCircleIcon, CheckCircleIcon } from '@heroic
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Toast, { ToastType } from '@/components/ui/Toast';
+import UserCombobox from '@/components/ui/UserCombobox';
 import { reportarRecarga, getAdminClientes } from '@/lib/api';
 import type { RecargaData } from '@/types';
 import { getErrorMsg } from '@/lib/utils';
@@ -49,7 +50,7 @@ export default function ReportarRecargaModal({
   useEffect(() => {
     if (!open || mode !== 'create') return;
     setLoadingUsers(true);
-    getAdminClientes({ page: 1, limit: 200 }).then((res) => {
+    getAdminClientes({ page: 1, limit: 100 }).then((res) => {
       setLoadingUsers(false);
       if (res.ok && res.data) {
         const items = (res.data.clientes || []).map((u) => ({
@@ -153,19 +154,13 @@ export default function ReportarRecargaModal({
                     <label className="text-sm font-medium text-[#1d212b]">
                       Usuario <span className="text-[#ef4444]">*</span>
                     </label>
-                    <select
+                    <UserCombobox
+                      options={usuarios}
                       value={telefono}
-                      onChange={(e) => setTelefono(e.target.value)}
-                      disabled={loadingUsers}
-                      className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 text-sm text-[#1d212b] focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
-                    >
-                      <option value="">{loadingUsers ? 'Cargando…' : 'Seleccione'}</option>
-                      {usuarios.map((u) => (
-                        <option key={u.telefono} value={u.telefono}>
-                          {u.nombre} {u.apellido} — {u.telefono}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setTelefono}
+                      loading={loadingUsers}
+                      placeholder="Buscar por nombre o celular…"
+                    />
                   </div>
                 ) : (
                   usuarioNombre && (

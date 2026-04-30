@@ -278,13 +278,11 @@ const [listLoading, setListLoading] = useState(true);
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="font-medium text-gray-900">{c.nombre} {c.apellido}</div>
-                          <PencilSquareIcon className="h-4 w-4 text-gray-400 hover:text-[var(--table-header)] cursor-pointer ml-2" />
                         </div>
                       </td>
                       <td className="p-4">
                         <div className="flex items-center">
                           <span>{c.telefono}</span>
-                          <PencilSquareIcon className="h-4 w-4 text-gray-400 hover:text-[var(--table-header)] cursor-pointer ml-2" />
                         </div>
                       </td>
                       <td className="p-4 font-medium text-[var(--table-header)]">{totalF}</td>

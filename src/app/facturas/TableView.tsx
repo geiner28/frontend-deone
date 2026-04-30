@@ -1,9 +1,16 @@
 'use client';
 
-import { useMemo, useState, useRef } from 'react';
+import { useState } from 'react';
 import type { FacturaEnriquecida } from '@/types';
 import { formatCurrency } from '@/lib/utils';
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import {
+  MagnifyingGlassIcon,
+  PencilSquareIcon,
+  CheckCircleIcon,
+  CalculatorIcon,
+  XCircleIcon,
+  CreditCardIcon,
+} from '@heroicons/react/24/outline';
 
 interface TableViewProps {
   facturas: FacturaEnriquecida[];
@@ -18,6 +25,9 @@ interface TableViewProps {
   selectedPlan: string;
   onPlanChange: (plan: string) => void;
   plans: string[];
+  selectedMes: string;
+  onMesChange: (mes: string) => void;
+  mesesOptions: { value: string; label: string }[];
   sortProximos: boolean;
   onToggleSort: () => void;
   onPageChange: (page: number) => void;
@@ -44,6 +54,9 @@ export default function TableView({
   selectedPlan,
   onPlanChange,
   plans,
+  selectedMes,
+  onMesChange,
+  mesesOptions,
   sortProximos,
   onToggleSort,
   onPageChange,
@@ -56,11 +69,9 @@ export default function TableView({
   onEditar,
   actionLoading,
 }: TableViewProps) {
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  // Si hay un usuario seleccionado, deshabilitar filtro de plan
+  const planDisabled = selectedUser !== 'todos';
 
-  // Cerrar menú cuando el mouse sale del área
-  // (sin listener global que interfiera con eventos)
   const isOverdue = (fecha?: string) => {
     if (!fecha) return false;
     const vencimiento = new Date(fecha);
@@ -112,17 +123,6 @@ export default function TableView({
     return isSinValidar(factura) || isValidada(factura);
   };
 
-  // Función para obtener las acciones disponibles para una factura
-  const getAvailableActionCount = (factura: FacturaEnriquecida): number => {
-    let count = 0;
-    if (isSinValidar(factura)) {
-      count += 2;
-      if (factura.origen === 'auto') count++;
-    }
-    if (isValidada(factura)) count += 1;
-    return count;
-  };
-
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -139,8 +139,24 @@ export default function TableView({
           </button>
 
           <select
+            value={selectedMes}
+            onChange={(e) => onMesChange(e.target.value)}
+            className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            {mesesOptions.map((m) => (
+              <option key={m.value} value={m.value}>
+                Mes: {m.label}
+              </option>
+            ))}
+          </select>
+
+          <select
             value={selectedUser}
-            onChange={(e) => onUserChange(e.target.value)}
+            onChange={(e) => {
+              onUserChange(e.target.value);
+              // Reset plan si se selecciona un usuario
+              if (e.target.value !== 'todos') onPlanChange('todos');
+            }}
             className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <option value="todos">User: Todos</option>
@@ -154,21 +170,20 @@ export default function TableView({
           <select
             value={selectedPlan}
             onChange={(e) => onPlanChange(e.target.value)}
-            className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            disabled={planDisabled}
+            title={planDisabled ? 'Quita el filtro de Usuario para filtrar por plan' : ''}
+            className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="todos">Plan: Todos</option>
-            {plans.map((plan) => (
-              <option key={plan} value={plan}>
-                Plan: {plan.charAt(0).toUpperCase() + plan.slice(1)}
-              </option>
-            ))}
+            <option value="tranquilidad">Plan: Tranquilidad</option>
+            <option value="respaldo">Plan: Respaldo</option>
           </select>
 
           <div className="relative ml-auto w-[300px] flex-shrink-0">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por nombre, celular..."
+              placeholder="Buscar por nombre o etiqueta..."
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pl-10"
@@ -274,112 +289,59 @@ export default function TableView({
                       </td>
                       <td className="px-4 py-3">
                         {hasAvailableActions(factura) ? (
-                          <div className="relative" ref={menuRef}>
-                            {/* Botón trigger */}
+                          <div className="flex items-center gap-1">
+                            {/* Editar - siempre disponible si hay acciones */}
                             <button
-                              onClick={() => {
-                                setOpenMenuId(openMenuId === factura.id ? null : factura.id);
-                                onSelectFactura(factura);
-                              }}
-                              className="px-3 py-2 hover:bg-gray-200 text-gray-700 hover:text-gray-900 rounded-lg transition-all duration-200 border border-gray-300 hover:border-gray-400 flex items-center justify-center gap-1.5 shadow-sm font-medium text-sm"
-                              title={`${getAvailableActionCount(factura)} acción(es) disponible(s)`}
+                              onClick={() => { onSelectFactura(factura); onEditar(); }}
+                              disabled={actionLoading}
+                              title="Editar"
+                              className="p-2 rounded-lg text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors disabled:opacity-50"
                             >
-                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M10.5 1.5H9.5V3.5H10.5V1.5ZM10.5 8.5H9.5V10.5H10.5V8.5ZM10.5 15.5H9.5V17.5H10.5V15.5Z" />
-                              </svg>
-                              <span className="bg-gray-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
-                                {getAvailableActionCount(factura)}
-                              </span>
+                              <PencilSquareIcon className="w-5 h-5" />
                             </button>
 
-                            {/* Dropdown Menu */}
-                            {openMenuId === factura.id && (
-                              <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-max">
-                                <div className="py-1">
+                            {isSinValidar(factura) && (
+                              <>
+                                <button
+                                  onClick={() => { onSelectFactura(factura); onValidar(); }}
+                                  disabled={actionLoading}
+                                  title="Validar"
+                                  className="p-2 rounded-lg text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors disabled:opacity-50"
+                                >
+                                  <CheckCircleIcon className="w-5 h-5" />
+                                </button>
+
+                                {factura.origen === 'auto' && (
                                   <button
-                                    onClick={() => {
-                                      console.log('Editar clicked', factura);
-                                      onSelectFactura(factura);
-                                      onEditar();
-                                      setOpenMenuId(null);
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 flex items-center gap-2 transition-colors cursor-pointer border-b border-gray-100"
+                                    onClick={() => { onSelectFactura(factura); onAproximar(); }}
+                                    disabled={actionLoading}
+                                    title="Aproximar"
+                                    className="p-2 rounded-lg text-purple-600 hover:bg-purple-50 hover:text-purple-700 transition-colors disabled:opacity-50"
                                   >
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                                    </svg>
-                                    Editar
+                                    <CalculatorIcon className="w-5 h-5" />
                                   </button>
+                                )}
 
-                                  {isSinValidar(factura) && (
-                                    <>
-                                      <button
-                                        onClick={() => {
-                                          console.log('Validar clicked', factura);
-                                          onSelectFactura(factura);
-                                          onValidar();
-                                          setOpenMenuId(null);
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                      >
-                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                        </svg>
-                                        Validar
-                                      </button>
+                                <button
+                                  onClick={() => { onSelectFactura(factura); onRechazar(); }}
+                                  disabled={actionLoading}
+                                  title="Rechazar"
+                                  className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors disabled:opacity-50"
+                                >
+                                  <XCircleIcon className="w-5 h-5" />
+                                </button>
+                              </>
+                            )}
 
-                                      {factura.origen === 'auto' && (
-                                        <button
-                                          onClick={() => {
-                                            console.log('Aproximar clicked', factura);
-                                            onSelectFactura(factura);
-                                            onAproximar();
-                                            setOpenMenuId(null);
-                                          }}
-                                          className="w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                        >
-                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                                          </svg>
-                                          Aproximar
-                                        </button>
-                                      )}
-
-                                      <button
-                                        onClick={() => {
-                                          console.log('Rechazar clicked', factura);
-                                          onSelectFactura(factura);
-                                          onRechazar();
-                                          setOpenMenuId(null);
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                      >
-                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                        </svg>
-                                        Rechazar
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {isValidada(factura) && (
-                                    <button
-                                      onClick={() => {
-                                        console.log('Pagar clicked', factura);
-                                        onSelectFactura(factura);
-                                        onPagar();
-                                        setOpenMenuId(null);
-                                      }}
-                                      className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                    >
-                                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a1 1 0 100-2 1 1 0 000 2z" />
-                                      </svg>
-                                      Pagar
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
+                            {isValidada(factura) && (
+                              <button
+                                onClick={() => { onSelectFactura(factura); onPagar(); }}
+                                disabled={actionLoading}
+                                title="Pagar"
+                                className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors disabled:opacity-50"
+                              >
+                                <CreditCardIcon className="w-5 h-5" />
+                              </button>
                             )}
                           </div>
                         ) : (

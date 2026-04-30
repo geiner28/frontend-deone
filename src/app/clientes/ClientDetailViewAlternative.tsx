@@ -110,35 +110,58 @@ const getEstadoBadgeContent = (estado: string) => {
   return estado;
 };
 
-// Generar meses disponibles (6 futuro + 12 pasado)
-const generateMonthOptions = () => {
-  const options = [];
+// Generar meses disponibles desde el registro del usuario hasta el mes siguiente al actual.
+// El "siguiente mes" se incluye para permitir crear obligaciones por adelantado.
+const generateMonthOptions = (createdAt?: string) => {
+  const options: { value: string; label: string }[] = [];
   const today = new Date();
-  
-  // 6 meses hacia el FUTURO
-  for (let i = 6; i > 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const monthName = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    options.push({ value: `${year}-${month}-01`, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) });
+  const todayY = today.getFullYear();
+  const todayM = today.getMonth();
+
+  // Mes inicial: el de creación del usuario (o 12 meses atrás como fallback razonable).
+  let startY: number;
+  let startM: number;
+  if (createdAt) {
+    const c = new Date(createdAt);
+    if (!isNaN(c.getTime())) {
+      startY = c.getFullYear();
+      startM = c.getMonth();
+    } else {
+      const fb = new Date(todayY, todayM - 12, 1);
+      startY = fb.getFullYear();
+      startM = fb.getMonth();
+    }
+  } else {
+    const fb = new Date(todayY, todayM - 12, 1);
+    startY = fb.getFullYear();
+    startM = fb.getMonth();
   }
-  
-  // MES ACTUAL (separador visual)
-  const today_y = today.getFullYear();
-  const today_m = String(today.getMonth() + 1).padStart(2, '0');
-  const todayName = today.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-  options.push({ value: `${today_y}-${today_m}-01`, label: `${todayName.charAt(0).toUpperCase() + todayName.slice(1)} (Actual)` });
-  
-  // 12 meses hacia el PASADO
-  for (let i = 1; i <= 12; i++) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const monthName = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    options.push({ value: `${year}-${month}-01`, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) });
+
+  // Mes final: el siguiente al actual (para permitir crear el siguiente mes).
+  const endDate = new Date(todayY, todayM + 1, 1);
+
+  // Iterar desde end (más reciente) hasta start (más antiguo): orden descendente.
+  const cursor = new Date(endDate);
+  while (
+    cursor.getFullYear() > startY ||
+    (cursor.getFullYear() === startY && cursor.getMonth() >= startM)
+  ) {
+    const y = cursor.getFullYear();
+    const m = String(cursor.getMonth() + 1).padStart(2, '0');
+    const monthName = cursor.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    let label = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+    if (y === todayY && cursor.getMonth() === todayM) {
+      label = `${label} (Actual)`;
+    } else if (
+      y === endDate.getFullYear() &&
+      cursor.getMonth() === endDate.getMonth()
+    ) {
+      label = `${label} (Siguiente)`;
+    }
+    options.push({ value: `${y}-${m}-01`, label });
+    cursor.setMonth(cursor.getMonth() - 1);
   }
-  
+
   return options;
 };
 
@@ -198,7 +221,10 @@ export default function ClientDetailViewAlternative({
     setTimeout(() => setToast(null), 3000);
   };
 
-  const monthOptions = useMemo(() => generateMonthOptions(), []);
+  const monthOptions = useMemo(
+    () => generateMonthOptions(perfil?.usuario?.creado_en),
+    [perfil?.usuario?.creado_en]
+  );
 
   // ─── HANDLER: Refrescar datos de facturas ─────────────────────────────────────
   const refreshFacturas = useCallback(async () => {
@@ -890,6 +916,7 @@ export default function ClientDetailViewAlternative({
           onClose={() => setOpenObligacionModal(false)}
           mode="from-profile"
           initialTelefono={u.telefono}
+          initialPeriodo={selectedMonth ? selectedMonth.slice(0, 7) : undefined}
           usuarioNombre={`${u.nombre || ''} ${u.apellido || ''}`.trim()}
           onSuccess={async () => {
             // Recargar los datos del perfil para actualizar la lista de obligaciones
