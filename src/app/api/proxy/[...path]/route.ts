@@ -7,7 +7,8 @@ const API_KEY =
   process.env.DEONE_API_KEY ||
   process.env.ADMIN_API_KEY ||
   process.env.BOT_API_KEY ||
-  process.env.NEXT_PUBLIC_DEONE_API_KEY;
+  process.env.NEXT_PUBLIC_DEONE_API_KEY ||
+  'TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3';
 
 // params may be either a plain object or a Promise that resolves to the object
 async function proxyRequest(req: Request | any, params: any) {
