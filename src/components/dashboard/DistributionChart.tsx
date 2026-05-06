@@ -1,176 +1,169 @@
 'use client';
 
 import { useState } from 'react';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 interface DistributionChartProps {
   title?: string;
   data?: {
     label: string;
     value: number;
-    percentage?: number;
-    color: string;
+    color?: string;
   }[];
 }
 
 const COLORS = [
-  '#FF8D2D', '#52596B', '#C9C9C9', '#FF6B6B', '#4ECDC4',
+  '#FF8D2D', '#52596B', '#A3B3C6', '#FF6B6B', '#4ECDC4',
   '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE',
-  '#85C1E2', '#F8B195', '#6C5B7B', '#355C7D', '#2A9D8F',
-  '#E76F51', '#F4A261', '#E9C46A', '#264653', '#9B5DE5'
 ];
 
+const formatCOP = (value: number): string =>
+  new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+
 export function DistributionChart({
-  title = 'Distribución de Saldos por Usuarios',
-  data = [
-    { label: 'Usuario 1', value: 5000, percentage: 45, color: '#FF8D2D' },
-    { label: 'Usuario 2', value: 4000, percentage: 36, color: '#52596B' },
-    { label: 'Usuario 3', value: 2000, percentage: 19, color: '#C9C9C9' },
-  ],
+  title = 'Distribución de saldo',
+  data = [],
 }: DistributionChartProps) {
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [selectedUser, setSelectedUser] = useState<string>('todos');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const total = data.reduce((sum, item) => sum + item.value, 0);
-
-  // Función para formatear como COP
-  const formatCOP = (value: number): string => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value).replace('$', '$COP ');
-  };
-
-  // Asignar colores a cada usuario si no los tienen
   const dataWithColors = data.map((item, idx) => ({
     ...item,
     color: item.color || COLORS[idx % COLORS.length],
-    percentage: total > 0 ? Math.round((item.value / total) * 100) : 0,
   }));
 
-  // Generar segmentos del círculo
-  const segments = dataWithColors.reduce((acc: any[], item, idx) => {
-    const prevPercentage = acc.reduce((sum, seg) => sum + seg.percentage, 0);
-    const startAngle = (prevPercentage / 100) * 360;
-    const endAngle = ((prevPercentage + item.percentage) / 100) * 360;
+  const total = dataWithColors.reduce((sum, item) => sum + item.value, 0);
 
-    const startRad = (startAngle * Math.PI) / 180;
-    const endRad = (endAngle * Math.PI) / 180;
+  // Donut segments
+  const SIZE = 160;
+  const CX = SIZE / 2;
+  const CY = SIZE / 2;
+  const R = 56;
+  const STROKE = 22;
+  const GAP_DEG = 2;
 
-    const x1 = 100 + 75 * Math.cos(startRad);
-    const y1 = 100 + 75 * Math.sin(startRad);
-    const x2 = 100 + 75 * Math.cos(endRad);
-    const y2 = 100 + 75 * Math.sin(endRad);
+  type Segment = { path: string; color: string; label: string };
+  const segments: Segment[] = [];
+  let cursor = -90;
 
-    const largeArc = item.percentage > 50 ? 1 : 0;
+  dataWithColors.forEach((item) => {
+    const pct = total > 0 ? item.value / total : 0;
+    const spanDeg = pct * 360 - GAP_DEG;
+    if (spanDeg <= 0) return;
 
-    return [
-      ...acc,
-      {
-        ...item,
-        path: `M ${x1} ${y1} A 75 75 0 ${largeArc} 1 ${x2} ${y2}`,
-      },
-    ];
-  }, []);
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const x1 = CX + R * Math.cos(toRad(cursor));
+    const y1 = CY + R * Math.sin(toRad(cursor));
+    const endAngle = cursor + spanDeg;
+    const x2 = CX + R * Math.cos(toRad(endAngle));
+    const y2 = CY + R * Math.sin(toRad(endAngle));
+    const largeArc = spanDeg > 180 ? 1 : 0;
+
+    segments.push({
+      path: `M ${x1} ${y1} A ${R} ${R} 0 ${largeArc} 1 ${x2} ${y2}`,
+      color: item.color,
+      label: item.label,
+    });
+
+    cursor = endAngle + GAP_DEG;
+  });
+
+  const totalFormatted = formatCOP(total);
+  const centerFontSize = totalFormatted.length > 12 ? '10' : '12';
+
+  const selectedLabel =
+    selectedUser === 'todos'
+      ? 'User'
+      : dataWithColors.find((u) => u.label === selectedUser)?.label ?? 'User';
 
   return (
-    <div className="rounded-[11.5px] border border-[#C9C9C9] bg-[#F9F9F9] p-4 h-full flex flex-col">
-      <h3 className="text-sm font-semibold text-[#1D212B] mb-3 flex-shrink-0">{title}</h3>
+    <div className="rounded-[11.5px] border border-[#C9C9C9] bg-white p-4 h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+        <h3 className="text-sm font-semibold text-[#1D212B]">{title}</h3>
 
-      <div
-        className={`flex flex-col lg:flex-row gap-4 flex-1 overflow-hidden ${
-          dataWithColors.length > 0 ? 'justify-between' : 'justify-center items-center'
-        }`}
-      >
-        {/* Lista de usuarios con scroll */}
-        {dataWithColors.length > 0 && (
-          <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
-            {dataWithColors.map((item, idx) => (
-              <div
-                key={idx}
-                onClick={() => setSelectedIndex(selectedIndex === idx ? null : idx)}
-                className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all ${
-                  selectedIndex === idx
-                    ? 'bg-white border border-[#1D212B]'
-                    : 'bg-white/50 border border-transparent hover:bg-white'
-                }`}
+        <div className="relative">
+          <button
+            onClick={() => setDropdownOpen((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#C9C9C9] bg-white text-xs text-[#1D212B] font-medium hover:bg-gray-50 transition-colors"
+          >
+            <span className="max-w-[80px] truncate">{selectedLabel}</span>
+            <ChevronDownIcon className="w-3.5 h-3.5 text-[#6D7382] flex-shrink-0" />
+          </button>
+
+          {dropdownOpen && (
+            <div className="absolute right-0 top-full mt-1 bg-white border border-[#C9C9C9] rounded-lg shadow-md z-20 min-w-[140px] overflow-hidden">
+              <button
+                onClick={() => { setSelectedUser('todos'); setDropdownOpen(false); }}
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${selectedUser === 'todos' ? 'font-semibold text-[#FF8D2D]' : 'text-[#1D212B]'}`}
               >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div
-                    className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-xs font-medium text-[#1D212B] truncate">{item.label}</span>
-                </div>
-                <div className="text-right flex-shrink-0 ml-2">
-                  <p className="text-xs font-bold text-[#1D212B] whitespace-nowrap">{item.percentage}%</p>
-                  <p className="text-[10px] text-[#999999] whitespace-nowrap">{formatCOP(item.value)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Gráfico circular */}
-        <div className="flex justify-center items-center flex-shrink-0 w-full lg:w-auto">
-          <div className="relative w-40 h-40 flex flex-col items-center justify-center">
-            <svg className="w-40 h-40" viewBox="0 0 200 200">
-              {/* Base circle background */}
-              <circle cx="100" cy="100" r="75" fill="none" stroke="#F0F0F0" strokeWidth="16" />
-
-              {/* Segmentos de color */}
-              {segments.map((segment, idx) => (
-                <path
-                  key={idx}
-                  d={segment.path}
-                  fill="none"
-                  stroke={segment.color}
-                  strokeWidth="16"
-                  strokeLinecap="round"
-                  opacity={selectedIndex === null || selectedIndex === idx ? 1 : 0.3}
-                  className="transition-opacity cursor-pointer"
-                  onClick={() => setSelectedIndex(selectedIndex === idx ? null : idx)}
-                />
+                Todos
+              </button>
+              {dataWithColors.map((u) => (
+                <button
+                  key={u.label}
+                  onClick={() => { setSelectedUser(u.label); setDropdownOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 truncate ${selectedUser === u.label ? 'font-semibold text-[#FF8D2D]' : 'text-[#1D212B]'}`}
+                >
+                  {u.label}
+                </button>
               ))}
-
-              {/* Centro blanco */}
-              <circle cx="100" cy="100" r="40" fill="white" stroke="#F0F0F0" strokeWidth="1" />
-
-              {/* Texto del total */}
-              <text
-                x="100"
-                y="95"
-                textAnchor="middle"
-                style={{
-                  fontSize: '14px',
-                  fontWeight: '700',
-                  fill: '#1D212B',
-                }}
-              >
-                Total
-              </text>
-              <text
-                x="100"
-                y="118"
-                textAnchor="middle"
-                style={{
-                  fontSize: formatCOP(total).length > 18 ? '20px' : '24px',
-                  fontWeight: '800',
-                  fill: '#1D212B',
-                }}
-              >
-                {formatCOP(total)}
-              </text>
-            </svg>
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Footer con resumen */}
-      <div className="mt-2 pt-2 border-t border-[#E5E7EB] flex-shrink-0">
-        <div className="flex justify-between items-center text-xs gap-2">
-          <span className="text-[#6D7382] font-medium">Total Usuarios: {dataWithColors.length}</span>
-          <span className="font-bold text-[#1D212B]">{formatCOP(total)}</span>
+      {/* Body: donut LEFT + legend RIGHT */}
+      <div className="flex flex-row items-center gap-4 flex-1 min-h-0">
+        {/* Donut */}
+        <div className="flex-shrink-0 flex items-center justify-center">
+          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+            <circle cx={CX} cy={CY} r={R} fill="none" stroke="#E5E7EB" strokeWidth={STROKE} />
+
+            {segments.length > 0 ? segments.map((seg, i) => (
+              <path
+                key={i}
+                d={seg.path}
+                fill="none"
+                stroke={seg.color}
+                strokeWidth={STROKE}
+                strokeLinecap="butt"
+                opacity={selectedUser === 'todos' || selectedUser === seg.label ? 1 : 0.2}
+                className="transition-opacity"
+              />
+            )) : (
+              <circle cx={CX} cy={CY} r={R} fill="none" stroke="#D1D5DB" strokeWidth={STROKE} />
+            )}
+
+            <text x={CX} y={CY - 6} textAnchor="middle" fontSize={centerFontSize} fontWeight="700" fill="#1D212B">
+              {totalFormatted}
+            </text>
+            <text x={CX} y={CY + 9} textAnchor="middle" fontSize="9" fill="#6D7382">
+              Saldo total
+            </text>
+          </svg>
+        </div>
+
+        {/* Legend */}
+        <div className="flex-1 min-w-0 overflow-y-auto space-y-3">
+          {dataWithColors.length === 0 ? (
+            <p className="text-xs text-[#6D7382]">Sin datos</p>
+          ) : (
+            dataWithColors.map((item, idx) => (
+              <div key={idx} className="flex items-start gap-2">
+                <span className="mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 bg-[#22c55e]" />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-[#1D212B] truncate leading-tight">{item.label}</p>
+                  <p className="text-xs text-[#6D7382] leading-tight">{formatCOP(item.value)}</p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
