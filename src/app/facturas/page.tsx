@@ -2,14 +2,11 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Toast, { ToastType } from '@/components/ui/Toast';
-import { getAllFacturas, validarFactura, rechazarFactura, crearPago, confirmarPago, aproximarFactura } from '@/lib/api';
+import { getAllFacturas, actualizarFactura, deleteFactura } from '@/lib/api';
 import type { FacturaEnriquecida, ListarTodasLasFacturasData } from '@/types';
-import { formatCurrency, getErrorMsg } from '@/lib/utils';
+import { getErrorMsg } from '@/lib/utils';
 import TimelineView from './TimelineView';
 import TableView from './TableView';
-import ValidarFacturaModal from '@/components/modals/ValidarFacturaModal';
-import RechazarFacturaModal from '@/components/modals/RechazarFacturaModal';
-import PagarFacturaModal from '@/components/modals/PagarFacturaModal';
 import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import EditarFacturaModal from '@/components/modals/EditarFacturaModal';
 
@@ -38,12 +35,9 @@ export default function FacturasPage() {
 
   // Modal states
   const [selectedFactura, setSelectedFactura] = useState<FacturaEnriquecida | null>(null);
-  const [openValidarModal, setOpenValidarModal] = useState(false);
-  const [openRechazarModal, setOpenRechazarModal] = useState(false);
-  const [openPagarModal, setOpenPagarModal] = useState(false);
   const [openAproximarModal, setOpenAproximarModal] = useState(false);
   const [openEditarModal, setOpenEditarModal] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [updatingFacturaId, setUpdatingFacturaId] = useState<string | null>(null);
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
@@ -64,42 +58,11 @@ export default function FacturasPage() {
     }
   };
 
-  // Handlers para abrir modales
-  const handleValidar = useCallback(() => {
-    setOpenValidarModal(true);
-  }, []);
-
-  const handleRechazar = useCallback(() => {
-    setOpenRechazarModal(true);
-  }, []);
-
-  const handlePagar = useCallback(() => {
-    setOpenPagarModal(true);
-  }, []);
-
-  const handleAproximar = useCallback(() => {
-    setOpenAproximarModal(true);
-  }, []);
-
   const handleEditar = useCallback(() => {
     setOpenEditarModal(true);
   }, []);
 
   // Handlers para éxito de acciones
-  // NO cerrar el modal ni limpiar la factura aquí — el modal muestra NotificationDisplay
-  // y el usuario cierra manualmente con el botón "Cerrar" (onClose)
-  const handleValidarSuccess = useCallback(async () => {
-    await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
-  }, [currentEstado]);
-
-  const handleRechazarSuccess = useCallback(async () => {
-    await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
-  }, [currentEstado]);
-
-  const handlePagarSuccess = useCallback(async () => {
-    await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
-  }, [currentEstado]);
-
   const handleAproximarSuccess = useCallback(async () => {
     await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
   }, [currentEstado]);
@@ -107,6 +70,71 @@ export default function FacturasPage() {
   const handleEditarSuccess = useCallback(async () => {
     await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
   }, [currentEstado]);
+
+  const handleEstadoChange = useCallback(async (
+    factura: FacturaEnriquecida,
+    newEstado: 'pagada' | 'pendiente' | 'sin_factura' | 'aproximada'
+  ) => {
+    if (!factura?.id) return;
+
+    if (newEstado === 'aproximada') {
+      setSelectedFactura(factura);
+      setOpenAproximarModal(true);
+      return;
+    }
+
+    setUpdatingFacturaId(factura.id);
+    const payload: { estado: 'pagada' | 'pendiente' | 'sin_factura'; validacion_estado?: 'validada' } = {
+      estado: newEstado,
+    };
+
+    // Al marcar pagada desde la lista no se exige referencia ni comprobante.
+    if (newEstado === 'pagada') {
+      payload.validacion_estado = 'validada';
+    }
+
+    const res = await actualizarFactura(factura.id, payload);
+    setUpdatingFacturaId(null);
+
+    if (res.ok) {
+      showToast('Estado actualizado', 'success');
+      await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo actualizar el estado'), 'error');
+    }
+  }, [currentEstado]);
+
+  const handleGrupoChange = useCallback(async (factura: FacturaEnriquecida, grupo: 1 | 2) => {
+    if (!factura?.id) return;
+    setUpdatingFacturaId(factura.id);
+    const res = await actualizarFactura(factura.id, { grupo });
+    setUpdatingFacturaId(null);
+
+    if (res.ok) {
+      showToast('Grupo actualizado', 'success');
+      await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo actualizar el grupo'), 'error');
+    }
+  }, [currentEstado]);
+
+  const handleDelete = useCallback(async (factura: FacturaEnriquecida) => {
+    if (!factura?.id) return;
+    const ok = globalThis.confirm('¿Eliminar esta factura? Esta acción no se puede deshacer.');
+    if (!ok) return;
+
+    setUpdatingFacturaId(factura.id);
+    const res = await deleteFactura(factura.id);
+    setUpdatingFacturaId(null);
+
+    if (res.ok) {
+      showToast('Factura eliminada', 'success');
+      await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
+      if (selectedFactura?.id === factura.id) setSelectedFactura(null);
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo eliminar la factura'), 'error');
+    }
+  }, [currentEstado, selectedFactura?.id]);
 
   useEffect(() => {
     loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
@@ -315,40 +343,17 @@ export default function FacturasPage() {
           onPageChange={setCurrentPage}
           selectedFactura={selectedFactura}
           onSelectFactura={setSelectedFactura}
-          onValidar={handleValidar}
-          onRechazar={handleRechazar}
-          onPagar={handlePagar}
-          onAproximar={handleAproximar}
+          onEstadoChange={handleEstadoChange}
+          onGrupoChange={handleGrupoChange}
+          onDelete={handleDelete}
           onEditar={handleEditar}
-          actionLoading={actionLoading}
+          updatingFacturaId={updatingFacturaId}
         />
       )}
 
       {/* Modals */}
       {selectedFactura && (
         <>
-          <ValidarFacturaModal
-            open={openValidarModal}
-            onClose={() => { setOpenValidarModal(false); setSelectedFactura(null); }}
-            factura={selectedFactura}
-            onSuccess={handleValidarSuccess}
-            showToast={showToast}
-          />
-          <RechazarFacturaModal
-            open={openRechazarModal}
-            onClose={() => { setOpenRechazarModal(false); setSelectedFactura(null); }}
-            factura={selectedFactura}
-            onSuccess={handleRechazarSuccess}
-            showToast={showToast}
-          />
-          <PagarFacturaModal
-            open={openPagarModal}
-            onClose={() => { setOpenPagarModal(false); setSelectedFactura(null); }}
-            factura={selectedFactura}
-            perfil={null}
-            onSuccess={handlePagarSuccess}
-            showToast={showToast}
-          />
           <AproximarValorModal
             open={openAproximarModal}
             onClose={() => { setOpenAproximarModal(false); setSelectedFactura(null); }}

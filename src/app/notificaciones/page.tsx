@@ -1,51 +1,45 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Card } from '@/components/ui/Card';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import Badge from '@/components/ui/Badge';
-import Modal from '@/components/ui/Modal';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+  BellIcon,
+  ShieldCheckIcon,
+  ChatBubbleLeftRightIcon,
+  MagnifyingGlassIcon,
+  ChevronUpDownIcon,
+  ChevronDownIcon,
+  ArrowsUpDownIcon,
+  EyeIcon,
+  PencilSquareIcon,
+  TrashIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from '@heroicons/react/24/outline';
+
 import Toast, { ToastType } from '@/components/ui/Toast';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import EmptyState from '@/components/ui/EmptyState';
-import UserAccionesCard from '@/components/UserAccionesCard';
-import { useNotifications } from '@/contexts/NotificationContext';
+import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
 import ValidarFacturaModal from '@/components/modals/ValidarFacturaModal';
-import RechazarFacturaModal from '@/components/modals/RechazarFacturaModal';
-import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import AprobarRechazarRecargaModal from '@/components/modals/AprobarRechazarRecargaModal';
 import {
   getAdminNotificaciones,
   getAdminNotificacionesEstadisticas,
+  deleteNotificacion,
+  updateNotificacion,
   marcarNotificacionEnviada,
-  marcarNotificacionesEnviadasBatch,
-  generarNotificacionesMock,
-  getAdminAlertasAdmin,
-  getAdminNotificacionesAutomaticas,
-  getAdminSolicitudOriginal,
-  getAdminNotificacionesAcciones,
 } from '@/lib/api';
-import type { NotificacionAPI, Factura } from '@/types';
-import { formatDateTime, getErrorMsg } from '@/lib/utils';
-import {
-  BellIcon,
-  CheckIcon,
-  ClipboardDocumentIcon,
-  EyeIcon,
-  UserIcon,
-  ShieldCheckIcon,
-  XMarkIcon,
-  FunnelIcon,
-  QuestionMarkCircleIcon,
-  MagnifyingGlassIcon,
-  ExclamationTriangleIcon,
-  ArrowPathIcon,
-  BoltIcon,
-  ChatBubbleLeftRightIcon,
-} from '@heroicons/react/24/outline';
+import type { NotificacionAPI, Factura, UpdateNotificacionPayload } from '@/types';
+import { formatDate, formatCurrency, getErrorMsg } from '@/lib/utils';
 
-type Tab = 'todas' | 'alertas' | 'acciones';
+// ──────────────────────────────────────────────────────────────────────────
+// Tipos & helpers visuales
+// ──────────────────────────────────────────────────────────────────────────
+
+type Vista = 'admin' | 'bot';
+type Tab = 'todos' | 'facturas' | 'recargas';
+type SortDir = 'recientes' | 'antiguas';
 
 type NotificacionConUsuario = NotificacionAPI & {
   usuarios?: { nombre: string; apellido: string; telefono: string };
@@ -59,1303 +53,739 @@ interface Estadisticas {
   por_tipo: Record<string, { total: number; pendiente: number; enviada: number; leida: number }>;
 }
 
-type DateFilterType = 'hoy' | 'semana' | 'mes' | 'custom';
+const ADMIN_TIPOS = new Set(['factura_por_validar', 'recarga_por_validar', 'alerta_admin']);
 
-interface DateFilter {
-  type: DateFilterType;
-  customDesde?: string;
-  customHasta?: string;
-}
+const TIPO_LABEL: Record<string, string> = {
+  // ADMIN (internas)
+  factura_por_validar: 'Factura agregada',
+  recarga_por_validar: 'Recarga',
+  alerta_admin: 'Alerta admin',
+  // BOT (mensajes al usuario)
+  solicitud_recarga: 'Recarga requerida',
+  solicitud_recarga_inicio_mes: 'Recarga requerida',
+  recordatorio_recarga: 'Recarga requerida',
+  recarga_confirmada: 'Recarga validada',
+  recarga_aprobada: 'Recarga validada',
+  obligacion_cumplida: 'Pago de factura',
+  pago_confirmado: 'Pago de factura',
+};
 
 const formatTipo = (tipo: string) =>
-  tipo.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  TIPO_LABEL[tipo] || tipo.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+// Categoría visual de la fila (para tabs Facturas/Recargas)
+const tipoCategoria = (tipo: string): 'factura' | 'recarga' | 'otro' => {
+  if (tipo === 'factura_por_validar' || tipo === 'obligacion_cumplida' || tipo === 'pago_confirmado') return 'factura';
+  if (
+    tipo === 'recarga_por_validar' ||
+    tipo === 'solicitud_recarga' ||
+    tipo === 'solicitud_recarga_inicio_mes' ||
+    tipo === 'recordatorio_recarga' ||
+    tipo === 'recarga_confirmada' ||
+    tipo === 'recarga_aprobada'
+  ) return 'recarga';
+  return 'otro';
+};
+
+interface EstadoStyle {
+  label: string;
+  // tailwind: text + border + bg subtle
+  cls: string;
+}
+
+function estadoVisual(estado: string, tipo: string): EstadoStyle {
+  if (ADMIN_TIPOS.has(tipo)) {
+    if (estado === 'pendiente' || estado === 'sin_revisar') {
+      return { label: 'Sin revisar', cls: 'text-amber-600 border-amber-300 bg-amber-50' };
+    }
+    return { label: 'Revisada', cls: 'text-emerald-600 border-emerald-300 bg-emerald-50' };
+  }
+  switch (estado) {
+    case 'sin_respuesta':
+      return { label: 'Sin respuesta', cls: 'text-gray-500 border-gray-300 bg-gray-50' };
+    case 'pendiente':
+      return { label: 'Pendiente', cls: 'text-amber-600 border-amber-300 bg-amber-50' };
+    case 'enviada':
+      return { label: 'Enviada', cls: 'text-emerald-600 border-emerald-300 bg-emerald-50' };
+    case 'entregada':
+      return { label: 'Entregada', cls: 'text-sky-600 border-sky-300 bg-sky-50' };
+    case 'rechazada':
+      return { label: 'Rechazada', cls: 'text-rose-600 border-rose-300 bg-rose-50' };
+    case 'leida':
+      return { label: 'Leída', cls: 'text-emerald-600 border-emerald-300 bg-emerald-50' };
+    default:
+      return { label: estado, cls: 'text-gray-600 border-gray-300 bg-gray-50' };
+  }
+}
+
+// Extraer numero_ref desde el payload (compatibilidad con varios formatos)
+function getNumeroRef(n: NotificacionAPI): string {
+  const p = (n.payload || {}) as Record<string, unknown>;
+  const candidatos = [
+    p['numero_ref'],
+    p['numero_factura'],
+    p['referencia_pago'],
+    p['etiqueta'],
+    p['recarga_id'],
+    p['factura_id'],
+  ];
+  for (const c of candidatos) {
+    if (c != null && String(c).trim() !== '') return String(c);
+  }
+  return '—';
+}
+
+function getMonto(n: NotificacionAPI): number | null {
+  const p = (n.payload || {}) as Record<string, unknown>;
+  const v = p['monto'] ?? p['monto_total'] ?? p['valor'];
+  if (v == null) return null;
+  const num = Number(v);
+  return Number.isFinite(num) ? num : null;
+}
+
+function getNombreUsuario(n: NotificacionConUsuario): string {
+  if (n.usuarios) {
+    const full = `${n.usuarios.nombre || ''} ${n.usuarios.apellido || ''}`.trim();
+    if (full) return full;
+  }
+  const p = (n.payload || {}) as Record<string, unknown>;
+  const candidatos = [p['usuario_nombre'], p['nombre_usuario'], p['usuario_telefono']];
+  for (const c of candidatos) {
+    if (c != null && String(c).trim() !== '') return String(c);
+  }
+  return '—';
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Página
+// ──────────────────────────────────────────────────────────────────────────
 
 export default function NotificacionesPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('todas');
-  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
-  
-  // Notificaciones simuladas del usuario
-  const { notifications: simulated, markRead, markAllRead, clearAll } = useNotifications();
-  const userNotifications = simulated.filter(n => n.target === 'usuario');
-  const userUnread = userNotifications.filter(n => !n.read).length;
-  
-  // Filtros y búsqueda admin
-  const [filterTipo, setFilterTipo] = useState<string>('');
+  const [vista, setVista] = useState<Vista>('bot');
+  const [tab, setTab] = useState<Tab>('todos');
+  const [sortDir, setSortDir] = useState<SortDir>('recientes');
   const [filterEstado, setFilterEstado] = useState<string>('');
-  // Vista principal: SIEMPRE separadas por destinatario.
-  // 'bot' → destinatario=usuario (lo que envía el bot a los clientes por WhatsApp/Telegram)
-  // 'admin' → destinatario=admin (lo que el sistema notifica al equipo en el dashboard)
-  const [vistaCanal, setVistaCanal] = useState<'bot' | 'admin'>('bot');
-  const [dateFilter, setDateFilter] = useState<DateFilter>({ type: 'mes' });
   const [searchUsuario, setSearchUsuario] = useState('');
-  const [page, setPage] = useState(1);
-  const limit = 20;
 
-  // Datos para cada tab
-  const [notificacionesTodas, setNotificacionesTodas] = useState<NotificacionConUsuario[]>([]);
-  const [accionesData, setAccionesData] = useState<any>(null);
-  const [alertas, setAlertas] = useState<NotificacionConUsuario[]>([]);
+  const [notificaciones, setNotificaciones] = useState<NotificacionConUsuario[]>([]);
   const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 20;
 
-  // Estado dinámico basado en la tab activa
-  const getActiveData = () => {
-    switch (activeTab) {
-      case 'todas':
-        return notificacionesTodas;
-      case 'alertas':
-        return alertas;
-      case 'acciones':
-        return accionesData?.acciones_por_usuario || [];
-      default:
-        return notificacionesTodas;
-    }
-  };
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
-  const notificaciones = getActiveData();
-
-  // Modales
-  const [selectedNotif, setSelectedNotif] = useState<NotificacionConUsuario | null>(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedAlerta, setSelectedAlerta] = useState<NotificacionConUsuario | null>(null);
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [originalSolicitud, setOriginalSolicitud] = useState<any>(null);
-  const [loadingOriginal, setLoadingOriginal] = useState(false);
-  const [showMarkModal, setShowMarkModal] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [copyNotifId, setCopyNotifId] = useState<string | null>(null);
-
-  // Modales para acciones (Facturas y Recargas)
-  const [showValidarFacturaModal, setShowValidarFacturaModal] = useState(false);
-  const [showRechazarFacturaModal, setShowRechazarFacturaModal] = useState(false);
-  const [showAproximarValorModal, setShowAproximarValorModal] = useState(false);
+  // Modales (solo activos en vista admin para validar/aprobar)
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null);
-  const [showAprobarRechazarModal, setShowAprobarRechazarModal] = useState(false);
-  const [selectedRecargaUsuarioTelefono, setSelectedRecargaUsuarioTelefono] = useState<string>('');
+  const [showValidarModal, setShowValidarModal] = useState(false);
+  const [showRecargaModal, setShowRecargaModal] = useState(false);
   const [selectedRecargaId, setSelectedRecargaId] = useState<string | null>(null);
 
-  const showToast = (message: string, type: ToastType) => setToast({ message, type });
+  const [notifToDelete, setNotifToDelete] = useState<NotificacionConUsuario | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [changingEstado, setChangingEstado] = useState<string | null>(null); // id de notif que se está actualizando
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null); // id de notif con dropdown abierto
 
-  // Función para calcular desde/hasta basado en el filtro de fecha
-  const getDateRange = (filter: DateFilter): { desde: string; hasta: string } => {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    
-    let desde: Date;
-    
-    switch (filter.type) {
-      case 'hoy':
-        desde = new Date(hoy);
-        break;
-      case 'semana':
-        desde = new Date(hoy);
-        desde.setDate(desde.getDate() - 7);
-        break;
-      case 'mes':
-        desde = new Date(hoy);
-        desde.setMonth(desde.getMonth() - 1); // Retroceder exactamente 1 mes
-        break;
-      case 'custom':
-        if (!filter.customDesde) {
-          desde = new Date(hoy);
-          desde.setMonth(desde.getMonth() - 1);
-        } else {
-          desde = new Date(filter.customDesde);
-        }
-        break;
-      default:
-        desde = new Date(hoy);
-    }
-    
-    const desdeStr = desde.toISOString().split('T')[0];
-    const hastaStr = hoy.toISOString().split('T')[0];
-    
-    return { desde: desdeStr, hasta: hastaStr };
-  };
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    if (!openDropdown) return;
+    const handler = () => setOpenDropdown(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [openDropdown]);
 
-  // Cargar datos admin - SIN searchUsuario (es solo búsqueda local)
+  // ────────────────────────────────────────
+  // Reset paginación al cambiar filtros
+  // ────────────────────────────────────────
   useEffect(() => {
     setPage(1);
-  }, [activeTab]);
+  }, [tab, sortDir, filterEstado, searchUsuario]);
 
-  // IMPORTANTE: searchUsuario NO está aquí porque el filtrado es 100% local en AccionesView
-  // Solo recargamos cuando cambian filtros reales o tab
-  useEffect(() => {
-    loadData();
-  }, [filterTipo, filterEstado, vistaCanal, dateFilter, page, activeTab]);
-
-  const loadData = async () => {
+  // ────────────────────────────────────────
+  // Cargar datos
+  // ────────────────────────────────────────
+  const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      console.log(`LOADING ${activeTab.toUpperCase()}:`, { page, limit });
+      const filters = {
+        canal_grupo: vista,
+        estado: filterEstado || undefined,
+        page,
+        limit,
+      };
 
-      if (activeTab === 'todas') {
-        const { desde, hasta } = getDateRange(dateFilter);
-        await loadTodas(desde, hasta);
-      } else if (activeTab === 'alertas') {
-        const { desde, hasta } = getDateRange(dateFilter);
-        await loadAlertas(desde, hasta);
-      } else if (activeTab === 'acciones') {
-        await loadAcciones();
+      const [resList, resStats] = await Promise.all([
+        getAdminNotificaciones(filters),
+        getAdminNotificacionesEstadisticas({ canal_grupo: vista }),
+      ]);
+
+      if (!resList.ok || !resList.data) {
+        throw new Error(getErrorMsg(resList) || 'Error al listar');
       }
+
+      let items = (resList.data.notificaciones || []) as NotificacionConUsuario[];
+
+      // Filtrar por tab (categoría)
+      if (tab === 'facturas') items = items.filter(n => tipoCategoria(n.tipo) === 'factura');
+      else if (tab === 'recargas') items = items.filter(n => tipoCategoria(n.tipo) === 'recarga');
+
+      // Búsqueda por nombre/teléfono (cliente, ya que API no soporta search)
+      const q = searchUsuario.trim().toLowerCase();
+      if (q) {
+        items = items.filter(n => {
+          const nombre = getNombreUsuario(n).toLowerCase();
+          const tel = (n.usuarios?.telefono || '').toLowerCase();
+          return nombre.includes(q) || tel.includes(q);
+        });
+      }
+
+      // Sort
+      items.sort((a, b) => {
+        const ta = new Date(a.creado_en).getTime();
+        const tb = new Date(b.creado_en).getTime();
+        return sortDir === 'recientes' ? tb - ta : ta - tb;
+      });
+
+      setNotificaciones(items);
+      setTotal(resList.data.total || 0);
+      setTotalPages(resList.data.total_pages || 1);
+      setEstadisticas((resStats.ok && resStats.data ? resStats.data.estadisticas : null) as Estadisticas | null);
     } catch (err) {
-      console.error('Error catch:', err);
-      showToast('Error al cargar datos: ' + (err as any).message, 'error');
+      setToast({ message: getErrorMsg(err as any) || 'Error cargando notificaciones', type: 'error' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [vista, tab, sortDir, filterEstado, searchUsuario, page]);
 
-  const loadTodas = async (desde: string, hasta: string) => {
-    const destinatario = vistaCanal === 'admin' ? 'admin' : 'usuario';
-    const resNotifs = await getAdminNotificaciones({
-      tipo: filterTipo || undefined,
-      estado: filterEstado || undefined,
-      destinatario,
-      desde,
-      hasta,
-      page,
-      limit,
+  useEffect(() => { void cargar(); }, [cargar]);
+
+  // ────────────────────────────────────────
+  // Stats derivadas (Tipos: Facturas vs Recargas)
+  // ────────────────────────────────────────
+  const tiposCount = useMemo(() => {
+    const por = estadisticas?.por_tipo || {};
+    let facturas = 0;
+    let recargas = 0;
+    Object.entries(por).forEach(([tipo, info]) => {
+      const cat = tipoCategoria(tipo);
+      if (cat === 'factura') facturas += info.total;
+      else if (cat === 'recarga') recargas += info.total;
     });
+    return { facturas, recargas };
+  }, [estadisticas]);
 
-    console.log('API RESPUESTA (Todas):', resNotifs);
-
-    if (resNotifs.ok && resNotifs.data) {
-      console.log('Notificaciones recibidas:', resNotifs.data.notificaciones?.length || 0);
-      setNotificacionesTodas(resNotifs.data.notificaciones || []);
-      setTotalPages(resNotifs.data.total_pages || 1);
-    } else {
-      console.log('Error en API:', resNotifs);
-      showToast(getErrorMsg(resNotifs, 'Error cargando notificaciones'), 'error');
-      setNotificacionesTodas([]);
-    }
-
-    // Estadísticas del período seleccionado (respetan el filtro de destinatario)
-    const resStats = await getAdminNotificacionesEstadisticas({
-      desde,
-      hasta,
-      destinatario,
-    });
-
-    console.log('Estadísticas:', resStats);
-
-    if (resStats.ok && resStats.data) {
-      setEstadisticas(resStats.data.estadisticas);
-    }
-  };
-
-  const loadAutomaticas = async (desde: string, hasta: string) => {
-    // Esta función se mantiene por compatibilidad pero será reemplazada
-    // La lógica de "acciones" está en loadAcciones()
-  };
-
-  const loadAcciones = async () => {
-    // NO pasar searchUsuario como usuario_id (es solo para búsqueda local)
-    // El filtrado por usuario se hace en el frontend dentro de AccionesView
-    const res = await getAdminNotificacionesAcciones({
-      page,
-      limit,
-    });
-
-    console.log('API RESPUESTA (Acciones):', res);
-
-    if (res.ok && res.data) {
-      console.log('Acciones recibidas:', res.data.total_acciones);
-      setAccionesData(res.data);
-      setTotalPages(res.data.total_pages || 1);
-    } else {
-      console.log('Error en API:', res);
-      showToast(getErrorMsg(res, 'Error cargando acciones'), 'error');
-      setAccionesData(null);
+  // ────────────────────────────────────────
+  // Acciones
+  // ────────────────────────────────────────
+  const onClickRow = (n: NotificacionConUsuario) => {
+    if (vista !== 'admin') return; // En vista BOT no hay acciones
+    const p = (n.payload || {}) as Record<string, unknown>;
+    if (n.tipo === 'factura_por_validar' && p.factura_id) {
+      // Construir un Factura mínimo para los modales
+      const facturaStub: Factura = {
+        id: String(p.factura_id),
+        usuario_id: String(p.usuario_id || n.usuario_id),
+        servicio: String(p.servicio || ''),
+        etiqueta: String(p.etiqueta || ''),
+        periodo: String(p.periodo || ''),
+        monto: Number(p.monto || 0),
+        validacion_estado: String(p.validacion_estado || 'sin_validar'),
+        estado: 'pendiente',
+        creado_en: String(p.creada_en || n.creado_en),
+      } as unknown as Factura;
+      setSelectedFactura(facturaStub);
+      setShowValidarModal(true);
+    } else if (n.tipo === 'recarga_por_validar' && p.recarga_id) {
+      setSelectedRecargaId(String(p.recarga_id));
+      setShowRecargaModal(true);
     }
   };
 
-  const loadAlertas = async (desde: string, hasta: string) => {
-    const resNotifs = await getAdminAlertasAdmin({
-      desde,
-      hasta,
-      destinatario: vistaCanal === 'admin' ? 'admin' : 'usuario',
-      page,
-      limit,
-    });
-
-    console.log('API RESPUESTA (Alertas):', resNotifs);
-
-    if (resNotifs.ok && resNotifs.data) {
-      console.log('Alertas recibidas:', resNotifs.data.alertas?.length || 0);
-      setAlertas(resNotifs.data.alertas || []);
-      setTotalPages(resNotifs.data.total_pages || 1);
-    } else {
-      console.log('Error en API:', resNotifs);
-      showToast(getErrorMsg(resNotifs, 'Error cargando alertas'), 'error');
-      setAlertas([]);
-    }
-  };
-
-  const handleCopyMessage = (notif: NotificacionConUsuario) => {
-    const payload = notif.payload as any;
-    const mensaje = (payload?.mensaje || payload?.mensaje_cobro || `Notificación: ${notif.tipo}`).toString();
-    navigator.clipboard.writeText(mensaje);
-    showToast('Mensaje copiado al portapapeles', 'success');
-    setCopyNotifId(notif.id);
-    setTimeout(() => setCopyNotifId(null), 2000);
-  };
-
-  const handleMarkSent = async (notifId: string) => {
+  // Cambiar estado de notificación bot
+  const handleChangeEstadoBot = async (n: NotificacionConUsuario, newEstado: string) => {
+    setOpenDropdown(null);
+    if (newEstado === n.estado) return;
+    setChangingEstado(n.id);
     try {
-      const res = await marcarNotificacionEnviada(notifId);
-      if (res.ok) {
-        showToast('Notificación marcada como enviada', 'success');
-        setShowMarkModal(false);
-        loadData();
-      } else {
-        showToast(getErrorMsg(res, 'Error marcando notificación'), 'error');
-      }
+      const res = await updateNotificacion(n.id, { estado: newEstado as UpdateNotificacionPayload['estado'] });
+      if (!res.ok) throw new Error(getErrorMsg(res) || 'Error al cambiar estado');
+      setToast({ message: `Estado cambiado a «${estadoVisual(newEstado, n.tipo).label}»`, type: 'success' });
+      await cargar();
     } catch (err) {
-      showToast('Error al marcar notificación', 'error');
-    }
-  };
-
-  const handleMarkBatch = async () => {
-    if (selectedIds.size === 0) return;
-    try {
-      const res = await marcarNotificacionesEnviadasBatch(Array.from(selectedIds));
-      if (res.ok) {
-        showToast(`${res.data?.actualizadas || 0} notificaciones marcadas como enviadas`, 'success');
-        setSelectedIds(new Set());
-        loadData();
-      } else {
-        showToast(getErrorMsg(res, 'Error en operación batch'), 'error');
-      }
-    } catch (err) {
-      showToast('Error en operación batch', 'error');
-    }
-  };
-
-  const handleGenerarMock = async () => {
-    try {
-      setLoading(true);
-      const res = await generarNotificacionesMock();
-      if (res.ok) {
-        showToast(`${res.data?.mensaje}`, 'success');
-        setPage(1); // Volver a página 1
-        await new Promise(r => setTimeout(r, 500)); // Pequeña pausa
-        loadData();
-      } else {
-        showToast(getErrorMsg(res, 'Error generando datos de prueba'), 'error');
-      }
-    } catch (err) {
-      showToast('Error al generar datos de prueba: ' + (err as any).message, 'error');
+      setToast({ message: getErrorMsg(err as any) || 'Error al cambiar estado', type: 'error' });
     } finally {
-      setLoading(false);
+      setChangingEstado(null);
     }
   };
 
-  const toggleSelect = (id: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
+  // Cambiar estado de notificación admin (sin_revisar ↔ revisada)
+  const handleChangeEstadoAdmin = async (n: NotificacionConUsuario, newEstado: string) => {
+    setOpenDropdown(null);
+    if (newEstado === n.estado) return;
+    setChangingEstado(n.id);
+    try {
+      const res = await updateNotificacion(n.id, { estado: newEstado as UpdateNotificacionPayload['estado'] });
+      if (!res.ok) throw new Error(getErrorMsg(res) || 'Error');
+      setToast({ message: `Notificación marcada como «${estadoVisual(newEstado, n.tipo).label}»`, type: 'success' });
+      await cargar();
+    } catch (err) {
+      setToast({ message: getErrorMsg(err as any) || 'Error', type: 'error' });
+    } finally {
+      setChangingEstado(null);
     }
-    setSelectedIds(newSelected);
   };
 
-  // FILTRO CLIENT-SIDE: solo búsqueda de usuario (canal/destinatario es server-side)
-  const notificacionesFiltradas = (activeTab === 'todas' && searchUsuario)
-    ? notificaciones.filter((n: any) => {
-        const notif = n as NotificacionConUsuario;
-        const nombre = `${notif.usuarios?.nombre || ''} ${notif.usuarios?.apellido || ''}`.toLowerCase();
-        const telefono = (notif.usuarios?.telefono || '').toLowerCase();
-        const search = searchUsuario.toLowerCase();
-        return nombre.includes(search) || telefono.includes(search);
-      })
-    : notificaciones;
+  // Marcar notif admin como revisada directamente (sin abrir modal)
+  const handleMarcarRevisada = async (n: NotificacionConUsuario) => {
+    setChangingEstado(n.id);
+    try {
+      const res = await marcarNotificacionEnviada(n.id);
+      if (!res.ok) throw new Error(getErrorMsg(res) || 'Error');
+      setToast({ message: 'Marcada como revisada', type: 'success' });
+      await cargar();
+    } catch (err) {
+      setToast({ message: getErrorMsg(err as any) || 'Error', type: 'error' });
+    } finally {
+      setChangingEstado(null);
+    }
+  };
 
-  const currentNotifications = notificacionesFiltradas;
+  const handleDelete = async () => {
+    if (!notifToDelete) return;
+    try {
+      await deleteNotificacion(notifToDelete.id);
+      setToast({ message: 'Notificación eliminada', type: 'success' });
+      setShowDeleteModal(false);
+      setNotifToDelete(null);
+      await cargar();
+    } catch (err) {
+      setToast({ message: getErrorMsg(err as any) || 'Error eliminando', type: 'error' });
+    }
+  };
 
+  // ────────────────────────────────────────
+  // Render
+  // ────────────────────────────────────────
   return (
-    <div className="space-y-6 animate-fade-in">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-
-      {/* Header */}
-      <div className="mb-2 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Notificaciones</h1>
-          <p className="text-sm text-gray-500 mt-1">Gestiona alertas y notificaciones del sistema</p>
-        </div>
-
-        {/* Toggle ADMIN / BOT (mockup) */}
-        <div className="inline-flex rounded-lg bg-[#f3f4f6] p-1 border border-[#e5e7eb]">
-          <button
-            onClick={() => { setVistaCanal('admin'); setPage(1); setSelectedIds(new Set()); if (activeTab === 'acciones') setActiveTab('todas'); }}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-              vistaCanal === 'admin'
-                ? 'bg-[#ff8d2d] text-white shadow-sm'
-                : 'text-[#1d212b] hover:bg-white/60'
-            }`}
-          >
-            ADMIN
-          </button>
-          <button
-            onClick={() => { setVistaCanal('bot'); setPage(1); setSelectedIds(new Set()); }}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-              vistaCanal === 'bot'
-                ? 'bg-[#ff8d2d] text-white shadow-sm'
-                : 'text-[#1d212b] hover:bg-white/60'
-            }`}
-          >
-            BOT
-          </button>
-        </div>
-      </div>
-      <div className="h-px bg-gray-200 w-full" />
-
-      {/* Tabs */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-1 inline-flex gap-1">
-          <button
-            onClick={() => { setActiveTab('todas'); setPage(1); setSearchUsuario(''); setFilterTipo(''); setFilterEstado(''); }}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-              activeTab === 'todas'
-                ? 'bg-white text-orange-500 border border-orange-500'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            Todas
-            {notificacionesTodas.length > 0 && (
-              <span className={`text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 ${
-                activeTab === 'todas' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
-              }`}>
-                {notificacionesTodas.length > 99 ? '99+' : notificacionesTodas.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => { setActiveTab('alertas'); setPage(1); }}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-              activeTab === 'alertas'
-                ? 'bg-white text-orange-500 border border-orange-500'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            Alertas
-            {alertas.length > 0 && (
-              <span className={`text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 ${
-                activeTab === 'alertas' ? 'bg-orange-500 text-white' : 'bg-red-100 text-red-600'
-              }`}>
-                {alertas.length > 99 ? '99+' : alertas.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => { setActiveTab('acciones'); setPage(1); setSearchUsuario(''); }}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-              activeTab === 'acciones'
-                ? 'bg-white text-orange-500 border border-orange-500'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            } ${vistaCanal === 'admin' ? 'hidden' : ''}`}
-          >
-            Acciones
-            {(accionesData?.total_acciones || 0) > 0 && (
-              <span className={`text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 ${
-                activeTab === 'acciones' ? 'bg-orange-500 text-white' : 'bg-red-100 text-red-600'
-              }`}>
-                {accionesData?.total_acciones > 99 ? '99+' : accionesData?.total_acciones}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Indicador de modo y acciones rápidas */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {activeTab !== 'acciones' && (
-            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200">
-              <label className="text-xs font-semibold text-gray-700">Período:</label>
-              <select
-                value={dateFilter.type}
-                onChange={(e) => {
-                  setDateFilter({ type: e.target.value as DateFilterType });
-                  setPage(1);
-                }}
-                className="px-2 py-1 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 hover:border-orange-400 transition"
-                title="Filtrar notificaciones por rango de fechas"
-              >
-                <option value="hoy">Últimas 24h</option>
-                <option value="semana">Última semana</option>
-                <option value="mes">Último mes</option>
-              </select>
-              {dateFilter.type === 'custom' && (
-                <>
-                  <input
-                    type="date"
-                    value={dateFilter.customDesde || ''}
-                    onChange={(e) => {
-                      setDateFilter({ ...dateFilter, customDesde: e.target.value });
-                      setPage(1);
-                    }}
-                    className="px-2 py-1 text-sm border border-gray-200 rounded"
-                  />
-                  <span className="text-gray-500">-</span>
-                  <input
-                    type="date"
-                    value={dateFilter.customHasta || ''}
-                    onChange={(e) => {
-                      setDateFilter({ ...dateFilter, customHasta: e.target.value });
-                      setPage(1);
-                    }}
-                    className="px-2 py-1 text-sm border border-gray-200 rounded"
-                  />
-                </>
-              )}
-            </div>
-          )}
-
-          {selectedIds.size > 0 && activeTab === 'todas' && (
-            <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
-              <span className="text-sm font-medium text-blue-900">{selectedIds.size} seleccionadas</span>
-              <Button
-                size="sm"
-                onClick={handleMarkBatch}
-                title="Marca las notificaciones seleccionadas como enviadas"
-              >
-                <CheckIcon className="h-3.5 w-3.5" /> Marcar como enviadas
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Info banner */}
-      {activeTab === 'alertas' && alertas.length === 0 && (
-        <div className="rounded-xl bg-green-50 border border-green-100 px-4 py-3 text-sm text-green-700">
-          No hay alertas activas. El sistema funciona correctamente.
-        </div>
-      )}
-
-      {/* Estadísticas Admin con más info */}
-      {activeTab === 'todas' && estadisticas && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-2">
-            <h3 className="text-sm font-semibold text-gray-900">Resumen del Período</h3>
-            <button title="Las estadísticas se calculan por el período seleccionado" className="text-gray-400 hover:text-orange-500">
-              <QuestionMarkCircleIcon className="h-4 w-4" />
-            </button>
+    <div className="min-h-screen bg-white">
+      <div className="max-w-[1400px] mx-auto px-6 py-6 space-y-5">
+        {/* HEADER */}
+        <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-gray-200">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Notificaciones</h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {vista === 'admin'
+                ? 'Notificaciones internas del panel admin (sin mensaje al usuario).'
+                : 'Mensajes que el bot envía a los clientes por WhatsApp.'}
+            </p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard
-              label="Total"
-              value={estadisticas.total}
-              highlight={estadisticas.total > 0}
-            />
-            <StatCard
-              label="No Enviadas"
-              value={estadisticas.no_enviadas}
-              highlight={estadisticas.no_enviadas > 0}
-              color="red"
-            />
-            <StatCard
-              label="Enviadas"
-              value={estadisticas.enviadas}
-              color="green"
-            />
-            <StatCard
-              label="Leídas"
-              value={estadisticas.leidas}
-              color="blue"
-            />
-          </div>
+          <ToggleVista value={vista} onChange={(v) => { setVista(v); setFilterEstado(''); setTab('todos'); setPage(1); }} />
         </div>
-      )}
 
-      {/* Filtros */}
-      {activeTab === 'todas' && (
-        <div className="bg-gray-100 rounded-lg p-3">
-          <div className="flex flex-wrap items-center gap-3 justify-between">
-            {/* Tipo filter */}
-            <select
-              id="filterTipo"
-              value={filterTipo}
-              onChange={(e) => { setFilterTipo(e.target.value); setPage(1); }}
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-              aria-label="Filtrar por tipo de notificación"
-            >
-              <option value="">Tipo: Todos</option>
-              <option value="solicitud_recarga_inicio_mes">Inicio mes</option>
-              <option value="solicitud_recarga">Solicitud recarga</option>
-              <option value="recarga_aprobada">Recarga aprobada</option>
-              <option value="recarga_rechazada">Recarga rechazada</option>
-              <option value="factura_validada">Factura validada</option>
-              <option value="pago_confirmado">Pago confirmado</option>
-              <option value="alerta_admin">Alerta admin</option>
-            </select>
+        {/* STATS CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard label="Total" value={estadisticas?.total ?? 0} />
+          <StatCard
+            label="No leídas"
+            value={(estadisticas?.no_enviadas ?? 0) + (estadisticas?.enviadas ?? 0)}
+            hint="pendientes + enviadas"
+          />
+          <StatCard label="Leídas" value={estadisticas?.leidas ?? 0} />
+          <TiposCard facturas={tiposCount.facturas} recargas={tiposCount.recargas} />
+        </div>
 
-            {/* Estado filter */}
+        {/* TABS */}
+        <div className="bg-gray-50 rounded-lg p-1 inline-flex gap-1">
+          <TabButton active={tab === 'todos'} onClick={() => setTab('todos')} label="Todos" count={total} />
+          <TabButton active={tab === 'facturas'} onClick={() => setTab('facturas')} label="Facturas" />
+          <TabButton active={tab === 'recargas'} onClick={() => setTab('recargas')} label="Recargas" />
+        </div>
+
+        {/* FILTER ROW */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setSortDir(sortDir === 'recientes' ? 'antiguas' : 'recientes')}
+            className="px-4 py-2 rounded-lg border border-orange-500 text-orange-600 bg-white text-sm font-medium hover:bg-orange-50 inline-flex items-center gap-2"
+            title="Ordenar"
+          >
+            {sortDir === 'recientes' ? 'Más recientes' : 'Más antiguas'}
+            <ArrowsUpDownIcon className="h-4 w-4" />
+          </button>
+
+          <div className="relative">
             <select
-              id="filterEstado"
               value={filterEstado}
-              onChange={(e) => { setFilterEstado(e.target.value); setPage(1); }}
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-              aria-label="Filtrar por estado"
+              onChange={(e) => setFilterEstado(e.target.value)}
+              className="appearance-none pl-9 pr-9 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="">Estado: Todos</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="enviada">Enviada</option>
-              <option value="leida">Leída</option>
-            </select>
-
-            {/* Clear filters */}
-            {(filterTipo || filterEstado || searchUsuario) && (
-              <button
-                onClick={() => {
-                  setFilterTipo('');
-                  setFilterEstado('');
-                  setSearchUsuario('');
-                  setPage(1);
-                }}
-                className="px-4 py-2 bg-white border border-orange-500 text-orange-500 rounded-lg text-sm font-medium hover:bg-orange-50 flex items-center gap-2"
-                title="Restablecer todos los filtros"
-              >
-                <XMarkIcon className="h-4 w-4" /> Limpiar filtros
-              </button>
-            )}
-
-            {/* Search */}
-            <div className="relative ml-auto w-[300px] flex-shrink-0">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar por nombre, teléfono..."
-                value={searchUsuario}
-                onChange={(e) => { setSearchUsuario(e.target.value); setPage(1); }}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pl-10"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Contenido principal */}
-      {loading ? (
-        <FullPageSpinner />
-      ) : activeTab === 'acciones' ? (
-        <AccionesView
-          accionesData={accionesData}
-          onRefresh={() => loadData()}
-          searchUsuario={searchUsuario}
-          onSearchChange={setSearchUsuario}
-          onShowToast={showToast}
-          totalPages={totalPages}
-          page={page}
-          onPageChange={setPage}
-          onOpenValidarFactura={(factura) => {
-            setSelectedFactura(factura);
-            setShowValidarFacturaModal(true);
-          }}
-          onOpenAprobarRecarga={(usuarioTelefono, recargaId) => {
-            setSelectedRecargaUsuarioTelefono(usuarioTelefono);
-            setSelectedRecargaId(recargaId || null);
-            setShowAprobarRechazarModal(true);
-          }}
-          onOpenRechazarFactura={(factura) => {
-            setSelectedFactura(factura);
-            setShowRechazarFacturaModal(true);
-          }}
-          onOpenAproximarValor={(factura) => {
-            setSelectedFactura(factura);
-            setShowAproximarValorModal(true);
-          }}
-        />
-      ) : currentNotifications.length === 0 ? (
-        <div className="space-y-4">
-          <EmptyState
-            icon={<BellIcon className="h-6 w-6" />}
-            title={searchUsuario ? "No hay resultados" : `Sin ${activeTab === 'alertas' ? 'alertas' : 'notificaciones'} para mostrar`}
-            description={searchUsuario ? `No se encontraron resultados para "${searchUsuario}"` : "No hay notificaciones que coincidan con los filtros seleccionados."}
-          />
-          {activeTab === 'todas' && estadisticas && estadisticas.total > 0 && !searchUsuario && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-sm text-amber-900 mb-3">
-                <strong>Tienes {estadisticas.total} notificaciones en la BD</strong>, pero no aparecen en la tabla. Esto sugiere:
-              </p>
-              <ul className="text-xs text-amber-800 space-y-1 list-disc list-inside">
-                <li>Verifca que los filtros sean correctos (actualmente: {filterTipo || 'sin tipo'}, {filterEstado || 'sin estado'})</li>
-                <li>Revisa la consola del navegador (F12) para ver los logs de depuración</li>
-                <li>Comprueba que el API retorna datos en la estructura esperada</li>
-              </ul>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-900 text-white">
-                <th className="px-4 py-3 text-left w-12">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.size === currentNotifications.length && currentNotifications.length > 0}
-                    onChange={() => {
-                      if (selectedIds.size === currentNotifications.length) {
-                        setSelectedIds(new Set());
-                      } else {
-                        setSelectedIds(new Set(currentNotifications.map((n: any) => n.id)));
-                      }
-                    }}
-                    aria-label="Seleccionar todas las notificaciones"
-                    title="Seleccionar todas las notificaciones de esta página"
-                  />
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  <span className="flex items-center gap-1">Usuario <span className="text-xs">↕</span></span>
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  <span className="flex items-center gap-1">Tipo <span className="text-xs">↕</span></span>
-                </th>
-                <th className="px-4 py-3 text-left font-medium">Canal</th>
-                <th className="px-4 py-3 text-left font-medium">
-                  <span className="flex items-center gap-1">Estado <span className="text-xs">↕</span></span>
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  <span className="flex items-center gap-1">Creada <span className="text-xs">↕</span></span>
-                </th>
-                <th className="px-4 py-3 text-left font-medium">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentNotifications.map((notif: any, idx: number) => {
-                const notifTyped = notif as NotificacionConUsuario;
-                return (
-                  <tr key={notif.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                    <td className="px-4 py-4"><input type="checkbox" checked={selectedIds.has(notif.id)} onChange={() => toggleSelect(notif.id)} /></td>
-                    <td className="px-4 py-4">
-                      {notifTyped.usuarios?.nombre ? (
-                        <>
-                          <p className="text-sm font-medium text-gray-900">{notifTyped.usuarios.nombre} {notifTyped.usuarios.apellido}</p>
-                          <p className="text-xs text-gray-500">{notifTyped.usuarios.telefono}</p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium text-gray-900">Administrador</p>
-                          <p className="text-xs text-gray-400">Sistema</p>
-                        </>
-                      )}
-                    </td>
-                    <td className="px-4 py-4">
-                      <Badge label={formatTipo(notifTyped.tipo)} variant="neutral" dot={false} />
-                    </td>
-                    <td className="px-4 py-4">
-                      {notifTyped.canal ? (
-                        <Badge
-                          label={notifTyped.canal}
-                          variant={['whatsapp','telegram','bot'].includes(notifTyped.canal.toLowerCase()) ? 'info' : 'neutral'}
-                          dot={false}
-                        />
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4">
-                      <Badge
-                        label={notifTyped.estado}
-                        variant={notifTyped.estado === 'pendiente' ? 'error' : notifTyped.estado === 'enviada' ? 'warning' : 'success'}
-                        dot={false}
-                      />
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-600">{formatDateTime(notifTyped.creado_en)}</td>
-                    <td className="px-4 py-4 text-left">
-                    <div className="flex items-center justify-start gap-1">
-                      {activeTab === 'alertas' ? (
-                        // Acciones para alertas
-                        <>
-                          <button
-                            onClick={async () => {
-                              setSelectedAlerta(notifTyped);
-                              setShowAlertModal(true);
-                              setLoadingOriginal(true);
-                              try {
-                                const res = await getAdminSolicitudOriginal(notif.id);
-                                if (res.ok && res.data) {
-                                  setOriginalSolicitud(res.data.solicitud_original);
-                                } else {
-                                  showToast('Error cargando solicitud original', 'error');
-                                }
-                              } catch (err) {
-                                showToast('Error cargando solicitud original', 'error');
-                              } finally {
-                                setLoadingOriginal(false);
-                              }
-                            }}
-                            className="p-2 text-red-400 hover:text-red-600 rounded hover:bg-red-50 transition-all"
-                            aria-label={`Ver alerta para ${notifTyped.usuarios?.nombre}`}
-                            title="Ver alerta y solicitud original"
-                          >
-                            <EyeIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              try {
-                                const res = await getAdminSolicitudOriginal(notif.id);
-                                if (res.ok && res.data && res.data.solicitud_original) {
-                                  const mensaje = (res.data.solicitud_original.payload as any)?.mensaje || `Notificación: ${res.data.solicitud_original.tipo}`;
-                                  navigator.clipboard.writeText(mensaje);
-                                  showToast('Mensaje copiado al portapapeles', 'success');
-                                  setCopyNotifId(notif.id);
-                                  setTimeout(() => setCopyNotifId(null), 2000);
-                                }
-                              } catch (err) {
-                                showToast('Error al copiar mensaje', 'error');
-                              }
-                            }}
-                            className={`p-2 rounded transition-all ${copyNotifId === notif.id ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-orange-500 hover:bg-gray-100'}`}
-                            title="Copiar mensaje original para reenviar"
-                          >
-                            <ClipboardDocumentIcon className="h-4 w-4" />
-                          </button>
-                          {notifTyped.estado === 'pendiente' && (
-                            <button
-                              onClick={() => { setSelectedNotif(notifTyped); setShowMarkModal(true); }}
-                              className="p-2 text-gray-400 hover:text-orange-500 rounded hover:bg-gray-100 transition-all"
-                              title="Registra que ya enviaste esta alerta"
-                            >
-                              <CheckIcon className="h-4 w-4" />
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        // Acciones para otras notificaciones de admin
-                        <>
-                          <button
-                            onClick={() => { setSelectedNotif(notifTyped); setShowDetailsModal(true); }}
-                            className="p-2 text-gray-400 hover:text-orange-500 rounded hover:bg-gray-100 transition-all"
-                            aria-label={`Ver detalles de ${notifTyped.tipo} para ${notifTyped.usuarios?.nombre}`}
-                            title="Ver contenido completo de la notificación"
-                          >
-                            <EyeIcon className="h-4 w-4" />
-                          </button>
-                          {notifTyped.estado === 'pendiente' && (
-                            <>
-                              <button
-                                onClick={() => handleCopyMessage(notifTyped)}
-                                className={`p-2 rounded transition-all ${copyNotifId === notif.id ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-orange-500 hover:bg-gray-100'}`}
-                                aria-label={`Copiar contenido de ${notifTyped.tipo}`}
-                                title="Copia el contenido para enviarlo manualmente (Ctrl+C)"
-                              >
-                                <ClipboardDocumentIcon className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => { setSelectedNotif(notifTyped); setShowMarkModal(true); }}
-                                className="p-2 text-gray-400 hover:text-orange-500 rounded hover:bg-gray-100 transition-all"
-                                aria-label={`Marcar como enviada ${notifTyped.tipo}`}
-                                title="Registra que ya enviaste esta notificación"
-                              >
-                                <CheckIcon className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="bg-white border-t border-gray-200 px-4 py-4 flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                Página {page} de {totalPages}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage(Math.max(1, page - 1))}
-                  disabled={page <= 1}
-                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Anterior
-                </button>
-                <button
-                  onClick={() => setPage(Math.min(totalPages, page + 1))}
-                  disabled={page >= totalPages}
-                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Siguiente
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Modal: Detalles de Notificación */}
-      <Modal
-        open={showDetailsModal && !!selectedNotif}
-        onClose={() => setShowDetailsModal(false)}
-        title="Detalles de Notificación"
-        maxWidth="md"
-      >
-        {selectedNotif && (
-          <div className="space-y-4 p-5">
-            <div>
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide mb-1.5">Tipo</p>
-              <p className="font-medium text-gray-900">{formatTipo(selectedNotif.tipo)}</p>
-            </div>
-
-            <div>
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide mb-1.5">Usuario</p>
-              {selectedNotif.usuarios?.nombre ? (
+              {vista === 'admin' ? (
                 <>
-                  <p className="font-medium text-gray-900">{selectedNotif.usuarios.nombre} {selectedNotif.usuarios.apellido}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{selectedNotif.usuarios.telefono}</p>
+                  <option value="sin_revisar">Sin revisar</option>
+                  <option value="revisada">Revisada</option>
                 </>
               ) : (
                 <>
-                  <p className="font-medium text-gray-900">Administrador</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Sistema</p>
+                  <option value="sin_respuesta">Sin respuesta</option>
+                  <option value="pendiente">Pendiente</option>
+                  <option value="enviada">Enviada</option>
+                  <option value="entregada">Entregada</option>
+                  <option value="rechazada">Rechazada</option>
                 </>
               )}
-            </div>
-
-            <div>
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide mb-1.5">Estado</p>
-              <Badge
-                label={selectedNotif.estado}
-                variant={selectedNotif.estado === 'pendiente' ? 'error' : selectedNotif.estado === 'enviada' ? 'warning' : 'success'}
-                dot={false}
-              />
-            </div>
-
-            <div>
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide mb-1.5">Creada</p>
-              <p className="text-xs text-gray-900">{formatDateTime(selectedNotif.creado_en)}</p>
-            </div>
-
-            {selectedNotif.payload && (
-              <div className="border-t pt-4">
-                <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide mb-2">Contenido</p>
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-64 overflow-y-auto">
-                  <code className="text-xs text-gray-700 whitespace-pre-wrap break-words font-mono leading-relaxed">
-                    {((selectedNotif.payload as any)?.mensaje ||
-                      (selectedNotif.payload as any)?.mensaje_cobro ||
-                      JSON.stringify(selectedNotif.payload, null, 2)) as unknown as string}
-                  </code>
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-4 border-t">
-              <Button size="sm" variant="secondary" onClick={() => setShowDetailsModal(false)}>
-                Cerrar
-              </Button>
-              {selectedNotif.estado === 'pendiente' && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    handleCopyMessage(selectedNotif);
-                  }}
-                  title="Copia el contenido del mensaje para enviarlo manualmente"
-                >
-                  <ClipboardDocumentIcon className="h-4 w-4" /> Copiar Contenido
-                </Button>
-              )}
-            </div>
+            </select>
+            <ShieldCheckIcon className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ChevronUpDownIcon className="h-4 w-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
-        )}
-      </Modal>
 
-      {/* Modal: Confirmar Envío */}
+          <div className="relative ml-auto w-full md:w-[320px]">
+            <MagnifyingGlassIcon className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchUsuario}
+              onChange={(e) => setSearchUsuario(e.target.value)}
+              placeholder="Buscar por nombre, celular…"
+              className="w-full pl-9 pr-3 py-2 rounded-full border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+        </div>
+
+        {/* TABLE */}
+        <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-[#1D212B] text-white">
+                <tr>
+                  <Th label="Tipo" />
+                  <Th label="Usuario" />
+                  <Th label="Número de ref" />
+                  <Th label="Fecha" />
+                  <Th label="Monto" align="right" />
+                  <Th label="Estado" />
+                  <Th label="" align="right" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="py-16">
+                      <FullPageSpinner />
+                    </td>
+                  </tr>
+                ) : notificaciones.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-16">
+                      <EmptyState
+                        icon={<BellIcon className="h-12 w-12" />}
+                        title="Sin notificaciones"
+                        description={
+                          vista === 'admin'
+                            ? 'No hay validaciones internas pendientes en este filtro.'
+                            : 'El bot no ha enviado mensajes que coincidan con este filtro.'
+                        }
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  notificaciones.map((n) => {
+                    const est = estadoVisual(n.estado, n.tipo);
+                    const monto = getMonto(n);
+                    const ref = getNumeroRef(n);
+                    return (
+                      <tr
+                        key={n.id}
+                        className={`hover:bg-gray-50 transition-colors ${vista === 'admin' ? 'cursor-pointer' : ''}`}
+                        onClick={() => onClickRow(n)}
+                      >
+                        <td className="px-4 py-4 text-gray-800">{formatTipo(n.tipo)}</td>
+                        <td className="px-4 py-4 text-gray-800">{getNombreUsuario(n)}</td>
+                        <td className="px-4 py-4 text-gray-600">{ref}</td>
+                        <td className="px-4 py-4 text-gray-600">{formatDate(n.creado_en)}</td>
+                        <td className="px-4 py-4 text-gray-800 text-right">
+                          {monto != null ? formatCurrency(monto) : '—'}
+                        </td>
+                        {/* ── ESTADO ── */}
+                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                          <div className="relative inline-block">
+                            <button
+                              disabled={changingEstado === n.id}
+                              onClick={() => setOpenDropdown(openDropdown === n.id ? null : n.id)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-opacity ${est.cls} ${changingEstado === n.id ? 'opacity-50 cursor-wait' : 'hover:opacity-80 cursor-pointer'}`}
+                            >
+                              {changingEstado === n.id ? '...' : est.label}
+                              <ChevronDownIcon className="h-3 w-3 opacity-70" />
+                            </button>
+                            {openDropdown === n.id && (
+                              <div className="absolute left-0 top-full mt-1 z-50 min-w-[140px] bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+                                {(vista === 'admin' ? (
+                                  [
+                                    ['sin_revisar', 'Sin revisar'],
+                                    ['revisada',    'Revisado'],
+                                  ]
+                                ) : (
+                                  [
+                                    ['sin_respuesta', 'Sin respuesta'],
+                                    ['pendiente',     'Pendiente'],
+                                    ['enviada',       'Enviada'],
+                                    ['entregada',     'Entregada'],
+                                    ['rechazada',     'Rechazada'],
+                                  ]
+                                ) as [string, string][]).map(([val, lbl]) => (
+                                  <button
+                                    key={val}
+                                    onClick={() => vista === 'admin' ? handleChangeEstadoAdmin(n, val) : handleChangeEstadoBot(n, val)}
+                                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors ${
+                                      n.estado === val ? 'font-semibold text-orange-600' : 'text-gray-700'
+                                    }`}
+                                  >
+                                    {lbl}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        {/* ── ACCIONES ── */}
+                        <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="inline-flex items-center gap-1">
+                            {vista === 'admin' && (
+                              <button
+                                onClick={() => onClickRow(n)}
+                                disabled={changingEstado === n.id}
+                                className="p-2 text-orange-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors disabled:opacity-40"
+                                title="Abrir y revisar"
+                              >
+                                <PencilSquareIcon className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setNotifToDelete(n); setShowDeleteModal(true); }}
+                              className="p-2 text-gray-300 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
+                              title="Eliminar"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-white">
+            <p className="text-xs text-gray-500">
+              Mostrando {notificaciones.length === 0 ? 0 : (page - 1) * limit + 1}-
+              {(page - 1) * limit + notificaciones.length} de {total.toLocaleString('es-CO')} registros
+            </p>
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          </div>
+        </div>
+      </div>
+
+      {/* Modales admin */}
+      {selectedFactura && (
+        <ValidarFacturaModal
+          open={showValidarModal}
+          onClose={() => { setShowValidarModal(false); setSelectedFactura(null); }}
+          factura={selectedFactura}
+          showToast={(msg, type) => setToast({ message: msg, type })}
+          onSuccess={async () => {
+            setShowValidarModal(false);
+            setSelectedFactura(null);
+            await cargar();
+          }}
+        />
+      )}
+      {selectedRecargaId && (
+        <AprobarRechazarRecargaModal
+          open={showRecargaModal}
+          onClose={() => { setShowRecargaModal(false); setSelectedRecargaId(null); }}
+          recargaId={selectedRecargaId}
+          showToast={(msg, type) => setToast({ message: msg, type })}
+          onSuccess={async () => {
+            setShowRecargaModal(false);
+            setSelectedRecargaId(null);
+            await cargar();
+          }}
+        />
+      )}
+
+      {/* Delete modal */}
       <Modal
-        open={showMarkModal && !!selectedNotif}
-        onClose={() => setShowMarkModal(false)}
-        title="Registrar Envío Manual"
+        open={showDeleteModal && !!notifToDelete}
+        onClose={() => { setShowDeleteModal(false); setNotifToDelete(null); }}
+        title="Eliminar notificación"
         maxWidth="sm"
       >
-        {selectedNotif && (
-          <div className="space-y-4 p-5">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-900 font-medium">
-                Confirma que <strong>ya enviaste</strong> esta notificación a {' '}
-                <strong>{selectedNotif.usuarios?.nombre ? `${selectedNotif.usuarios.nombre} ${selectedNotif.usuarios.apellido}` : 'Administrador'}</strong>
-              </p>
-            </div>
-
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Notificación</p>
-              <div>
-                <p className="text-sm font-medium text-gray-900">{formatTipo(selectedNotif.tipo)}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{formatDateTime(selectedNotif.creado_en)}</p>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-xs text-amber-900">
-                Este registro es <strong>auditable</strong> y quedará documentado en el sistema.
-              </p>
-            </div>
-
-            <div className="flex gap-2 pt-2 border-t">
-              <Button size="sm" variant="secondary" onClick={() => setShowMarkModal(false)}>
+        {notifToDelete && (
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-gray-700">
+              ¿Eliminar la notificación <strong>{formatTipo(notifToDelete.tipo)}</strong>?
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="secondary" onClick={() => { setShowDeleteModal(false); setNotifToDelete(null); }}>
                 Cancelar
               </Button>
-              <Button
-                size="sm"
-                onClick={() => handleMarkSent(selectedNotif.id)}
-                title="Marca la notificación como enviada (acción auditable)"
-              >
-                <CheckIcon className="h-4 w-4" /> Sí, Marcar Enviada
+              <Button size="sm" variant="danger" onClick={handleDelete}>
+                Eliminar
               </Button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Modal para detalles de alerta con solicitud original */}
-      <Modal
-        open={showAlertModal && !!selectedAlerta}
-        onClose={() => {
-          setShowAlertModal(false);
-          setSelectedAlerta(null);
-          setOriginalSolicitud(null);
-        }}
-        title="Detalles de Alerta"
-        maxWidth="md"
-      >
-        {selectedAlerta && (
-          <div className="space-y-4 p-5">
-            {/* Alert Info */}
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <ExclamationTriangleIcon className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-bold text-red-900">Alerta crítica</p>
-                  <p className="text-xs text-red-800 mt-1">
-                    {(selectedAlerta.payload as any)?.tipo_alerta || 'Usuario no respondió a solicitud'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Alert Payload */}
-            {selectedAlerta.payload && (
-              <div className="space-y-2">
-                <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Detalles</p>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-2">
-                  <p className="text-sm">
-                    <span className="font-medium text-gray-700">Usuario:</span>{' '}
-                    <span className="text-gray-900">{(selectedAlerta.payload as any)?.usuario_nombre}</span>
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium text-gray-700">Teléfono:</span>{' '}
-                    <span className="text-gray-900">{(selectedAlerta.payload as any)?.usuario_telefono}</span>
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium text-gray-700">Días sin respuesta:</span>{' '}
-                    <span className="text-red-600 font-bold">{(selectedAlerta.payload as any)?.dias_sin_respuesta || 'N/A'}</span>
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium text-gray-700">Creada:</span>{' '}
-                    <span className="text-gray-900">{formatDateTime(selectedAlerta.creado_en)}</span>
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Original Solicitud */}
-            {loadingOriginal && (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin h-5 w-5 text-orange-500" />
-              </div>
-            )}
-
-            {originalSolicitud && !loadingOriginal && (
-              <div className="space-y-2">
-                <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Solicitud Original que desencadenó esta alerta</p>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-                  <p className="font-medium text-blue-900">{formatTipo(originalSolicitud.tipo)}</p>
-                  <p className="text-sm text-blue-800">{(originalSolicitud.payload as any)?.mensaje || 'Ver contenido de la solicitud'}</p>
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-2 border-t">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  setShowAlertModal(false);
-                  setSelectedAlerta(null);
-                  setOriginalSolicitud(null);
-                }}
-              >
-                Cerrar
-              </Button>
-              {originalSolicitud && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const mensaje = (originalSolicitud.payload as any)?.mensaje || `Notificación: ${originalSolicitud.tipo}`;
-                    navigator.clipboard.writeText(mensaje);
-                    showToast('Mensaje original copiado', 'success');
-                  }}
-                  title="Copia el mensaje original para reenviar"
-                >
-                  <ClipboardDocumentIcon className="h-4 w-4" /> Copiar Original
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Modal: Validar Factura */}
-      <ValidarFacturaModal
-        open={showValidarFacturaModal}
-        factura={selectedFactura}
-        onClose={() => {
-          setShowValidarFacturaModal(false);
-          setSelectedFactura(null);
-        }}
-        onSuccess={async () => {
-          await loadData();
-        }}
-        showToast={showToast}
-      />
-
-      {/* Modal: Rechazar Factura */}
-      <RechazarFacturaModal
-        open={showRechazarFacturaModal}
-        factura={selectedFactura}
-        onClose={() => {
-          setShowRechazarFacturaModal(false);
-          setSelectedFactura(null);
-        }}
-        onSuccess={async () => {
-          await loadData();
-        }}
-        showToast={showToast}
-      />
-
-      {/* Modal: Aproximar Valor */}
-      <AproximarValorModal
-        open={showAproximarValorModal}
-        factura={selectedFactura}
-        onClose={() => {
-          setShowAproximarValorModal(false);
-          setSelectedFactura(null);
-        }}
-        onSuccess={async () => {
-          await loadData();
-        }}
-        showToast={showToast}
-      />
-
-      {/* Modal: Aprobar/Rechazar Recarga - para Tab ACCIONES */}
-      <AprobarRechazarRecargaModal
-        open={showAprobarRechazarModal}
-        telefono={selectedRecargaUsuarioTelefono}
-        recargaId={selectedRecargaId}
-        onClose={() => {
-          setShowAprobarRechazarModal(false);
-          setSelectedRecargaUsuarioTelefono('');
-          setSelectedRecargaId(null);
-        }}
-        onSuccess={async () => {
-          await loadData();
-        }}
-        showToast={showToast}
-      />
-    </div>
-  );
-}
-
-/**
- * Componente AccionesView
- * Muestra acciones pendientes (validaciones de facturas y recargas) agrupadas por usuario
- */
-interface AccionesViewProps {
-  accionesData: any;
-  onRefresh: () => void;
-  searchUsuario: string;
-  onSearchChange: (search: string) => void;
-  onShowToast: (msg: string, type: ToastType) => void;
-  totalPages: number;
-  page: number;
-  onPageChange: (page: number) => void;
-  onOpenValidarFactura: (factura: Factura) => void;
-  onOpenRechazarFactura: (factura: Factura) => void;
-  onOpenAproximarValor: (factura: Factura) => void;
-  onOpenAprobarRecarga: (usuarioTelefono: string, recargaId?: string) => void;
-}
-
-function AccionesView({
-  accionesData,
-  onRefresh,
-  searchUsuario,
-  onSearchChange,
-  onShowToast,
-  totalPages,
-  page,
-  onPageChange,
-  onOpenValidarFactura,
-  onOpenRechazarFactura,
-  onOpenAproximarValor,
-  onOpenAprobarRecarga,
-}: AccionesViewProps) {
-  // AccionesView no necesita estado local ahora, los parámetros se pasan directamente
-  if (!accionesData || !accionesData.acciones_por_usuario) {
-    return (
-      <EmptyState
-        icon={<BellIcon className="h-6 w-6" />}
-        title="Sin acciones pendientes"
-        description="No hay validaciones pendientes en este momento. ¡Buen trabajo!"
-      />
-    );
-  }
-
-  const { acciones_por_usuario, total_acciones, total_usuarios } = accionesData;
-
-  return (
-    <div className="space-y-6">
-      {/* Resumen y controles */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h3 className="text-lg font-bold text-gray-900">
-            {total_acciones} {total_acciones === 1 ? 'acción' : 'acciones'} pendiente{total_acciones !== 1 ? 's' : ''}
-          </h3>
-          <span className="text-sm text-gray-500">en {total_usuarios} {total_usuarios === 1 ? 'usuario' : 'usuarios'}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Buscar usuario..."
-            value={searchUsuario}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-48"
-          />
-          <Button
-            size="sm"
-            onClick={onRefresh}
-            title="Actualizar acciones (no usa auto-refresh)"
-          >
-            <ArrowPathIcon className="h-4 w-4" /> Actualizar
-          </Button>
-        </div>
-      </div>
-
-      {/* Info banner */}
-      <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-700 space-y-2">
-        <p>
-          <strong>Cómo funciona:</strong> Las acciones muestran facturas y recargas pendientes de validación. 
-          Haz click en "Validar" o "Revisar" para abrir el modal correspondiente. No hay auto-refresh; 
-          usa el botón "Actualizar" cuando necesites refrescar los datos.
-        </p>
-        <p className="text-xs text-blue-600">
-          Busca por usuario para filtrar, pero recuerda que la búsqueda es temporal. 
-          Después de validar/aprobar, refresca manualmente para ver cambios.
-        </p>
-      </div>
-
-      {/* Acciones por usuario - CON FILTRADO Y ACORDEONES POR USUARIO */}
-      {(() => {
-        // Filtrar por búsqueda de usuario si existe
-        const filteredAcciones = searchUsuario
-          ? acciones_por_usuario.filter((item: any) => {
-              const nombre = `${item.usuario.nombre || ''} ${item.usuario.apellido || ''}`.toLowerCase();
-              const telefono = (item.usuario.telefono || '').toLowerCase();
-              const search = searchUsuario.toLowerCase();
-              return nombre.includes(search) || telefono.includes(search);
-            })
-          : acciones_por_usuario;
-
-        return filteredAcciones.length === 0 ? (
-          <EmptyState
-            icon={<CheckIcon className="h-6 w-6 text-green-600" />}
-            title={searchUsuario ? "Sin resultados" : "¡Todo al día!"}
-            description={searchUsuario 
-              ? `No se encontraron usuarios que coincidan con "${searchUsuario}"` 
-              : "No hay validaciones pendientes. Todas las facturas y recargas han sido revisadas."}
-          />
-        ) : (
-          <div className="space-y-4">
-            {filteredAcciones.map((item: any) => {
-              // Agrupar acciones del usuario por tipo - USANDO ORIGEN COMO DIFERENCIADOR
-              const recargasUsuario = item.acciones.filter((a: any) => a.tipo === 'recarga');
-              const facturasUsuario = item.acciones.filter((a: any) => a.tipo === 'factura' && a.origen !== 'auto');
-              const facturasHeredadasUsuario = item.acciones.filter((a: any) => a.tipo === 'factura' && a.origen === 'auto');
-
-              return (
-                <UserAccionesCard
-                  key={item.usuario_id}
-                  usuario={item.usuario}
-                  recargasUsuario={recargasUsuario}
-                  facturasUsuario={facturasUsuario}
-                  facturasHeredadasUsuario={facturasHeredadasUsuario}
-                  onOpenValidarFactura={onOpenValidarFactura}
-                  onOpenRechazarFactura={onOpenRechazarFactura}
-                  onOpenAproximarValor={onOpenAproximarValor}
-                  onOpenAprobarRecarga={onOpenAprobarRecarga}
-                  onShowToast={onShowToast}
-                />
-              );
-            })}
-          </div>
-        );
-      })()}
-
-      {/* Paginación */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 p-4 border-t">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={page <= 1}
-            onClick={() => onPageChange(Math.max(1, page - 1))}
-          >
-            Anterior
-          </Button>
-          <span className="text-sm text-gray-600">Página {page} de {totalPages}</span>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={page >= totalPages}
-            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-          >
-            Siguiente
-          </Button>
-        </div>
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
       )}
     </div>
   );
 }
 
-function StatCard({
-  label,
-  value,
-  highlight = false,
-  color = 'gray',
-}: {
-  label: string;
-  value: number;
-  highlight?: boolean;
-  color?: 'red' | 'green' | 'blue' | 'gray';
-}) {
-  const colorClass = {
-    red: 'text-red-600',
-    green: 'text-green-600',
-    blue: 'text-blue-600',
-    gray: 'text-gray-900',
-  }[color];
+// ──────────────────────────────────────────────────────────────────────────
+// Subcomponentes
+// ──────────────────────────────────────────────────────────────────────────
 
+function ToggleVista({ value, onChange }: { value: Vista; onChange: (v: Vista) => void }) {
   return (
-    <Card className={`!p-4 ${highlight ? 'border-2 border-orange-500' : ''}`}>
-      <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase mb-1">{label}</p>
-        <p className={`text-2xl font-bold ${colorClass}`}>{value}</p>
+    <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+      <button
+        type="button"
+        onClick={() => onChange('admin')}
+        className={`px-4 py-2 rounded-md text-sm font-medium inline-flex items-center gap-2 transition-colors ${
+          value === 'admin' ? 'bg-orange-500 text-white' : 'text-gray-600 hover:text-gray-900'
+        }`}
+      >
+        <ShieldCheckIcon className="h-4 w-4" />
+        ADMIN
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('bot')}
+        className={`px-4 py-2 rounded-md text-sm font-medium inline-flex items-center gap-2 transition-colors ${
+          value === 'bot' ? 'bg-orange-500 text-white' : 'text-gray-600 hover:text-gray-900'
+        }`}
+      >
+        <ChatBubbleLeftRightIcon className="h-4 w-4" />
+        BOT - JAVIER
+      </button>
+    </div>
+  );
+}
+
+function StatCard({ label, value, hint }: { label: string; value: number; hint?: string }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <p className="text-sm text-gray-700 font-medium">{label}</p>
+      <p className="text-3xl font-bold text-gray-900 mt-2">{value.toLocaleString('es-CO').padStart(3, '0')}</p>
+      {hint && <p className="text-[11px] text-gray-400 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+function TiposCard({ facturas, recargas }: { facturas: number; recargas: number }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <p className="text-sm text-gray-700 font-medium mb-3">Tipos</p>
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="text-sm text-gray-600">Facturas</span>
+          <span className="text-sm font-semibold text-gray-900">{facturas}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
+          <span className="text-sm text-gray-600">Recargas</span>
+          <span className="text-sm font-semibold text-gray-900">{recargas}</span>
+        </div>
       </div>
-    </Card>
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count?: number }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-2 rounded-md text-sm font-medium inline-flex items-center gap-2 transition-colors ${
+        active ? 'bg-white text-orange-600 border border-orange-200 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+      }`}
+    >
+      {label}
+      {typeof count === 'number' && (
+        <span className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-semibold ${
+          active ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-600'
+        }`}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function Th({ label, align = 'left' }: { label: string; align?: 'left' | 'right' }) {
+  return (
+    <th className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-${align}`}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {label && <ChevronUpDownIcon className="h-3 w-3 opacity-60" />}
+      </span>
+    </th>
+  );
+}
+
+function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  const pages: (number | '…')[] = [];
+  const push = (n: number | '…') => pages.push(n);
+  const window = 1;
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - page) <= window) push(i);
+    else if (pages[pages.length - 1] !== '…') push('…');
+  }
+  return (
+    <div className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(1, page - 1))}
+        disabled={page === 1}
+        className="px-2 py-1 rounded text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-40 inline-flex items-center gap-1"
+      >
+        <ChevronLeftIcon className="h-4 w-4" /> Anterior
+      </button>
+      {pages.map((p, i) =>
+        p === '…' ? (
+          <span key={`e${i}`} className="px-2 text-gray-400 text-sm">…</span>
+        ) : (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onChange(p)}
+            className={`min-w-[28px] h-7 px-2 rounded text-sm font-medium transition-colors ${
+              p === page ? 'bg-white border border-orange-500 text-orange-600' : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            {p}
+          </button>
+        )
+      )}
+      <button
+        type="button"
+        onClick={() => onChange(Math.min(totalPages, page + 1))}
+        disabled={page === totalPages}
+        className="px-2 py-1 rounded text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-40 inline-flex items-center gap-1"
+      >
+        Siguiente <ChevronRightIcon className="h-4 w-4" />
+      </button>
+    </div>
   );
 }

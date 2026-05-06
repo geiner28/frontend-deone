@@ -32,6 +32,7 @@ interface UpsertObligacionConFacturasModalProps {
   mode?: 'create' | 'from-profile';
   initialTelefono?: string;
   usuarioNombre?: string;
+  cantidadRecargas?: number | null;
   /**
    * Periodo en formato 'YYYY-MM' — cuando se crea desde la sección de un mes
    * específico del usuario, se pre-llenan las fechas con ese mes y no se pide
@@ -47,8 +48,10 @@ export default function UpsertObligacionConFacturasModal({
   mode = 'create',
   initialTelefono,
   usuarioNombre,
+  cantidadRecargas,
   initialPeriodo,
 }: UpsertObligacionConFacturasModalProps) {
+  const puedeUsarGrupo2 = Number(cantidadRecargas) === 2;
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -148,9 +151,10 @@ export default function UpsertObligacionConFacturasModal({
   }, [mode, initialTelefono, telefono]);
 
   const sec2Filled = useMemo(() => {
-    // "Datos de la obligación": entidad + tipo y número de referencia
-    return Boolean(receptor.trim() && tipoReferencia.trim() && numeroReferencia.trim());
-  }, [receptor, tipoReferencia, numeroReferencia]);
+    // "Datos de la obligación": entidad + número de referencia.
+    // tipoReferencia es opcional.
+    return Boolean(receptor.trim() && numeroReferencia.trim());
+  }, [receptor, numeroReferencia]);
 
   const sec3Filled = useMemo(() => {
     // "Datos de la factura": fechas + monto
@@ -184,7 +188,7 @@ export default function UpsertObligacionConFacturasModal({
       numero_referencia: numeroReferencia || undefined,
       pagina_pago: portalPago || undefined,
       receptor: receptor || undefined,
-      grupo: grupo ? (Number(grupo) as 1 | 2) : undefined,
+      grupo: grupo ? ((puedeUsarGrupo2 ? Number(grupo) : 1) as 1 | 2) : undefined,
     });
 
     if (!obRes.ok || !obRes.data) {
@@ -340,7 +344,7 @@ export default function UpsertObligacionConFacturasModal({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    {labelReq('Tipo de referencia')}
+                    {labelOpt('Tipo de referencia')}
                     <select
                       value={tipoReferencia}
                       onChange={(e) => setTipoReferencia(e.target.value)}
@@ -378,12 +382,16 @@ export default function UpsertObligacionConFacturasModal({
                     <select
                       value={grupo}
                       onChange={(e) => setGrupo(e.target.value as '' | '1' | '2')}
-                      className={inputCls}
+                      className={`${inputCls} disabled:bg-gray-100 disabled:text-gray-500`}
+                      disabled={mode === 'from-profile' && !puedeUsarGrupo2}
                     >
                       <option value="">Seleccione</option>
                       <option value="1">Grupo 1</option>
-                      <option value="2">Grupo 2</option>
+                      {(mode !== 'from-profile' || puedeUsarGrupo2) && <option value="2">Grupo 2</option>}
                     </select>
+                    {mode === 'from-profile' && !puedeUsarGrupo2 && (
+                      <p className="text-xs text-[#737780]">Con una sola fecha de recarga solo aplica Grupo 1.</p>
+                    )}
                   </div>
                 </div>
               </div>

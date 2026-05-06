@@ -23,12 +23,12 @@ export function MetricCard({ title, value, label, color = '#FF8D2D', isCurrency 
   }
 
   // Calcular tamaño de fuente basado en longitud del número (escala aumentada)
-  let fontSize = '2.25rem'; // base (antes 1.875rem)
+  let fontSize = '2rem';
   const valueLength = displayValue.length;
   if (valueLength > 30) fontSize = '1rem';
   else if (valueLength > 25) fontSize = '1.125rem';
-  else if (valueLength > 20) fontSize = '1.5rem';
-  else if (valueLength > 15) fontSize = '1.875rem';
+  else if (valueLength > 20) fontSize = '1.25rem';
+  else if (valueLength > 15) fontSize = '1.5rem';
 
   return (
     <div
@@ -41,11 +41,11 @@ export function MetricCard({ title, value, label, color = '#FF8D2D', isCurrency 
         </div>
         <div>
           {isCurrency ? (
-            <div className="flex items-baseline gap-1 mb-2 flex-wrap">
+            <div className="flex items-baseline gap-1 mb-2 min-w-0">
               <p
-                className="font-bold text-[#1D212B] break-words leading-tight"
+                className="font-bold text-[#1D212B] leading-tight min-w-0 w-full whitespace-nowrap"
                 style={{
-                  fontSize: fontSize,
+                  fontSize: `clamp(1rem, 2.1vw, ${fontSize})`,
                 }}
               >
                 ${displayValue}
@@ -53,9 +53,9 @@ export function MetricCard({ title, value, label, color = '#FF8D2D', isCurrency 
             </div>
           ) : (
             <p
-              className="font-bold text-[#1D212B] mb-2 leading-tight"
+              className="font-bold text-[#1D212B] mb-2 leading-tight min-w-0 w-full whitespace-nowrap"
               style={{
-                fontSize: fontSize,
+                fontSize: `clamp(1rem, 2.1vw, ${fontSize})`,
               }}
             >
               {displayValue}

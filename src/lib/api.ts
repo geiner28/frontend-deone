@@ -53,6 +53,7 @@ import type {
   UpdateNotificacionPayload,
   BatchEnviadasPayload,
   AdminDashboardData,
+  AdminDashboardPeriodosData,
   ListAdminClientesData,
   AdminClientePerfilData,
   ListAdminPagosData,
@@ -64,17 +65,19 @@ import type {
 // ══════════════════════════════════════════════════════════════════════════════
 // 🔧 Configuración de conexión al backend
 // ══════════════════════════════════════════════════════════════════════════════
-// Opción A (producción — Netlify, Vercel, etc.):
-//   NEXT_PUBLIC_DEONE_API_BASE_URL = https://prueba-supabase.onrender.com/api
-//   NEXT_PUBLIC_DEONE_API_KEY      = TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3
-//   → El frontend llama al backend directamente.
+// Opción A (RECOMENDADA — proxy server-side, key NO expuesta al cliente):
+//   No definir NEXT_PUBLIC_DEONE_API_BASE_URL.
+//   Configurar en el servidor (Netlify env vars):
+//     DEONE_API_BASE_URL = https://prueba-supabase.onrender.com/api
+//     DEONE_API_KEY      = <api key>
+//   → El frontend llama a /api/proxy/* y el proxy reenvía con la key.
 //
-// Opción B (desarrollo local):
-//   No defines NEXT_PUBLIC_*, y el frontend usa el proxy /api/proxy
-//   que lee DEONE_API_KEY / ADMIN_API_KEY del servidor.
+// Opción B (directa — key visible en bundle del cliente, NO recomendada):
+//   NEXT_PUBLIC_DEONE_API_BASE_URL = https://prueba-supabase.onrender.com/api
+//   NEXT_PUBLIC_DEONE_API_KEY      = <api key>
 // ══════════════════════════════════════════════════════════════════════════════
-const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_DEONE_API_BASE_URL || 'https://prueba-supabase.onrender.com/api';
-const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_DEONE_API_KEY || 'TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3';
+const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_DEONE_API_BASE_URL || '';
+const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_DEONE_API_KEY || '';
 const API_PREFIX = PUBLIC_API_BASE ? PUBLIC_API_BASE.replace(/\/$/, '') : '/api/proxy';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
@@ -415,6 +418,10 @@ export const getAdminDashboard = (params?: {
   return request<AdminDashboardData>(path);
 };
 
+// GET /api/admin/dashboard/periodos
+export const getAdminDashboardPeriodos = () =>
+  request<AdminDashboardPeriodosData>('/admin/dashboard/periodos');
+
 // GET /api/admin/clientes?page=&limit=&search=&plan=&activo=
 export const getAdminClientes = (params?: {
   page?: number;
@@ -586,6 +593,19 @@ export const marcarNotificacionesEnviadasBatch = (notificacion_ids: string[]) =>
   }>(`/admin/notificaciones/batch/enviadas`, {
     method: 'POST',
     body: JSON.stringify({ notificacion_ids }),
+  });
+
+// DELETE /api/notificaciones/:id — Eliminar una notificación
+export const deleteNotificacion = (id: string) =>
+  request<{ eliminada: boolean; id: string }>(`/notificaciones/${id}`, {
+    method: 'DELETE',
+  });
+
+// DELETE /api/notificaciones/batch — Eliminar múltiples notificaciones
+export const deleteNotificacionesBatch = (ids: string[]) =>
+  request<{ eliminadas: number }>(`/notificaciones/batch`, {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
   });
 
 // 🧪 GET /api/admin/notificaciones/mock/generar — SOLO TESTING: Generar datos de prueba

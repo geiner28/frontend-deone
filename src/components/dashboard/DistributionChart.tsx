@@ -77,33 +77,39 @@ export function DistributionChart({
     <div className="rounded-[11.5px] border border-[#C9C9C9] bg-[#F9F9F9] p-4 h-full flex flex-col">
       <h3 className="text-sm font-semibold text-[#1D212B] mb-3 flex-shrink-0">{title}</h3>
 
-      <div className="flex flex-col lg:flex-row gap-4 flex-1 justify-between overflow-hidden">
+      <div
+        className={`flex flex-col lg:flex-row gap-4 flex-1 overflow-hidden ${
+          dataWithColors.length > 0 ? 'justify-between' : 'justify-center items-center'
+        }`}
+      >
         {/* Lista de usuarios con scroll */}
-        <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
-          {dataWithColors.map((item, idx) => (
-            <div
-              key={idx}
-              onClick={() => setSelectedIndex(selectedIndex === idx ? null : idx)}
-              className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all ${
-                selectedIndex === idx 
-                  ? 'bg-white border border-[#1D212B]' 
-                  : 'bg-white/50 border border-transparent hover:bg-white'
-              }`}
-            >
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <div
-                  className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-xs font-medium text-[#1D212B] truncate">{item.label}</span>
+        {dataWithColors.length > 0 && (
+          <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
+            {dataWithColors.map((item, idx) => (
+              <div
+                key={idx}
+                onClick={() => setSelectedIndex(selectedIndex === idx ? null : idx)}
+                className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all ${
+                  selectedIndex === idx
+                    ? 'bg-white border border-[#1D212B]'
+                    : 'bg-white/50 border border-transparent hover:bg-white'
+                }`}
+              >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div
+                    className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="text-xs font-medium text-[#1D212B] truncate">{item.label}</span>
+                </div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <p className="text-xs font-bold text-[#1D212B] whitespace-nowrap">{item.percentage}%</p>
+                  <p className="text-[10px] text-[#999999] whitespace-nowrap">{formatCOP(item.value)}</p>
+                </div>
               </div>
-              <div className="text-right flex-shrink-0 ml-2">
-                <p className="text-xs font-bold text-[#1D212B] whitespace-nowrap">{item.percentage}%</p>
-                <p className="text-[10px] text-[#999999] whitespace-nowrap">{formatCOP(item.value)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Gráfico circular */}
         <div className="flex justify-center items-center flex-shrink-0 w-full lg:w-auto">
@@ -136,8 +142,8 @@ export function DistributionChart({
                 y="95"
                 textAnchor="middle"
                 style={{
-                  fontSize: formatCOP(total).length > 20 ? '8px' : '9px',
-                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  fontWeight: '700',
                   fill: '#1D212B',
                 }}
               >
@@ -145,11 +151,11 @@ export function DistributionChart({
               </text>
               <text
                 x="100"
-                y="110"
+                y="118"
                 textAnchor="middle"
                 style={{
-                  fontSize: formatCOP(total).length > 20 ? '7px' : '8px',
-                  fontWeight: 'bold',
+                  fontSize: formatCOP(total).length > 18 ? '20px' : '24px',
+                  fontWeight: '800',
                   fill: '#1D212B',
                 }}
               >

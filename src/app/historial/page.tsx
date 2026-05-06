@@ -106,7 +106,6 @@ export default function HistorialPage() {
   const handleSearchKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       setPage(1);
-      fetchHistorial();
     }
   };
 
@@ -247,7 +246,7 @@ export default function HistorialPage() {
               type="text"
               placeholder="Buscar por nombre..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               onKeyDown={handleSearchKey}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pl-10"
             />

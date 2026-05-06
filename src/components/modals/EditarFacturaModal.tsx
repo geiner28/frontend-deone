@@ -13,6 +13,7 @@ import { ToastType } from '@/components/ui/Toast';
 interface EditarFacturaModalProps {
   open: boolean;
   factura: Factura | null;
+  cantidadRecargas?: number | null;
   onClose: () => void;
   onSuccess: () => Promise<void> | void;
   showToast: (msg: string, type: ToastType) => void;
@@ -24,10 +25,12 @@ const VALIDACIONES: FacturaValidacionEstado[] = ['sin_validar', 'validada', 'rec
 export default function EditarFacturaModal({
   open,
   factura,
+  cantidadRecargas,
   onClose,
   onSuccess,
   showToast,
 }: EditarFacturaModalProps) {
+  const puedeUsarGrupo2 = Number(cantidadRecargas) === 2;
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     servicio: '',
@@ -38,7 +41,6 @@ export default function EditarFacturaModal({
     fecha_recordatorio: '',
     referencia_pago: '',
     tipo_referencia: '',
-    archivo_url: '',
     pagina_pago: '',
     grupo: 1 as 1 | 2,
     estado: 'pendiente' as FacturaEstado,
@@ -49,6 +51,7 @@ export default function EditarFacturaModal({
 
   useEffect(() => {
     if (!open || !factura) return;
+    const grupoInicial = factura.grupo === 2 && puedeUsarGrupo2 ? 2 : 1;
     setForm({
       servicio: factura.servicio || '',
       monto: factura.monto != null ? String(factura.monto) : '',
@@ -58,9 +61,8 @@ export default function EditarFacturaModal({
       fecha_recordatorio: factura.fecha_recordatorio || '',
       referencia_pago: factura.referencia_pago || '',
       tipo_referencia: factura.tipo_referencia || '',
-      archivo_url: factura.archivo_url || '',
       pagina_pago: factura.pagina_pago || '',
-      grupo: (factura.grupo === 2 ? 2 : 1),
+      grupo: grupoInicial,
       estado: ((['pendiente', 'pagada', 'sin_factura', 'aproximada'].includes(String(factura.estado))
         ? factura.estado
         : 'pendiente') as FacturaEstado),
@@ -83,10 +85,9 @@ export default function EditarFacturaModal({
       fecha_vencimiento: form.fecha_vencimiento || undefined,
       fecha_recordatorio: form.fecha_recordatorio || undefined,
       referencia_pago: form.referencia_pago || undefined,
-      tipo_referencia: form.tipo_referencia || undefined,
-      archivo_url: form.archivo_url || undefined,
+      tipo_referencia: form.tipo_referencia.trim() ? form.tipo_referencia.trim() : undefined,
       pagina_pago: form.pagina_pago || undefined,
-      grupo: form.grupo,
+      grupo: puedeUsarGrupo2 ? form.grupo : 1,
       estado: form.estado,
       validacion_estado: form.validacion_estado,
       observaciones_admin: form.observaciones_admin || undefined,
@@ -131,11 +132,15 @@ export default function EditarFacturaModal({
             <select
               value={form.grupo}
               onChange={(e) => setForm((f) => ({ ...f, grupo: (Number(e.target.value) as 1 | 2) }))}
-              className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm bg-white"
+              className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
+              disabled={!puedeUsarGrupo2}
             >
               <option value={1}>Grupo 1 (1 al 15)</option>
-              <option value={2}>Grupo 2 (16 al fin de mes)</option>
+              {puedeUsarGrupo2 && <option value={2}>Grupo 2 (16 al fin de mes)</option>}
             </select>
+            {!puedeUsarGrupo2 && (
+              <p className="text-xs text-gray-500">Con una sola fecha de recarga solo aplica Grupo 1.</p>
+            )}
           </div>
         </div>
 
@@ -167,18 +172,12 @@ export default function EditarFacturaModal({
             onChange={(e) => setForm((f) => ({ ...f, referencia_pago: e.target.value }))}
           />
           <Input
-            label="Tipo de referencia"
+            label="Tipo de referencia (opcional)"
             value={form.tipo_referencia}
             onChange={(e) => setForm((f) => ({ ...f, tipo_referencia: e.target.value }))}
           />
         </div>
 
-        <Input
-          label="Archivo (URL del comprobante o factura)"
-          type="url"
-          value={form.archivo_url}
-          onChange={(e) => setForm((f) => ({ ...f, archivo_url: e.target.value }))}
-        />
         <Input
           label="Portal de pago (URL)"
           type="url"

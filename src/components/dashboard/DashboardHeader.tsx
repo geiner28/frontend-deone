@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import type { AdminDashboardPeriodo } from '@/types';
 
 interface DashboardHeaderProps {
   onMonthChange?: (year: number, month: number) => void;
   onPlanChange?: (plan: string) => void;
+  availablePeriods?: AdminDashboardPeriodo[];
 }
 
-export function DashboardHeader({ onMonthChange, onPlanChange }: DashboardHeaderProps) {
+export function DashboardHeader({ onMonthChange, onPlanChange, availablePeriods = [] }: DashboardHeaderProps) {
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -36,7 +38,32 @@ export function DashboardHeader({ onMonthChange, onPlanChange }: DashboardHeader
     { id: 12, label: 'Diciembre' },
   ];
 
-  const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i);
+  const sortedPeriods = useMemo(
+    () => [...availablePeriods].sort((a, b) => (b.year - a.year) || (b.month - a.month)),
+    [availablePeriods]
+  );
+
+  const years = useMemo(
+    () => Array.from(new Set(sortedPeriods.map((p) => p.year))),
+    [sortedPeriods]
+  );
+
+  const monthsBySelectedYear = useMemo(
+    () => sortedPeriods.filter((p) => p.year === selectedYear).map((p) => p.month),
+    [sortedPeriods, selectedYear]
+  );
+
+  useEffect(() => {
+    if (sortedPeriods.length === 0) return;
+
+    const exists = sortedPeriods.some((p) => p.year === selectedYear && p.month === selectedMonth);
+    if (!exists) {
+      const first = sortedPeriods[0];
+      setSelectedYear(first.year);
+      setSelectedMonth(first.month);
+      onMonthChange?.(first.year, first.month);
+    }
+  }, [sortedPeriods, selectedYear, selectedMonth, onMonthChange]);
 
   const handleMonthChange = (newMonth: number) => {
     setSelectedMonth(newMonth);
@@ -45,7 +72,10 @@ export function DashboardHeader({ onMonthChange, onPlanChange }: DashboardHeader
 
   const handleYearChange = (newYear: number) => {
     setSelectedYear(newYear);
-    onMonthChange?.(newYear, selectedMonth);
+    const monthsForYear = sortedPeriods.filter((p) => p.year === newYear).map((p) => p.month);
+    const nextMonth = monthsForYear.includes(selectedMonth) ? selectedMonth : (monthsForYear[0] || selectedMonth);
+    setSelectedMonth(nextMonth);
+    onMonthChange?.(newYear, nextMonth);
   };
 
   const handlePlanChange = (planId: string) => {
@@ -68,13 +98,20 @@ export function DashboardHeader({ onMonthChange, onPlanChange }: DashboardHeader
             <select
               value={selectedMonth}
               onChange={(e) => handleMonthChange(Number(e.target.value))}
+              disabled={monthsBySelectedYear.length === 0}
               className="appearance-none px-3 py-2 text-sm rounded-lg border border-[#C9C9C9] bg-white text-[#1D212B] focus:outline-none focus:border-[#FF8D2D] pr-8 cursor-pointer w-full sm:w-auto"
             >
-              {months.map((month) => (
-                <option key={month.id} value={month.id}>
-                  {month.label}
-                </option>
-              ))}
+              {monthsBySelectedYear.length > 0 ? (
+                months
+                  .filter((month) => monthsBySelectedYear.includes(month.id))
+                  .map((month) => (
+                    <option key={month.id} value={month.id}>
+                      {month.label}
+                    </option>
+                  ))
+              ) : (
+                <option value="">Sin registros</option>
+              )}
             </select>
             <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6D7382] pointer-events-none" />
           </div>
@@ -84,13 +121,18 @@ export function DashboardHeader({ onMonthChange, onPlanChange }: DashboardHeader
             <select
               value={selectedYear}
               onChange={(e) => handleYearChange(Number(e.target.value))}
+              disabled={years.length === 0}
               className="appearance-none px-3 py-2 text-sm rounded-lg border border-[#C9C9C9] bg-white text-[#1D212B] focus:outline-none focus:border-[#FF8D2D] pr-8 cursor-pointer w-full sm:w-auto"
             >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
+              {years.length > 0 ? (
+                years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))
+              ) : (
+                <option value="">Sin registros</option>
+              )}
             </select>
             <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6D7382] pointer-events-none" />
           </div>

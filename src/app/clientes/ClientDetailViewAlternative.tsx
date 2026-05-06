@@ -6,6 +6,7 @@ import {
   PencilIcon,
   PhoneIcon,
   EnvelopeIcon,
+  IdentificationIcon,
   MapPinIcon,
   PlusIcon,
   DocumentTextIcon,
@@ -18,14 +19,11 @@ import EditarFechasRecargasModal from '@/components/modals/EditarFechasRecargasM
 import UpsertUsuarioAdminModal from '@/components/modals/UpsertUsuarioAdminModal';
 import UpsertObligacionConFacturasModal from '@/components/modals/UpsertObligacionConFacturasModal';
 import ReportarRecargaModal from '@/components/modals/ReportarRecargaModal';
-import ValidarFacturaModal from '@/components/modals/ValidarFacturaModal';
-import RechazarFacturaModal from '@/components/modals/RechazarFacturaModal';
-import PagarFacturaModal from '@/components/modals/PagarFacturaModal';
 import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import EditarFacturaModal from '@/components/modals/EditarFacturaModal';
 import type { AdminClientePerfilData, Factura, Plan, ProgramacionRecargas } from '@/types';
 import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
-import { getAdminClientePerfil, validarFactura, rechazarFactura, deleteUsuario, deleteObligacion, deleteFactura } from '@/lib/api';
+import { getAdminClientePerfil, actualizarFactura, deleteUsuario, deleteObligacion, deleteFactura } from '@/lib/api';
 import Toast from '@/components/ui/Toast';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -110,59 +108,40 @@ const getEstadoBadgeContent = (estado: string) => {
   return estado;
 };
 
-// Generar meses disponibles desde el registro del usuario hasta el mes siguiente al actual.
-// El "siguiente mes" se incluye para permitir crear obligaciones por adelantado.
-const generateMonthOptions = (createdAt?: string) => {
-  const options: { value: string; label: string }[] = [];
-  const today = new Date();
-  const todayY = today.getFullYear();
-  const todayM = today.getMonth();
+// Generar meses disponibles SOLO cuando existan registros de facturas.
+const normalizePeriodoMonth = (periodo?: string | null): string | null => {
+  if (!periodo) return null;
+  const match = periodo.match(/^(\d{4})-(\d{2})/);
+  if (!match) return null;
+  return `${match[1]}-${match[2]}-01`;
+};
 
-  // Mes inicial: el de creación del usuario (o 12 meses atrás como fallback razonable).
-  let startY: number;
-  let startM: number;
-  if (createdAt) {
-    const c = new Date(createdAt);
-    if (!isNaN(c.getTime())) {
-      startY = c.getFullYear();
-      startM = c.getMonth();
-    } else {
-      const fb = new Date(todayY, todayM - 12, 1);
-      startY = fb.getFullYear();
-      startM = fb.getMonth();
+const generateMonthOptionsFromFacturas = (perfil?: AdminClientePerfilData | null) => {
+  const periodos = new Set<string>();
+
+  for (const obligacion of perfil?.obligaciones || []) {
+    for (const factura of obligacion.facturas || []) {
+      const esSuscripcion = (factura.tipo_referencia || '').toLowerCase() === 'suscripcion';
+      const esPlaceholder = (factura.estado || '').toLowerCase() === 'sin_factura';
+
+      // Solo considerar facturas reales para el filtro de meses.
+      if (esSuscripcion || esPlaceholder) continue;
+
+      const normalized = normalizePeriodoMonth(factura.periodo || obligacion.periodo);
+      if (normalized) periodos.add(normalized);
     }
-  } else {
-    const fb = new Date(todayY, todayM - 12, 1);
-    startY = fb.getFullYear();
-    startM = fb.getMonth();
   }
 
-  // Mes final: el siguiente al actual (para permitir crear el siguiente mes).
-  const endDate = new Date(todayY, todayM + 1, 1);
-
-  // Iterar desde end (más reciente) hasta start (más antiguo): orden descendente.
-  const cursor = new Date(endDate);
-  while (
-    cursor.getFullYear() > startY ||
-    (cursor.getFullYear() === startY && cursor.getMonth() >= startM)
-  ) {
-    const y = cursor.getFullYear();
-    const m = String(cursor.getMonth() + 1).padStart(2, '0');
-    const monthName = cursor.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    let label = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-    if (y === todayY && cursor.getMonth() === todayM) {
-      label = `${label} (Actual)`;
-    } else if (
-      y === endDate.getFullYear() &&
-      cursor.getMonth() === endDate.getMonth()
-    ) {
-      label = `${label} (Siguiente)`;
-    }
-    options.push({ value: `${y}-${m}-01`, label });
-    cursor.setMonth(cursor.getMonth() - 1);
-  }
-
-  return options;
+  return Array.from(periodos)
+    .sort((a, b) => b.localeCompare(a))
+    .map((value) => {
+      const d = new Date(`${value}T00:00:00`);
+      const monthName = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      return {
+        value,
+        label: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+      };
+    });
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -202,14 +181,10 @@ export default function ClientDetailViewAlternative({
   const [deletingFactura, setDeletingFactura] = useState(false);
 
   // ─── FACTURA ACTION STATES ────────────────────────────────────────────────────
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [updatingFacturaId, setUpdatingFacturaId] = useState<string | null>(null);
 
   // Modal visibility states for factura actions
-  const [openValidarModal, setOpenValidarModal] = useState(false);
-  const [openRechazarModal, setOpenRechazarModal] = useState(false);
-  const [openPagarModal, setOpenPagarModal] = useState(false);
   const [openAproximarModal, setOpenAproximarModal] = useState(false);
   const [openEditarFacturaModal, setOpenEditarFacturaModal] = useState(false);
 
@@ -221,10 +196,7 @@ export default function ClientDetailViewAlternative({
     setTimeout(() => setToast(null), 3000);
   };
 
-  const monthOptions = useMemo(
-    () => generateMonthOptions(perfil?.usuario?.creado_en),
-    [perfil?.usuario?.creado_en]
-  );
+  const monthOptions = useMemo(() => generateMonthOptionsFromFacturas(perfil), [perfil]);
 
   // ─── HANDLER: Refrescar datos de facturas ─────────────────────────────────────
   const refreshFacturas = useCallback(async () => {
@@ -245,25 +217,56 @@ export default function ClientDetailViewAlternative({
     }
   }, [perfil?.usuario.telefono, selectedMonth]);
 
-  // ─── HANDLER: Validar Factura ───────────────────────────────────────────────────
-  // NO cerrar el modal ni limpiar la factura aquí — el modal muestra NotificationDisplay
-  // y el usuario cierra manualmente con el botón "Cerrar" (onClose)
-  const handleValidarSuccess = useCallback(async () => {
-    await refreshFacturas();
-  }, [refreshFacturas]);
-
-  // ─── HANDLER: Rechazar Factura ──────────────────────────────────────────────────
-  const handleRechazarSuccess = useCallback(async () => {
-    await refreshFacturas();
-  }, [refreshFacturas]);
-
-  // ─── HANDLER: Pagar Factura ────────────────────────────────────────────────────
-  const handlePagarSuccess = useCallback(async () => {
-    await refreshFacturas();
-  }, [refreshFacturas]);
   // ─── HANDLER: Aproximar Valor ──────────────────────────────────────────────
   const handleAproximarSuccess = useCallback(async () => {
     await refreshFacturas();
+  }, [refreshFacturas]);
+
+  // ─── HANDLER: Cambiar estado inline ────────────────────────────────────────
+  const handleEstadoChange = useCallback(async (factura: Factura, newEstado: 'pagada' | 'pendiente' | 'sin_factura' | 'aproximada') => {
+    if (!factura?.id) return;
+
+    if (newEstado === 'aproximada') {
+      setSelectedFactura(factura);
+      setOpenAproximarModal(true);
+      return;
+    }
+
+    setUpdatingFacturaId(factura.id);
+    const payload: { estado: 'pagada' | 'pendiente' | 'sin_factura'; validacion_estado?: 'validada' } = {
+      estado: newEstado,
+    };
+
+    // Al marcar pagada desde la lista no pedimos referencias/comprobante.
+    if (newEstado === 'pagada') {
+      payload.validacion_estado = 'validada';
+    }
+
+    const res = await actualizarFactura(factura.id, payload);
+    setUpdatingFacturaId(null);
+
+    if (res.ok) {
+      showToast('Estado actualizado', 'success');
+      await refreshFacturas();
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo actualizar el estado'), 'error');
+    }
+  }, [refreshFacturas]);
+
+  // ─── HANDLER: Cambiar grupo inline ─────────────────────────────────────────
+  const handleGrupoChange = useCallback(async (factura: Factura, grupo: 1 | 2) => {
+    if (!factura?.id) return;
+
+    setUpdatingFacturaId(factura.id);
+    const res = await actualizarFactura(factura.id, { grupo });
+    setUpdatingFacturaId(null);
+
+    if (res.ok) {
+      showToast('Grupo actualizado', 'success');
+      await refreshFacturas();
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo actualizar el grupo'), 'error');
+    }
   }, [refreshFacturas]);
 
   // ─── HANDLER: Eliminar Usuario ─────────────────────────────────────────────
@@ -347,6 +350,13 @@ export default function ClientDetailViewAlternative({
     [perfil?.usuario.telefono]
   );
 
+  useEffect(() => {
+    if (monthOptions.length === 0) return;
+    if (!monthOptions.some((opt) => opt.value === selectedMonth)) {
+      void handleMonthChange(monthOptions[0].value);
+    }
+  }, [monthOptions, selectedMonth, handleMonthChange]);
+
   if (!perfil) return null;
 
   const u = perfil.usuario;
@@ -389,14 +399,18 @@ export default function ClientDetailViewAlternative({
           <select
             value={selectedMonth}
             onChange={(e) => handleMonthChange(e.target.value)}
-            disabled={isLoadingMonth}
+            disabled={isLoadingMonth || monthOptions.length === 0}
             className={`bg-white border border-gray-200 px-3 py-2 rounded-full text-sm font-medium text-gray-900 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 ${isLoadingMonth ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
           >
-            {monthOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            {monthOptions.length > 0 ? (
+              monthOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))
+            ) : (
+              <option value="">Sin registros</option>
+            )}
           </select>
         </div>
 
@@ -436,8 +450,12 @@ export default function ClientDetailViewAlternative({
                   {u.correo || 'No registrado'}
                 </div>
                 <div className="flex items-center gap-2">
+                  <IdentificationIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                  {[u.tipo_identificacion, u.numero_identificacion].filter(Boolean).join(' ') || 'No registrada'}
+                </div>
+                <div className="flex items-center gap-2">
                   <MapPinIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                  {u.direccion || 'No registrada'}
+                  {[u.ciudad, u.direccion].filter(Boolean).join(' · ') || 'No registrada'}
                 </div>
               </div>
             </div>
@@ -534,7 +552,7 @@ export default function ClientDetailViewAlternative({
         </div>
 
         {/* STATS GRID */}
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <div className="text-sm font-semibold mb-4 text-gray-900">Total recargas</div>
             <div className="text-[28px] font-normal text-gray-900">{formatCurrency(r.total_recargas_aprobadas_mes)}</div>
@@ -552,8 +570,14 @@ export default function ClientDetailViewAlternative({
             <div className="text-[28px] font-normal text-gray-900">{formatCurrency(r.saldo_disponible)}</div>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <div className="text-sm font-semibold mb-4 text-gray-900">Transacciones realizadas</div>
-            <div className="text-[28px] font-normal text-gray-900">{r.recargas_aprobadas_count_mes}</div>
+            <div className="text-sm font-semibold mb-1 text-gray-900">Transacciones</div>
+            <div className="text-xs font-medium mb-3 text-gray-500">Cash in</div>
+            <div className="text-[28px] font-normal text-gray-900">{formatCurrency(r.total_recargas_aprobadas_mes)}</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-sm font-semibold mb-1 text-gray-900">Transacciones</div>
+            <div className="text-xs font-medium mb-3 text-gray-500">Cash out</div>
+            <div className="text-[28px] font-normal text-gray-900">{formatCurrency(r.total_pagos_realizados_mes)}</div>
           </div>
         </div>
 
@@ -636,20 +660,9 @@ export default function ClientDetailViewAlternative({
                       perfil?.programacion_recargas?.cantidad_recargas
                     );
 
-                    const hasActions = true; // Eliminar/Editar siempre disponible
-
-                    const sinValidar = factura.validacion_estado === 'sin_validar';
-                    const validada = factura.validacion_estado === 'validada';
-                    const pagada = factura.estado === 'pagada';
-
-                    let actionCount = 2; // Editar + Eliminar
-                    if (sinValidar && !pagada) {
-                      actionCount += 2; // Validar + Rechazar
-                      if (factura.origen === 'auto') actionCount++; // Aproximar
-                    }
-                    if (validada && !pagada) {
-                      actionCount += 1; // Pagar
-                    }
+                    const cantidadRecargas = Number(perfil?.programacion_recargas?.cantidad_recargas || 1);
+                    const grupoActual = Number(factura.grupo || grupo || (cantidadRecargas === 1 ? 1 : 0));
+                    const isUpdatingRow = updatingFacturaId === factura.id;
 
                     const getEstadoClasses = (estado: string) => {
                       switch (estado) {
@@ -680,9 +693,11 @@ export default function ClientDetailViewAlternative({
                           {factura.tipo_referencia || '—'}
                         </td>
                         <td className="px-4 py-4 text-sm">
-                          {factura.archivo_url ? (
+                            {(() => {
+                              const portalUrl = factura.pagina_pago || factura.archivo_url;
+                              return portalUrl ? (
                             <a
-                              href={factura.archivo_url}
+                                href={portalUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
@@ -693,9 +708,10 @@ export default function ClientDetailViewAlternative({
                                 <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
                               </svg>
                             </a>
-                          ) : (
+                            ) : (
                             <span className="text-gray-400">\u2014</span>
-                          )}
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-4 text-gray-600 text-sm">
                           {factura.fecha_emision ? formatDate(factura.fecha_emision) : '\u2014'}
@@ -711,140 +727,70 @@ export default function ClientDetailViewAlternative({
                           {formatCurrency(factura.monto)}
                         </td>
                         <td className="px-4 py-4 text-sm">
-                          {grupo ? (
-                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-sm font-bold border ${
-                              grupo === 1 ? 'text-gray-500 border-gray-300' : 'text-orange-500 border-orange-400'
-                            }`}>
-                              {grupo}
-                            </span>
-                          ) : (
-                            <span className="border border-gray-200 px-2 py-0.5 rounded-full text-xs text-gray-400">\u2014</span>
-                          )}
+                          <select
+                            value={grupoActual > 0 ? String(grupoActual) : ''}
+                            disabled={isUpdatingRow}
+                            onChange={(e) => {
+                              const value = Number(e.target.value);
+                              if (value === 1 || value === 2) {
+                                void handleGrupoChange(factura, value as 1 | 2);
+                              }
+                            }}
+                            className="h-9 min-w-[86px] rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 disabled:opacity-60"
+                          >
+                            {cantidadRecargas === 1 ? (
+                              <option value="1">Grupo 1</option>
+                            ) : (
+                              <>
+                                <option value="1">Grupo 1</option>
+                                <option value="2">Grupo 2</option>
+                              </>
+                            )}
+                          </select>
                         </td>
                         <td className="px-4 py-4 text-sm">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getEstadoClasses(factura.estado)}`}>
-                            {displayEstado}
-                          </span>
+                          <select
+                            value={String(factura.estado || 'pendiente')}
+                            disabled={isUpdatingRow}
+                            onChange={(e) => {
+                              const next = e.target.value as 'pagada' | 'pendiente' | 'sin_factura' | 'aproximada';
+                              void handleEstadoChange(factura, next);
+                            }}
+                            className={`h-9 min-w-[132px] rounded-full border px-3 text-sm font-medium bg-white ${getEstadoClasses(String(factura.estado || 'pendiente'))} disabled:opacity-60`}
+                          >
+                            <option value="pagada">Pagada</option>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="sin_factura">Sin factura</option>
+                            <option value="aproximada">Aproximada</option>
+                          </select>
                         </td>
                         <td className="px-4 py-4 text-sm">
-                          {hasActions ? (
-                            <div className="relative">
-                              <button
-                                onClick={() => {
-                                  setOpenMenuId(openMenuId === factura.id ? null : (factura.id || null));
-                                  setSelectedFactura(factura);
-                                }}
-                                className="px-3 py-2 hover:bg-gray-200 text-gray-700 hover:text-gray-900 rounded-lg transition-all duration-200 border border-gray-300 hover:border-gray-400 flex items-center justify-center gap-1.5 shadow-sm font-medium text-sm"
-                                title={`${actionCount} acci\u00F3n(es) disponible(s)`}
-                              >
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                                </svg>
-                                <span className="bg-gray-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
-                                  {actionCount}
-                                </span>
-                              </button>
-                              {openMenuId === factura.id && (
-                                <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-max">
-                                  <div className="py-1">
-                                    {sinValidar && !pagada && (
-                                      <>
-                                        <button
-                                          onClick={() => {
-                                            setSelectedFactura(factura);
-                                            setOpenValidarModal(true);
-                                            setOpenMenuId(null);
-                                          }}
-                                          className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                        >
-                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                          </svg>
-                                          Validar
-                                        </button>
-                                        {factura.origen === 'auto' && (
-                                          <button
-                                            onClick={() => {
-                                              setSelectedFactura(factura);
-                                              setOpenAproximarModal(true);
-                                              setOpenMenuId(null);
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                          >
-                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                              <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                                            </svg>
-                                            Aproximar
-                                          </button>
-                                        )}
-                                        <button
-                                          onClick={() => {
-                                            setSelectedFactura(factura);
-                                            setOpenRechazarModal(true);
-                                            setOpenMenuId(null);
-                                          }}
-                                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                        >
-                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                          </svg>
-                                          Rechazar
-                                        </button>
-                                      </>
-                                    )}
-                                    {validada && !pagada && (
-                                      <button
-                                        onClick={() => {
-                                          setSelectedFactura(factura);
-                                          setOpenPagarModal(true);
-                                          setOpenMenuId(null);
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                      >
-                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                          <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
-                                        </svg>
-                                        Pagar
-                                      </button>
-                                    )}
-                                    <button
-                                      onClick={() => {
-                                        setSelectedFactura(factura);
-                                        setOpenEditarFacturaModal(true);
-                                        setOpenMenuId(null);
-                                      }}
-                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                    >
-                                      <PencilSquareIcon className="w-4 h-4" />
-                                      Editar
-                                    </button>
-                                    <div className="border-t border-gray-100 my-1" />
-                                    <button
-                                      onClick={() => {
-                                        setFacturaToDelete(factura);
-                                        setOpenMenuId(null);
-                                      }}
-                                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                    >
-                                      <TrashIcon className="w-4 h-4" />
-                                      Eliminar
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="px-3 py-2 text-gray-400 text-xs italic">
-                              Sin acciones
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedFactura(factura);
+                                setOpenEditarFacturaModal(true);
+                              }}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                              title="Editar"
+                            >
+                              <PencilSquareIcon className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setFacturaToDelete(factura)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                              title="Eliminar"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-gray-500 text-sm">
+                    <td colSpan={10} className="p-8 text-center text-gray-500 text-sm">
                       No hay facturas en esta categor\u00EDa
                     </td>
                   </tr>
@@ -895,6 +841,9 @@ export default function ClientDetailViewAlternative({
             nombre: u.nombre,
             apellido: u.apellido,
             correo: u.correo,
+            tipo_identificacion: u.tipo_identificacion,
+            numero_identificacion: u.numero_identificacion,
+            ciudad: u.ciudad,
             direccion: u.direccion,
           }}
           onSuccess={async (data) => {
@@ -917,6 +866,7 @@ export default function ClientDetailViewAlternative({
           mode="from-profile"
           initialTelefono={u.telefono}
           initialPeriodo={selectedMonth ? selectedMonth.slice(0, 7) : undefined}
+          cantidadRecargas={perfil?.programacion_recargas?.cantidad_recargas}
           usuarioNombre={`${u.nombre || ''} ${u.apellido || ''}`.trim()}
           onSuccess={async () => {
             // Recargar los datos del perfil para actualizar la lista de obligaciones
@@ -1087,43 +1037,19 @@ export default function ClientDetailViewAlternative({
         {/* ─ FACTURA ACTION MODALS ─────────────────────────────────────────────── */}
         {selectedFactura && perfil && (
           <>
-            <ValidarFacturaModal
-              open={openValidarModal}
-              onClose={() => { setOpenValidarModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
-              factura={selectedFactura}
-              onSuccess={handleValidarSuccess}
-              showToast={showToast}
-            />
-
-            <RechazarFacturaModal
-              open={openRechazarModal}
-              onClose={() => { setOpenRechazarModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
-              factura={selectedFactura}
-              onSuccess={handleRechazarSuccess}
-              showToast={showToast}
-            />
-
             <AproximarValorModal
               open={openAproximarModal}
-              onClose={() => { setOpenAproximarModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
+              onClose={() => { setOpenAproximarModal(false); setSelectedFactura(null); }}
               factura={selectedFactura}
               onSuccess={handleAproximarSuccess}
-              showToast={showToast}
-            />
-
-            <PagarFacturaModal
-              open={openPagarModal}
-              onClose={() => { setOpenPagarModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
-              factura={selectedFactura}
-              perfil={perfil}
-              onSuccess={handlePagarSuccess}
               showToast={showToast}
             />
 
             <EditarFacturaModal
               open={openEditarFacturaModal}
               factura={selectedFactura}
-              onClose={() => { setOpenEditarFacturaModal(false); setOpenMenuId(null); setSelectedFactura(null); }}
+              cantidadRecargas={perfil?.programacion_recargas?.cantidad_recargas}
+              onClose={() => { setOpenEditarFacturaModal(false); setSelectedFactura(null); }}
               onSuccess={async () => {
                 if (perfil) {
                   try {

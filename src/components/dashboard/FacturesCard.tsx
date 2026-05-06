@@ -26,29 +26,29 @@ export function FacturesCard({
   return (
     <div className="rounded-[11.5px] border border-[#C9C9C9] bg-[#F9F9F9] p-3 flex flex-col h-full">
       <div className="flex justify-between items-center mb-2 flex-shrink-0">
-        <h3 className="text-xs font-semibold text-[#1D212B]">Facturas</h3>
-        <span className="text-base font-bold text-[#FF8D2D]">{totalCount}</span>
+        <h3 className="text-sm font-semibold text-[#1D212B]">Facturas</h3>
+        <span className="text-xl font-bold text-[#FF8D2D]">{totalCount}</span>
       </div>
 
-      <div className="space-y-1.5 flex-1 overflow-y-auto">
+      <div className="space-y-2 flex-1 overflow-y-auto">
         {indicators.map((indicator, idx) => (
-          <div key={idx} className="flex items-center justify-between text-xs gap-2">
+          <div key={idx} className="flex items-center justify-between text-sm gap-2">
             <div className="flex items-center gap-1 min-w-0">
               <div
-                className="w-1 h-1 rounded-full flex-shrink-0"
+                className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ backgroundColor: indicator.color }}
               />
               <span className="text-[#6D7382] truncate">{indicator.label}</span>
             </div>
-            <span className="font-semibold text-[#1D212B] flex-shrink-0">{indicator.count}</span>
+            <span className="font-bold text-[#1D212B] flex-shrink-0">{indicator.count}</span>
           </div>
         ))}
       </div>
 
       <div className="mt-1.5 pt-1.5 border-t border-[#E5E7EB] flex-shrink-0">
-        <div className="flex justify-between items-center text-xs gap-2">
+        <div className="flex justify-between items-center text-sm gap-2">
           <span className="text-[#6D7382]">Total</span>
-          <span className="font-semibold text-[#1D212B]">{totalCount}</span>
+          <span className="font-bold text-[#1D212B]">{totalCount}</span>
         </div>
       </div>
     </div>

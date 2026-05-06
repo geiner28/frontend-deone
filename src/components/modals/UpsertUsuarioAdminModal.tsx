@@ -20,7 +20,7 @@ interface UpsertUsuarioAdminModalProps {
     apellido: string;
     correo: string;
     direccion: string | null;
-    tipo_identificacion?: 'CC' | 'NIT' | null;
+    tipo_identificacion?: 'CC' | 'NIT' | 'CE' | null;
     numero_identificacion?: string | null;
     ciudad?: string | null;
   };
@@ -45,7 +45,7 @@ export default function UpsertUsuarioAdminModal({
     telefono: '',
     nombre: '',
     apellido: '',
-    tipo_identificacion: 'CC' as 'CC' | 'NIT',
+    tipo_identificacion: 'CC' as 'CC' | 'NIT' | 'CE',
     numero_identificacion: '',
     correo: '',
     ciudad: '',
@@ -70,7 +70,7 @@ export default function UpsertUsuarioAdminModal({
         telefono: initialData.telefono,
         nombre: initialData.nombre,
         apellido: initialData.apellido,
-        tipo_identificacion: (initialData.tipo_identificacion as 'CC' | 'NIT') || 'CC',
+        tipo_identificacion: (initialData.tipo_identificacion as 'CC' | 'NIT' | 'CE') || 'CC',
         numero_identificacion: initialData.numero_identificacion || '',
         correo: initialData.correo,
         ciudad: initialData.ciudad || '',
@@ -192,7 +192,7 @@ export default function UpsertUsuarioAdminModal({
       correo?: string;
       direccion?: string;
       plan?: Plan;
-      tipo_identificacion?: 'CC' | 'NIT';
+      tipo_identificacion?: 'CC' | 'NIT' | 'CE';
       numero_identificacion?: string;
       ciudad?: string;
     } = {
@@ -297,10 +297,11 @@ export default function UpsertUsuarioAdminModal({
               </label>
               <select
                 value={form.tipo_identificacion}
-                onChange={(e) => setForm(f => ({ ...f, tipo_identificacion: e.target.value as 'CC' | 'NIT' }))}
+                onChange={(e) => setForm(f => ({ ...f, tipo_identificacion: e.target.value as 'CC' | 'NIT' | 'CE' }))}
                 className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm text-[#1d212b] bg-white focus:outline-none focus:ring-2 focus:ring-[#ff8d2d]/50 focus:border-[#ff8d2d]"
               >
-                <option value="CC">CC — Cédula de Ciudadanía</option>
+                <option value="CC">C.C — Cédula de Ciudadanía</option>
+                <option value="CE">C.E — Cédula de Extranjería</option>
                 <option value="NIT">NIT</option>
               </select>
             </div>

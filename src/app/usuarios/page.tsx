@@ -183,9 +183,10 @@ export default function UsuariosPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6">
               <ProfileStat label="Plan" value={usuario.plan} icon={<ShieldCheckIcon className="h-4 w-4" />} />
               <ProfileStat label="Miembro desde" value={formatDate(usuario.creado_en)} icon={<CalendarDaysIcon className="h-4 w-4" />} />
+              <ProfileStat label="Ciudad" value={usuario.ciudad ?? '—'} />
               <ProfileStat label="Dirección" value={usuario.direccion ?? '—'} />
               <ProfileStat label="ID" value={usuario.id.slice(0, 8) + '…'} mono />
             </div>

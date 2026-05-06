@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server';
 import { EXTERNAL_API_BASE_URL } from '@/lib/config';
 
 const EXTERNAL_BASE = EXTERNAL_API_BASE_URL;
-// Prefer `DEONE_API_KEY`, but accept `ADMIN_API_KEY` or `BOT_API_KEY` if present
+// Configurar `DEONE_API_KEY` (preferida) en el servidor (Netlify env vars).
+// Fallbacks aceptados: ADMIN_API_KEY, BOT_API_KEY.
 const API_KEY =
   process.env.DEONE_API_KEY ||
   process.env.ADMIN_API_KEY ||
   process.env.BOT_API_KEY ||
-  process.env.NEXT_PUBLIC_DEONE_API_KEY ||
-  'TK2026A7F9X3M8N2P5Q1R4T6Y8U0I9O3';
+  '';
 
 // params may be either a plain object or a Promise that resolves to the object
 async function proxyRequest(req: Request | any, params: any) {

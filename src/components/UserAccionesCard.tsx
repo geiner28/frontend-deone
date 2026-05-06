@@ -136,6 +136,12 @@ export default function UserAccionesCard({
                   <div key={accion.id} className="flex items-center justify-between gap-3 p-3 bg-white rounded border border-gray-200 hover:bg-gray-50">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-900">+${accion.monto}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-gray-500">Estado:</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                          {String(accion.estado || 'pendiente').replace(/_/g, ' ')}
+                        </span>
+                      </div>
                       <p className="text-xs text-gray-500 mt-0.5">{formatDateTime(accion.creado_en)}</p>
                       {accion.comprobante_url && (
                         <p className="text-xs mt-1">
@@ -179,7 +185,13 @@ export default function UserAccionesCard({
                       <p className="text-xs text-gray-600 mt-0.5">
                         Período: {accion.periodo} | ${accion.monto}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5">{formatDateTime(accion.creado_en)}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-gray-500">Validación:</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                          {String(accion.validacion_estado || 'extraida').replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(accion.creado_en)}</p>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
                       <Button
@@ -194,7 +206,7 @@ export default function UserAccionesCard({
                               monto: accion.monto || 0,
                               servicio: accion.servicio || '',
                               periodo: accion.periodo || '',
-                              estado: accion.factura_estado || 'pendiente',
+                              estado: accion.estado || 'pendiente',
                               referencia_pago: undefined,
                               etiqueta: undefined,
                               fecha_emision: undefined,
@@ -227,7 +239,7 @@ export default function UserAccionesCard({
                               monto: accion.monto || 0,
                               servicio: accion.servicio || '',
                               periodo: accion.periodo || '',
-                              estado: accion.factura_estado || 'pendiente',
+                              estado: accion.estado || 'pendiente',
                               referencia_pago: undefined,
                               etiqueta: undefined,
                               fecha_emision: undefined,
@@ -266,6 +278,12 @@ export default function UserAccionesCard({
                       <p className="text-xs text-gray-600 mt-0.5">
                         Período: {accion.periodo} | ${accion.monto}
                       </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-gray-500">Validación:</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                          {String(accion.validacion_estado || 'extraida').replace(/_/g, ' ')}
+                        </span>
+                      </div>
                       <p className="text-xs text-gray-500 mt-0.5">{formatDateTime(accion.creado_en)}</p>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
@@ -281,7 +299,7 @@ export default function UserAccionesCard({
                               monto: accion.monto || 0,
                               servicio: accion.servicio || '',
                               periodo: accion.periodo || '',
-                              estado: accion.factura_estado || 'pendiente',
+                              estado: accion.estado || 'pendiente',
                               referencia_pago: undefined,
                               etiqueta: undefined,
                               fecha_emision: undefined,
@@ -314,7 +332,7 @@ export default function UserAccionesCard({
                               monto: accion.monto || 0,
                               servicio: accion.servicio || '',
                               periodo: accion.periodo || '',
-                              estado: accion.factura_estado || 'pendiente',
+                              estado: accion.estado || 'pendiente',
                               referencia_pago: undefined,
                               etiqueta: undefined,
                               fecha_emision: undefined,
@@ -348,7 +366,7 @@ export default function UserAccionesCard({
                                 monto: accion.monto || 0,
                                 servicio: accion.servicio || '',
                                 periodo: accion.periodo || '',
-                                estado: accion.factura_estado || 'pendiente',
+                                estado: accion.estado || 'pendiente',
                                 referencia_pago: undefined,
                                 etiqueta: undefined,
                                 fecha_emision: undefined,

@@ -1,15 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import type { FacturaEnriquecida } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
-  CheckCircleIcon,
-  CalculatorIcon,
-  XCircleIcon,
-  CreditCardIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 interface TableViewProps {
@@ -33,12 +29,11 @@ interface TableViewProps {
   onPageChange: (page: number) => void;
   selectedFactura: FacturaEnriquecida | null;
   onSelectFactura: (factura: FacturaEnriquecida) => void;
-  onValidar: () => void;
-  onRechazar: () => void;
-  onPagar: () => void;
-  onAproximar: () => void;
+  onEstadoChange: (factura: FacturaEnriquecida, estado: 'pagada' | 'pendiente' | 'sin_factura' | 'aproximada') => void;
+  onGrupoChange: (factura: FacturaEnriquecida, grupo: 1 | 2) => void;
+  onDelete: (factura: FacturaEnriquecida) => void;
   onEditar: () => void;
-  actionLoading: boolean;
+  updatingFacturaId: string | null;
 }
 
 export default function TableView({
@@ -62,12 +57,11 @@ export default function TableView({
   onPageChange,
   selectedFactura,
   onSelectFactura,
-  onValidar,
-  onRechazar,
-  onPagar,
-  onAproximar,
+  onEstadoChange,
+  onGrupoChange,
+  onDelete,
   onEditar,
-  actionLoading,
+  updatingFacturaId,
 }: TableViewProps) {
   // Si hay un usuario seleccionado, deshabilitar filtro de plan
   const planDisabled = selectedUser !== 'todos';
@@ -103,25 +97,28 @@ export default function TableView({
         return 'bg-yellow-100 text-yellow-800 border-yellow-300';
       case 'sin_factura':
         return 'bg-gray-100 text-gray-700 border-gray-300';
+      default:
+        return 'bg-amber-100 text-amber-800 border-amber-300';
+    }
+  };
+
+  // Color para validacion_estado (columna separada del estado de pago)
+  const getValidacionColor = (validacion: string) => {
+    switch (validacion) {
       case 'validada':
         return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'rechazada':
         return 'bg-red-100 text-red-800 border-red-300';
+      case 'extraida':
+        return 'bg-purple-100 text-purple-800 border-purple-300';
+      case 'sin_validar':
       default:
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+        return 'bg-gray-100 text-gray-600 border-gray-300';
     }
   };
 
   const startIndex = (currentPage - 1) * 50;
   const endIndex = startIndex + 50;
-
-  const isSinValidar = (factura: FacturaEnriquecida) => factura.validacion_estado === 'sin_validar' && factura.estado !== 'pagada';
-  const isValidada = (factura: FacturaEnriquecida) => factura.validacion_estado === 'validada' && factura.estado !== 'pagada';
-
-  // Función para determinar si una factura tiene acciones disponibles
-  const hasAvailableActions = (factura: FacturaEnriquecida): boolean => {
-    return isSinValidar(factura) || isValidada(factura);
-  };
 
   return (
     <div className="space-y-4">
@@ -229,7 +226,13 @@ export default function TableView({
                       <span className="flex items-center gap-1">Monto <span className="text-xs">↕</span></span>
                     </th>
                     <th className="px-4 py-3 text-left font-medium">
-                      <span className="flex items-center gap-1">Estado <span className="text-xs">↕</span></span>
+                      <span className="flex items-center gap-1">Grupo <span className="text-xs">↕</span></span>
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium">
+                      <span className="flex items-center gap-1">Estado pago <span className="text-xs">↕</span></span>
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium">
+                      <span className="flex items-center gap-1">Validación <span className="text-xs">↕</span></span>
                     </th>
                     <th className="px-4 py-3 text-left font-medium">Acciones</th>
                   </tr>
@@ -247,9 +250,11 @@ export default function TableView({
                         {factura.tipo_referencia || '-'}
                       </td>
                       <td className="px-4 py-3">
-                        {factura.archivo_url ? (
+                        {(() => {
+                          const portal = factura.pagina_pago || factura.archivo_url;
+                          return portal ? (
                           <a
-                            href={factura.archivo_url}
+                            href={portal}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
@@ -261,7 +266,8 @@ export default function TableView({
                           </a>
                         ) : (
                           <span className="text-gray-400">-</span>
-                        )}
+                        );
+                        })()}
                       </td>
                       <td className={`px-4 py-3 ${isExpiringSoon(factura.fecha_emision) ? 'text-orange-600 font-medium' : 'text-gray-600'}`}>
                         {formatDate(factura.fecha_emision)}
@@ -283,72 +289,59 @@ export default function TableView({
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(factura.estado)}`}>
-                          {factura.estado.charAt(0).toUpperCase() + factura.estado.slice(1)}
+                        <select
+                          value={String(factura.grupo || 1)}
+                          disabled={updatingFacturaId === factura.id}
+                          onChange={(e) => {
+                            const next = Number(e.target.value);
+                            if (next === 1 || next === 2) onGrupoChange(factura, next as 1 | 2);
+                          }}
+                          className="h-9 min-w-[86px] rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 disabled:opacity-60"
+                        >
+                          <option value="1">Grupo 1</option>
+                          <option value="2">Grupo 2</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <select
+                          value={String(factura.estado || 'pendiente')}
+                          disabled={updatingFacturaId === factura.id}
+                          onChange={(e) => {
+                            const next = e.target.value as 'pagada' | 'pendiente' | 'sin_factura' | 'aproximada';
+                            onEstadoChange(factura, next);
+                          }}
+                          className={`h-9 min-w-[132px] rounded-full border px-3 text-sm font-medium bg-white ${getStatusColor(String(factura.estado || 'pendiente'))} disabled:opacity-60`}
+                        >
+                          <option value="pagada">Pagada</option>
+                          <option value="pendiente">Pendiente</option>
+                          <option value="sin_factura">Sin factura</option>
+                          <option value="aproximada">Aproximada</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getValidacionColor(String(factura.validacion_estado || 'sin_validar'))}`}>
+                          {String(factura.validacion_estado || 'sin_validar').replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {hasAvailableActions(factura) ? (
-                          <div className="flex items-center gap-1">
-                            {/* Editar - siempre disponible si hay acciones */}
-                            <button
-                              onClick={() => { onSelectFactura(factura); onEditar(); }}
-                              disabled={actionLoading}
-                              title="Editar"
-                              className="p-2 rounded-lg text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors disabled:opacity-50"
-                            >
-                              <PencilSquareIcon className="w-5 h-5" />
-                            </button>
-
-                            {isSinValidar(factura) && (
-                              <>
-                                <button
-                                  onClick={() => { onSelectFactura(factura); onValidar(); }}
-                                  disabled={actionLoading}
-                                  title="Validar"
-                                  className="p-2 rounded-lg text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors disabled:opacity-50"
-                                >
-                                  <CheckCircleIcon className="w-5 h-5" />
-                                </button>
-
-                                {factura.origen === 'auto' && (
-                                  <button
-                                    onClick={() => { onSelectFactura(factura); onAproximar(); }}
-                                    disabled={actionLoading}
-                                    title="Aproximar"
-                                    className="p-2 rounded-lg text-purple-600 hover:bg-purple-50 hover:text-purple-700 transition-colors disabled:opacity-50"
-                                  >
-                                    <CalculatorIcon className="w-5 h-5" />
-                                  </button>
-                                )}
-
-                                <button
-                                  onClick={() => { onSelectFactura(factura); onRechazar(); }}
-                                  disabled={actionLoading}
-                                  title="Rechazar"
-                                  className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors disabled:opacity-50"
-                                >
-                                  <XCircleIcon className="w-5 h-5" />
-                                </button>
-                              </>
-                            )}
-
-                            {isValidada(factura) && (
-                              <button
-                                onClick={() => { onSelectFactura(factura); onPagar(); }}
-                                disabled={actionLoading}
-                                title="Pagar"
-                                className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors disabled:opacity-50"
-                              >
-                                <CreditCardIcon className="w-5 h-5" />
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="px-3 py-2 text-gray-400 text-xs italic">
-                            Sin acciones
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => { onSelectFactura(factura); onEditar(); }}
+                            disabled={updatingFacturaId === factura.id}
+                            title="Editar"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50"
+                          >
+                            <PencilSquareIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => onDelete(factura)}
+                            disabled={updatingFacturaId === factura.id}
+                            title="Eliminar"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

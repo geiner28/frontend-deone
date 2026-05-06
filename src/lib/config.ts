@@ -2,7 +2,9 @@
 // 🔧 ÚNICA LÍNEA A CAMBIAR PARA PRODUCCIÓN — URL del backend API
 // ══════════════════════════════════════════════════════════════════════════════
 export const EXTERNAL_API_BASE_URL =
-  process.env.DEONE_API_BASE_URL || 'https://prueba-supabase.onrender.com/api';
+  process.env.DEONE_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_DEONE_API_BASE_URL ||
+  'https://prueba-supabase.onrender.com/api';
 // ══════════════════════════════════════════════════════════════════════════════
 
 // NOTE: No exponer la API key al cliente. Configure `DEONE_API_KEY` en el entorno del servidor (.env.local)

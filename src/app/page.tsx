@@ -8,8 +8,8 @@ import { QuickActionsPanel } from '@/components/dashboard/QuickActionsPanel';
 import { DistributionChart } from '@/components/dashboard/DistributionChart';
 import { FacturesCard } from '@/components/dashboard/FacturesCard';
 import { PlansCard } from '@/components/dashboard/PlansCard';
-import { getAdminDashboard } from '@/lib/api';
-import type { AdminDashboardData } from '@/types';
+import { getAdminDashboard, getAdminDashboardPeriodos } from '@/lib/api';
+import type { AdminDashboardData, AdminDashboardPeriodo } from '@/types';
 
 // Función para formatear como pesos colombianos
 const formatCOP = (value: number): string => {
@@ -23,6 +23,7 @@ const formatCOP = (value: number): string => {
 
 export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null);
+  const [availablePeriods, setAvailablePeriods] = useState<AdminDashboardPeriodo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -57,7 +58,28 @@ export default function DashboardPage() {
 
   // Cargar datos iniciales
   useEffect(() => {
-    fetchDashboard(selectedYear, selectedMonth, selectedPlan);
+    const initDashboard = async () => {
+      let year = selectedYear;
+      let month = selectedMonth;
+
+      const pRes = await getAdminDashboardPeriodos();
+      if (pRes.ok && pRes.data?.periodos) {
+        const periodos = pRes.data.periodos;
+        setAvailablePeriods(periodos);
+
+        const existe = periodos.some((p) => p.year === selectedYear && p.month === selectedMonth);
+        if (!existe && periodos.length > 0) {
+          year = periodos[0].year;
+          month = periodos[0].month;
+          setSelectedYear(year);
+          setSelectedMonth(month);
+        }
+      }
+
+      await fetchDashboard(year, month, selectedPlan);
+    };
+
+    initDashboard();
   }, []);
 
   const handleMonthChange = (year: number, month: number) => {
@@ -74,7 +96,11 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="space-y-8 animate-fade-in">
-        <DashboardHeader onMonthChange={handleMonthChange} onPlanChange={handlePlanChange} />
+        <DashboardHeader
+          onMonthChange={handleMonthChange}
+          onPlanChange={handlePlanChange}
+          availablePeriods={availablePeriods}
+        />
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}
         </div>
@@ -85,7 +111,11 @@ export default function DashboardPage() {
   if (loading || !dashboardData) {
     return (
       <div className="space-y-8 animate-fade-in">
-        <DashboardHeader onMonthChange={handleMonthChange} onPlanChange={handlePlanChange} />
+        <DashboardHeader
+          onMonthChange={handleMonthChange}
+          onPlanChange={handlePlanChange}
+          availablePeriods={availablePeriods}
+        />
         <div className="flex items-center justify-center py-12">
           <div className="text-[#6D7382]">Cargando datos...</div>
         </div>
@@ -98,23 +128,27 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Dashboard Header with Filters */}
-      <DashboardHeader onMonthChange={handleMonthChange} onPlanChange={handlePlanChange} />
+      <DashboardHeader
+        onMonthChange={handleMonthChange}
+        onPlanChange={handlePlanChange}
+        availablePeriods={availablePeriods}
+      />
 
       {/* Main Grid Layout */}
       <div className="space-y-6">
-        {/* TOP ROW: 5 Metric Cards - Full Width Horizontal */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* TOP ROW: Main Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
-            title="Total Recargas"
+            title="Transacciones"
             value={metricas.totalRecargasAprobadas}
             isCurrency={true}
-            label={`${metricas.cantidadTransacciones} transacciones`}
+            label="Cash in"
           />
           <MetricCard
-            title="Total Pagado"
+            title="Transacciones"
             value={metricas.totalPagado}
             isCurrency={true}
-            label={metricas.totalPagado > 0 ? `${Math.round((metricas.totalPagado / metricas.totalRecargasAprobadas) * 100)}% utilizado` : 'sin pagos'}
+            label="Cash out"
           />
 
           <MetricCard
@@ -130,11 +164,6 @@ export default function DashboardPage() {
             label="En obligaciones por pagar"
           />
           
-          <MetricCard
-            title="Transacciones"
-            value={metricas.cantidadTransacciones}
-            label="Cash in"
-          />
         </div>
 
         {/* BOTTOM ROW: 3 Equal Sections - Same Height & Width */}

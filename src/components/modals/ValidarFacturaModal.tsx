@@ -14,6 +14,7 @@ import Toast, { ToastType } from '@/components/ui/Toast';
 interface ValidarFacturaModalProps {
   open: boolean;
   factura: Factura | null;
+  cantidadRecargas?: number | null;
   onClose: () => void;
   onSuccess: () => Promise<void>;
   showToast: (msg: string, type: ToastType) => void;
@@ -22,10 +23,12 @@ interface ValidarFacturaModalProps {
 const ValidarFacturaModal = ({
   open,
   factura,
+  cantidadRecargas,
   onClose,
   onSuccess,
   showToast,
 }: ValidarFacturaModalProps) => {
+  const puedeUsarGrupo2 = Number(cantidadRecargas) === 2;
   const [form, setForm] = useState({
     monto: '',
     servicio: '',
@@ -38,7 +41,6 @@ const ValidarFacturaModal = ({
     fecha_recordatorio: '',
     origen: '',
     extraccion_estado: '',
-    archivo_url: '',
     pagina_pago: '',
     grupo: 1 as 1 | 2,
     observaciones_admin: '',
@@ -76,9 +78,8 @@ const ValidarFacturaModal = ({
         fecha_recordatorio: factura.fecha_recordatorio ?? '',
         origen: factura.origen ?? '',
         extraccion_estado: factura.extraccion_estado ?? '',
-        archivo_url: factura.archivo_url ?? '',
-        pagina_pago: factura.pagina_pago ?? '',
-        grupo: (factura.grupo === 2 ? 2 : 1) as 1 | 2,
+        pagina_pago: factura.pagina_pago ?? factura.archivo_url ?? '',
+        grupo: (factura.grupo === 2 && puedeUsarGrupo2 ? 2 : 1) as 1 | 2,
         observaciones_admin: '',
       });
       setSuccessData(null);
@@ -86,7 +87,7 @@ const ValidarFacturaModal = ({
       setFieldErrors({});
       setShowConfirmation(false);
     }
-  }, [factura, open]);
+  }, [factura, open, puedeUsarGrupo2]);
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -113,8 +114,8 @@ const ValidarFacturaModal = ({
     if (!form.referencia_pago.trim()) {
       errors.referencia_pago = 'La referencia de pago es requerida';
     }
-    if (!form.tipo_referencia.trim()) {
-      errors.tipo_referencia = 'El tipo de referencia es requerido';
+    if (!form.pagina_pago.trim()) {
+      errors.pagina_pago = 'El portal de pago es requerido';
     }
     if (!form.etiqueta.trim()) {
       errors.etiqueta = 'La etiqueta es requerida';
@@ -149,11 +150,10 @@ const ValidarFacturaModal = ({
       fecha_emision: form.fecha_emision,
       fecha_recordatorio: form.fecha_recordatorio || undefined,
       referencia_pago: form.referencia_pago,
-      tipo_referencia: form.tipo_referencia,
+      tipo_referencia: form.tipo_referencia || undefined,
       etiqueta: form.etiqueta,
-      archivo_url: form.archivo_url || undefined,
       pagina_pago: form.pagina_pago || undefined,
-      grupo: form.grupo,
+      grupo: puedeUsarGrupo2 ? form.grupo : 1,
       observaciones_admin: form.observaciones_admin || undefined,
     });
     setLoading(false);
@@ -332,11 +332,9 @@ const ValidarFacturaModal = ({
 
             <Input
               label="Tipo de referencia"
-              required
               value={form.tipo_referencia}
               onChange={(e) => setForm((f) => ({ ...f, tipo_referencia: e.target.value }))}
               placeholder="Ej: PSE, Bancolombia, Nequi..."
-              error={fieldErrors.tipo_referencia}
             />
 
             <Input
@@ -385,11 +383,15 @@ const ValidarFacturaModal = ({
                 <select
                   value={form.grupo}
                   onChange={(e) => setForm((f) => ({ ...f, grupo: (Number(e.target.value) as 1 | 2) }))}
-                  className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm bg-white"
+                  className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
+                  disabled={!puedeUsarGrupo2}
                 >
                   <option value={1}>Grupo 1 (1 al 15)</option>
-                  <option value={2}>Grupo 2 (16 al fin de mes)</option>
+                  {puedeUsarGrupo2 && <option value={2}>Grupo 2 (16 al fin de mes)</option>}
                 </select>
+                {!puedeUsarGrupo2 && (
+                  <p className="text-xs text-gray-500">Con una sola fecha de recarga solo aplica Grupo 1.</p>
+                )}
               </div>
             </div>
 
@@ -399,19 +401,13 @@ const ValidarFacturaModal = ({
             </div>
 
             <Input
-              label="Archivo (URL del comprobante o factura)"
-              type="url"
-              value={form.archivo_url}
-              onChange={(e) => setForm((f) => ({ ...f, archivo_url: e.target.value }))}
-              placeholder="https://..."
-            />
-
-            <Input
               label="Portal de pago (URL)"
               type="url"
+              required
               value={form.pagina_pago}
               onChange={(e) => setForm((f) => ({ ...f, pagina_pago: e.target.value }))}
               placeholder="https://portal-de-pago.com"
+              error={fieldErrors.pagina_pago}
             />
 
             <Input

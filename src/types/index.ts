@@ -41,7 +41,7 @@ export interface Usuario {
   plan: Plan;
   activo: boolean;
   ajustes_usuario: AjustesUsuario;
-  tipo_identificacion?: 'CC' | 'NIT' | null;
+  tipo_identificacion?: 'CC' | 'NIT' | 'CE' | null;
   numero_identificacion?: string | null;
   ciudad?: string | null;
 }
@@ -52,7 +52,7 @@ export interface UpsertUsuarioPayload {
   apellido?: string;
   correo?: string;
   direccion?: string;
-  tipo_identificacion?: 'CC' | 'NIT';
+  tipo_identificacion?: 'CC' | 'NIT' | 'CE';
   numero_identificacion?: string;
   ciudad?: string;
 }
@@ -94,7 +94,7 @@ export interface UpsertUsuarioAdminPayload {
   correo?: string;
   direccion?: string;
   plan?: Plan;
-  tipo_identificacion?: 'CC' | 'NIT';
+  tipo_identificacion?: 'CC' | 'NIT' | 'CE';
   numero_identificacion?: string;
   ciudad?: string;
 }
@@ -482,7 +482,7 @@ export interface NotificacionAPI {
   canal: string;
   destinatario?: 'admin' | 'usuario';
   payload: Record<string, unknown>;
-  estado: 'pendiente' | 'enviada' | 'fallida' | 'leida';
+  estado: 'pendiente' | 'enviada' | 'fallida' | 'leida' | 'sin_revisar' | 'revisada' | 'entregada' | 'rechazada' | 'sin_respuesta' | 'cancelada';
   ultimo_error: string | null;
   usuarios?: {
     nombre: string;
@@ -513,7 +513,7 @@ export interface CrearNotificacionMasivaPayload {
 }
 
 export interface UpdateNotificacionPayload {
-  estado: 'enviada' | 'fallida' | 'leida';
+  estado: 'pendiente' | 'enviada' | 'entregada' | 'leida' | 'fallida' | 'sin_respuesta' | 'rechazada' | 'revisada' | 'sin_revisar';
   ultimo_error?: string;
 }
 
@@ -561,6 +561,16 @@ export interface AdminDashboardData {
     month: number;
     plan: string;
   };
+}
+
+export interface AdminDashboardPeriodo {
+  year: number;
+  month: number;
+  periodo: string;
+}
+
+export interface AdminDashboardPeriodosData {
+  periodos: AdminDashboardPeriodo[];
 }
 
 // ─── Admin Clientes ───────────────────────────────────────────────────────────

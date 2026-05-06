@@ -49,17 +49,9 @@ export default function TimelineView({
         apellido: f.usuario?.apellido || '',
       }));
 
-    // Get day range for selected month
-    const fechas = facturas
-      .filter(f => f.fecha_vencimiento)
-      .filter(f => {
-        const fecha = new Date(f.fecha_vencimiento!);
-        return fecha.getMonth() === mesSeleccionado && fecha.getFullYear() === añoSeleccionado;
-      })
-      .map(f => new Date(f.fecha_vencimiento!).getDate());
-
-    const dias = Array.from(new Set(fechas))
-      .sort((a, b) => a - b);
+    // Mostrar todo el mes para representar rangos (recordatorio -> vencimiento).
+    const daysInMonth = new Date(añoSeleccionado, mesSeleccionado + 1, 0).getDate();
+    const dias = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
     // Check if today is in the selected month
     const hoy = ahora.getDate();
@@ -71,16 +63,38 @@ export default function TimelineView({
     return { usuarios, dias, hoy, mesActual, mesAño, esHoy };
   }, [facturas, mesSeleccionado, añoSeleccionado]);
 
-  const getFacturasByUserAndDay = (usuarioId: string, dia: number) => {
-    return facturas.filter(f => {
-      if (f.usuario_id !== usuarioId) return false;
-      if (!f.fecha_vencimiento) return false;
-      const fecha = new Date(f.fecha_vencimiento);
-      const facturaMonth = fecha.getMonth();
-      const facturaYear = fecha.getFullYear();
-      const facturaDay = fecha.getDate();
-      return facturaDay === dia && facturaMonth === mesSeleccionado && facturaYear === añoSeleccionado;
-    });
+  const getFacturaRange = (f: FacturaEnriquecida) => {
+    const startRaw = f.fecha_recordatorio || f.fecha_emision || f.fecha_vencimiento;
+    const endRaw = f.fecha_vencimiento || f.fecha_recordatorio || f.fecha_emision;
+    if (!startRaw || !endRaw) return null;
+
+    const start = new Date(startRaw);
+    const end = new Date(endRaw);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+    if (start.getTime() <= end.getTime()) return { start, end };
+    return { start: end, end: start };
+  };
+
+  const isFacturaVisibleInSelectedMonth = (f: FacturaEnriquecida) => {
+    const range = getFacturaRange(f);
+    if (!range) return false;
+
+    const monthStart = new Date(añoSeleccionado, mesSeleccionado, 1);
+    const monthEnd = new Date(añoSeleccionado, mesSeleccionado + 1, 0, 23, 59, 59, 999);
+    return range.end >= monthStart && range.start <= monthEnd;
+  };
+
+  const getVisibleFacturasByUser = (usuarioId: string) => {
+    return facturas
+      .filter((f) => f.usuario_id === usuarioId)
+      .filter((f) => isFacturaVisibleInSelectedMonth(f))
+      .sort((a, b) => {
+        const ra = getFacturaRange(a);
+        const rb = getFacturaRange(b);
+        if (!ra || !rb) return 0;
+        return ra.start.getTime() - rb.start.getTime();
+      });
   };
 
   const getEstadoColor = (estado: string) => {
@@ -88,9 +102,9 @@ export default function TimelineView({
       case 'pagada':
         return 'bg-green-500';
       case 'pendiente':
-        return 'bg-blue-500';
+        return 'bg-amber-500';
       case 'aproximada':
-        return 'bg-yellow-500';
+        return 'bg-indigo-500';
       case 'sin_factura':
         return 'bg-gray-400';
       // Compat
@@ -139,7 +153,7 @@ export default function TimelineView({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between mb-2 gap-3">
-        <h2 className="text-xl font-bold text-gray-900">Cronograma de Vencimientos</h2>
+        <h2 className="text-xl font-bold text-gray-900">Cronograma de Facturas (Recordatorio → Vencimiento)</h2>
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={selectedUser}
@@ -203,7 +217,7 @@ export default function TimelineView({
               {timelineData.dias.length > 0 ? (
                 <>
                   {/* Day columns */}
-                  {timelineData.dias.map((dia, idx) => (
+                  {timelineData.dias.map((dia) => (
                     <div key={dia} className="flex-1 min-w-40 border-r border-gray-200 last:border-r-0">
                       <div className="p-3 border-b border-gray-200">
                         <div className="flex flex-col items-center">
@@ -220,52 +234,75 @@ export default function TimelineView({
             </div>
           </div>
 
-          {/* Today line indicator (will be added to each row)*/}
-
           {/* Users rows */}
-          {timelineData.usuarios.map((usuario) => (
+          {timelineData.usuarios.map((usuario) => {
+            const facturasUsuario = getVisibleFacturasByUser(usuario.id);
+            const rowHeight = Math.max(56, facturasUsuario.length * 26 + 12);
+
+            return (
             <div key={usuario.id} className="flex border-b border-gray-200 last:border-b-0 hover:bg-gray-50">
               {/* User column */}
-              <div className="w-48 border-r border-gray-200 sticky left-0 bg-white p-4 flex items-center">
+              <div className="w-48 border-r border-gray-200 sticky left-0 bg-white p-4 flex items-center" style={{ minHeight: rowHeight }}>
                 <div className="text-sm font-medium text-gray-900">
                   {usuario.nombre} {usuario.apellido}
                 </div>
               </div>
 
               {/* Day cells */}
-              <div className="flex-1 flex relative">
+              <div className="flex-1 flex relative" style={{ minHeight: rowHeight }}>
                 {timelineData.dias.map((dia) => {
-                  const facturasDelDia = getFacturasByUserAndDay(usuario.id, dia);
                   return (
              <div
                       key={`${usuario.id}-${dia}`}
-                      className="flex-1 min-w-32 border-r border-gray-200 last:border-r-0 p-2 relative"
+                      className="flex-1 min-w-32 border-r border-gray-200 last:border-r-0 relative"
                     >
                       {/* Today indicator line */}
                       {timelineData.esHoy && timelineData.hoy === dia && (
-                        <div className="absolute inset-0 border-l-4 border-orange-500 bg-orange-50 bg-opacity-30">
-                          <div className="absolute -top-2 left-0 px-1 py-0.5 bg-orange-500 text-white text-xs font-bold rounded">HOY</div>
+                        <div className="absolute inset-y-0 left-0 border-l-2 border-orange-500 z-20">
+                          <div className="absolute -top-2 -left-2 px-1 py-0.5 bg-orange-500 text-white text-[10px] font-bold rounded">HOY</div>
                         </div>
                       )}
-
-                      {/* Facturas pills */}
-                      {facturasDelDia.map((factura) => (
-                        <div
-                          key={factura.id}
-                          className={`${getEstadoColor(
-                            factura.estado
-                          )} text-white rounded-lg px-2 py-1 text-xs font-medium mb-1 truncate`}
-                          title={`${factura.servicio} - ${formatCurrency(factura.monto)}`}
-                        >
-                          {factura.etiqueta || factura.servicio} - {formatCurrency(factura.monto)}
-                        </div>
-                      ))}
                     </div>
                   );
                 })}
+
+                {/* Facturas como barras continuas recordatorio -> vencimiento */}
+                <div className="absolute inset-0 z-10 pointer-events-none">
+                  {facturasUsuario.map((factura, idx) => {
+                    const range = getFacturaRange(factura);
+                    if (!range) return null;
+
+                    const monthStart = new Date(añoSeleccionado, mesSeleccionado, 1);
+                    const monthEnd = new Date(añoSeleccionado, mesSeleccionado + 1, 0);
+
+                    const visibleStart = range.start < monthStart ? monthStart : range.start;
+                    const visibleEnd = range.end > monthEnd ? monthEnd : range.end;
+
+                    const startDay = visibleStart.getDate();
+                    const endDay = visibleEnd.getDate();
+                    const totalDays = timelineData.dias.length || 30;
+                    const leftPct = ((startDay - 1) / totalDays) * 100;
+                    const widthPct = ((endDay - startDay + 1) / totalDays) * 100;
+
+                    return (
+                      <div
+                        key={factura.id}
+                        className={`${getEstadoColor(factura.estado)} absolute h-5 rounded-md text-white text-[11px] font-semibold truncate px-2 leading-5 pointer-events-auto`}
+                        style={{
+                          left: `${leftPct}%`,
+                          width: `${Math.max(widthPct, 1.8)}%`,
+                          top: `${6 + idx * 26}px`,
+                        }}
+                        title={`${factura.etiqueta || factura.servicio} - ${formatCurrency(factura.monto)} (${getEstadoLabel(factura.estado)})`}
+                      >
+                        {`${factura.etiqueta || factura.servicio} - ${formatCurrency(factura.monto)}`}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          ))}
+          );})}
         </div>
       </div>
 
@@ -279,20 +316,16 @@ export default function TimelineView({
               <span className="text-sm text-gray-700">Pagada</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-              <span className="text-sm text-gray-700">Validada</span>
+              <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+              <span className="text-sm text-gray-700">Pendiente</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <span className="text-sm text-gray-700">Por validar</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span className="text-sm text-gray-700">Rechazada</span>
+              <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
+              <span className="text-sm text-gray-700">Aproximada</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-              <span className="text-sm text-gray-700">Sin estado</span>
+              <span className="text-sm text-gray-700">Sin factura</span>
             </div>
           </div>
         </div>
