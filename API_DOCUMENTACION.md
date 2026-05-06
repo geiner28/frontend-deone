@@ -9,7 +9,7 @@
 
 ---
 
-## 🔐 Autenticación
+## 🔐 Autenticació
 
 **Todos los endpoints requieren este header:**
 
