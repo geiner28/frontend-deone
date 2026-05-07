@@ -12,6 +12,7 @@ import ClientDetailViewAlternative from './ClientDetailViewAlternative';
 import {
   getAdminClientes,
   getAdminClientePerfil,
+  deleteUsuario,
 } from '@/lib/api';
 import type {
   Usuario,
@@ -24,6 +25,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PencilSquareIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 
@@ -85,6 +87,44 @@ const [listLoading, setListLoading] = useState(true);
   const [perfilLoading, setPerfilLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'obligaciones' | 'recargas' | 'pagos' | 'notificaciones'>('obligaciones');
 
+  // ─── Multi-select & bulk delete ──────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [openBulkDelete, setOpenBulkDelete] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(new Set(clientes.map((c: any) => c.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const idsToDelete = [...selectedIds];
+    setBulkDeleting(true);
+    const results = await Promise.all(idsToDelete.map((id) => deleteUsuario({ id }, { force: true })));
+    setBulkDeleting(false);
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length > 0) {
+      showToast(`Error al eliminar ${failed.length} usuario(s)`, 'error');
+    } else {
+      showToast(`${idsToDelete.length} usuario(s) eliminado(s) correctamente`, 'success');
+    }
+    setOpenBulkDelete(false);
+    setSelectedIds(new Set());
+    fetchClientes();
+  };
+
   // ─── Fetch list ───────────────────────────────────────────────────────
   const fetchClientes = useCallback(async () => {
     setListLoading(true);
@@ -92,7 +132,8 @@ const [listLoading, setListLoading] = useState(true);
         page, 
         limit: 9, 
         search: search || undefined, 
-        plan: filterPlan || undefined
+        plan: filterPlan || undefined,
+        activo: true,
       });
     setListLoading(false);
     if (res.ok && res.data) {
@@ -222,16 +263,33 @@ const [listLoading, setListLoading] = useState(true);
     </div>
     </div>
 
-    <div className="relative ml-auto w-[300px] flex-shrink-0">
-      <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-      
-      <Input
-        placeholder="Buscar por nombre, celular.."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onKeyDown={handleSearchKey}
-        className="w-full rounded-full border border-gray-200 bg-white py-2 pl-10 pr-4 text-sm text-gray-700 outline-none focus:border-[var(--table-header)] focus:ring-[var(--table-header)]/50"
-      />
+    <div className="flex items-center gap-3 ml-auto flex-shrink-0">
+      <div className="relative w-[300px]">
+        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Input
+          placeholder="Buscar por nombre, celular.."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={handleSearchKey}
+          className="w-full rounded-full border border-gray-200 bg-white py-2 pl-10 pr-4 text-sm text-gray-700 outline-none focus:border-[var(--table-header)] focus:ring-[var(--table-header)]/50"
+        />
+      </div>
+      <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-white text-sm text-gray-600 select-none">
+        <input
+          type="checkbox"
+          readOnly
+          checked={selectedIds.size > 0}
+          className="h-4 w-4 rounded border-gray-300 accent-amber-500"
+        />
+        <span>{selectedIds.size} Seleccionado</span>
+      </div>
+      <button
+        disabled={selectedIds.size === 0}
+        onClick={() => setOpenBulkDelete(true)}
+        className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-200 bg-white text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-300 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <TrashIcon className="h-4 w-4" /> Borrar
+      </button>
     </div>
 
   </div>
@@ -253,14 +311,23 @@ const [listLoading, setListLoading] = useState(true);
               <table className="w-full table-auto">
                 <thead className="bg-[var(--table-header)] text-white">
                   <tr>
-                    <th className="p-4 text-left"><input type="checkbox" /></th>
-                    <th className="p-4 text-left font-medium w-48">Usuario</th>
-                    <th className="p-4 text-left font-medium w-40">Celular</th>
-                    <th className="p-4 text-left font-medium">Facturas</th>
-                    <th className="p-4 text-center font-medium">Pagadas</th>
-<th className="p-4 text-center font-medium">Pendientes</th>
-                    <th className="p-4 text-right font-medium">Saldo</th>
-                    <th className="p-4 text-left font-medium">Plan</th>
+                    <th className="p-4 text-left">
+                      <input
+                        type="checkbox"
+                        checked={clientes.length > 0 && selectedIds.size === clientes.length}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-gray-300 accent-amber-500"
+                      />
+                    </th>
+                    <th className="p-4 text-left font-medium w-48">User <span className="text-xs opacity-60">↕</span></th>
+                    <th className="p-4 text-left font-medium w-40">Celular <span className="text-xs opacity-60">↕</span></th>
+                    <th className="p-4 text-left font-medium">Facturas <span className="text-xs opacity-60">↕</span></th>
+                    <th className="p-4 text-center font-medium">Pagadas <span className="text-xs opacity-60">↕</span></th>
+                    <th className="p-4 text-center font-medium">Pendientes <span className="text-xs opacity-60">↕</span></th>
+                    <th className="p-4 text-center font-medium">Sin factura <span className="text-xs opacity-60">↕</span></th>
+                    <th className="p-4 text-right font-medium">Saldo <span className="text-xs opacity-60">↕</span></th>
+                    <th className="p-4 text-left font-medium">Plan <span className="text-xs opacity-60">↕</span></th>
+                    <th className="p-4 text-left font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -270,27 +337,47 @@ const [listLoading, setListLoading] = useState(true);
                     const totalF = ultima.total_facturas || 0;
                     const pagadas = ultima.facturas_pagadas || 0;
                     const pendientes = Math.max(0, totalF - pagadas);
+                    const sinFactura = Math.max(0, totalF - pagadas - pendientes);
+                    const isSelected = selectedIds.has(c.id);
                     return (
-                    <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => openClientProfile(c.telefono)}>
-                      <td className="p-4"><input type="checkbox" /></td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="font-medium text-gray-900">{c.nombre} {c.apellido}</div>
-                        </div>
+                    <tr
+                      key={c.id}
+                      className={`border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-amber-50' : ''}`}
+                      onClick={() => openClientProfile(c.telefono)}
+                    >
+                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          onClick={(e) => toggleSelect(c.id, e)}
+                          className="h-4 w-4 rounded border-gray-300 accent-amber-500"
+                        />
                       </td>
                       <td className="p-4">
-                        <div className="flex items-center">
-                          <span>{c.telefono}</span>
-                        </div>
+                        <div className="font-medium text-gray-900">{c.nombre} {c.apellido}</div>
+                      </td>
+                      <td className="p-4">
+                        <span>{c.telefono}</span>
                       </td>
                       <td className="p-4 font-medium text-[var(--table-header)]">{totalF}</td>
                       <td className="p-4 text-center text-emerald-600 font-medium">{pagadas}</td>
                       <td className="p-4 text-center text-amber-600 font-medium">{pendientes}</td>
+                      <td className="p-4 text-center text-gray-500 font-medium">{sinFactura}</td>
                       <td className="p-4 text-right font-bold text-emerald-600">{formatCurrency(c.saldo || 0)}</td>
                       <td className="p-4">
                         <span className={getPlanVariant(c.plan)} style={{fontSize: '0.75rem', fontWeight: 500}}>
                           {c.plan}
                         </span>
+                      </td>
+                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => { setSelectedIds(new Set([c.id])); setOpenBulkDelete(true); }}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors"
+                          title="Eliminar usuario"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
                       </td>
                     </tr>
                   )})}
@@ -354,6 +441,56 @@ const [listLoading, setListLoading] = useState(true);
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Bulk Delete Confirmation Modal */}
+          {openBulkDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                    <TrashIcon className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Eliminar usuario{selectedIds.size > 1 ? 's' : ''}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {selectedIds.size} usuario{selectedIds.size > 1 ? 's' : ''} seleccionado{selectedIds.size > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-700">
+                  ¿Estás seguro de que deseas eliminar{' '}
+                  {selectedIds.size > 1 ? 'estos' : 'este'}{' '}
+                  <strong>{selectedIds.size} usuario{selectedIds.size > 1 ? 's' : ''}</strong>?
+                </p>
+                <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                  Se realizará un <strong>soft delete</strong>. El usuario quedará inactivo pero su historial se conserva.
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    disabled={bulkDeleting}
+                    onClick={() => setOpenBulkDelete(false)}
+                    className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    disabled={bulkDeleting}
+                    onClick={handleBulkDelete}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {bulkDeleting ? (
+                      <span className="inline-block h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <TrashIcon className="h-4 w-4" />
+                    )}
+                    Eliminar
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

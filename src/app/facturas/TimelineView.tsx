@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FacturaEnriquecida } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 
@@ -37,6 +37,69 @@ export default function TimelineView({
   const [mesSeleccionado, setMesSeleccionado] = useState(ahora.getMonth());
   const [añoSeleccionado, setAñoSeleccionado] = useState(ahora.getFullYear());
 
+  const getFacturaRange = (f: FacturaEnriquecida) => {
+    // Timeline debe representar desde emisión hasta vencimiento.
+    const startRaw = f.fecha_emision || f.fecha_vencimiento;
+    const endRaw = f.fecha_vencimiento || f.fecha_emision;
+    if (!startRaw || !endRaw) return null;
+
+    const start = new Date(startRaw);
+    const end = new Date(endRaw);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+    if (start.getTime() <= end.getTime()) return { start, end };
+    return { start: end, end: start };
+  };
+
+  // Periodos disponibles (YYYY-MM) según facturas visibles y su rango emisión->vencimiento.
+  const periodosDisponibles = useMemo(() => {
+    const set = new Set<string>();
+    for (const factura of facturas) {
+      const range = getFacturaRange(factura);
+      if (!range) continue;
+
+      const cursor = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
+      const fin = new Date(range.end.getFullYear(), range.end.getMonth(), 1);
+
+      while (cursor <= fin) {
+        const y = cursor.getFullYear();
+        const m = String(cursor.getMonth() + 1).padStart(2, '0');
+        set.add(`${y}-${m}`);
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    }
+
+    return Array.from(set).sort();
+  }, [facturas]);
+
+  const yearsDisponibles = useMemo(() => {
+    return Array.from(new Set(periodosDisponibles.map((p) => Number(p.slice(0, 4))))).sort((a, b) => b - a);
+  }, [periodosDisponibles]);
+
+  const mesesDisponibles = useMemo(() => {
+    return Array.from(
+      new Set(
+        periodosDisponibles
+          .filter((p) => Number(p.slice(0, 4)) === añoSeleccionado)
+          .map((p) => Number(p.slice(5, 7)) - 1)
+      )
+    ).sort((a, b) => a - b);
+  }, [periodosDisponibles, añoSeleccionado]);
+
+  useEffect(() => {
+    if (yearsDisponibles.length === 0) return;
+    if (!yearsDisponibles.includes(añoSeleccionado)) {
+      setAñoSeleccionado(yearsDisponibles[0]);
+    }
+  }, [yearsDisponibles, añoSeleccionado]);
+
+  useEffect(() => {
+    if (mesesDisponibles.length === 0) return;
+    if (!mesesDisponibles.includes(mesSeleccionado)) {
+      setMesSeleccionado(mesesDisponibles[0]);
+    }
+  }, [mesesDisponibles, mesSeleccionado]);
+
   const timelineData = useMemo(() => {
     if (!facturas.length) return { usuarios: [], dias: [], hoy: 0, mesActual: '', mesAño: '', esHoy: false };
 
@@ -62,19 +125,6 @@ export default function TimelineView({
 
     return { usuarios, dias, hoy, mesActual, mesAño, esHoy };
   }, [facturas, mesSeleccionado, añoSeleccionado]);
-
-  const getFacturaRange = (f: FacturaEnriquecida) => {
-    const startRaw = f.fecha_recordatorio || f.fecha_emision || f.fecha_vencimiento;
-    const endRaw = f.fecha_vencimiento || f.fecha_recordatorio || f.fecha_emision;
-    if (!startRaw || !endRaw) return null;
-
-    const start = new Date(startRaw);
-    const end = new Date(endRaw);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-
-    if (start.getTime() <= end.getTime()) return { start, end };
-    return { start: end, end: start };
-  };
 
   const isFacturaVisibleInSelectedMonth = (f: FacturaEnriquecida) => {
     const range = getFacturaRange(f);
@@ -153,7 +203,7 @@ export default function TimelineView({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between mb-2 gap-3">
-        <h2 className="text-xl font-bold text-gray-900">Cronograma de Facturas (Recordatorio → Vencimiento)</h2>
+        <h2 className="text-xl font-bold text-gray-900">Cronograma de Facturas (Emisión → Vencimiento)</h2>
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={selectedUser}
@@ -184,20 +234,30 @@ export default function TimelineView({
           <select
             value={mesSeleccionado}
             onChange={(e) => setMesSeleccionado(parseInt(e.target.value))}
+            disabled={mesesDisponibles.length === 0}
             className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
-            {meses.map((mes, idx) => (
-              <option key={idx} value={idx}>{mes}</option>
-            ))}
+            {mesesDisponibles.length > 0 ? (
+              mesesDisponibles.map((idx) => (
+                <option key={idx} value={idx}>{meses[idx]}</option>
+              ))
+            ) : (
+              <option value={mesSeleccionado}>Sin meses</option>
+            )}
           </select>
           <select
             value={añoSeleccionado}
             onChange={(e) => setAñoSeleccionado(parseInt(e.target.value))}
+            disabled={yearsDisponibles.length === 0}
             className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
-            {[2024, 2025, 2026, 2027].map((año) => (
-              <option key={año} value={año}>{año}</option>
-            ))}
+            {yearsDisponibles.length > 0 ? (
+              yearsDisponibles.map((año) => (
+                <option key={año} value={año}>{año}</option>
+              ))
+            ) : (
+              <option value={añoSeleccionado}>Sin años</option>
+            )}
           </select>
         </div>
       </div>
@@ -266,7 +326,7 @@ export default function TimelineView({
                   );
                 })}
 
-                {/* Facturas como barras continuas recordatorio -> vencimiento */}
+                {/* Facturas como barras continuas emisión -> vencimiento */}
                 <div className="absolute inset-0 z-10 pointer-events-none">
                   {facturasUsuario.map((factura, idx) => {
                     const range = getFacturaRange(factura);

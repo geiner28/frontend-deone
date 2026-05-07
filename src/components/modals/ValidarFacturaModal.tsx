@@ -340,17 +340,11 @@ const ValidarFacturaModal = ({
             <Input
               label="Etiqueta"
               required
-              list="etiquetas-catalog-validar"
               value={form.etiqueta}
               onChange={(e) => setForm((f) => ({ ...f, etiqueta: e.target.value }))}
               placeholder="Ej: Factura Marzo"
               error={fieldErrors.etiqueta}
             />
-            <datalist id="etiquetas-catalog-validar">
-              {etiquetasCatalog.map((et) => (
-                <option key={et} value={et} />
-              ))}
-            </datalist>
 
             <div className="grid grid-cols-2 gap-3">
               <Input

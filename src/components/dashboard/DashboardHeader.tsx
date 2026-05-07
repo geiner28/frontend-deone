@@ -18,7 +18,6 @@ export function DashboardHeader({ onMonthChange, onPlanChange, availablePeriods 
 
   const plans = [
     { id: 'all', label: 'Todos los Planes' },
-    { id: 'control', label: 'Plan Control' },
     { id: 'tranquilidad', label: 'Plan Tranquilidad' },
     { id: 'respaldo', label: 'Plan Respaldo' },
   ];

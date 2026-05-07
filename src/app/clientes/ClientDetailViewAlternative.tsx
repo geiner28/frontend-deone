@@ -12,6 +12,7 @@ import {
   DocumentTextIcon,
   TrashIcon,
   PencilSquareIcon,
+  ReceiptPercentIcon,
 } from '@heroicons/react/24/outline';
 import Badge from '@/components/ui/Badge';
 import UpdatePlanModal from '@/components/modals/UpdatePlanModal';
@@ -23,7 +24,7 @@ import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import EditarFacturaModal from '@/components/modals/EditarFacturaModal';
 import type { AdminClientePerfilData, Factura, Plan, ProgramacionRecargas } from '@/types';
 import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
-import { getAdminClientePerfil, actualizarFactura, deleteUsuario, deleteObligacion, deleteFactura } from '@/lib/api';
+import { getAdminClientePerfil, actualizarFactura, deleteUsuario, deleteObligacion, deleteFactura, crearSiguienteMes } from '@/lib/api';
 import Toast from '@/components/ui/Toast';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -108,7 +109,7 @@ const getEstadoBadgeContent = (estado: string) => {
   return estado;
 };
 
-// Generar meses disponibles SOLO cuando existan registros de facturas.
+// Generar meses disponibles a partir de cualquier periodo presente en obligaciones/facturas.
 const normalizePeriodoMonth = (periodo?: string | null): string | null => {
   if (!periodo) return null;
   const match = periodo.match(/^(\d{4})-(\d{2})/);
@@ -120,13 +121,10 @@ const generateMonthOptionsFromFacturas = (perfil?: AdminClientePerfilData | null
   const periodos = new Set<string>();
 
   for (const obligacion of perfil?.obligaciones || []) {
+    const periodoObligacion = normalizePeriodoMonth(obligacion.periodo);
+    if (periodoObligacion) periodos.add(periodoObligacion);
+
     for (const factura of obligacion.facturas || []) {
-      const esSuscripcion = (factura.tipo_referencia || '').toLowerCase() === 'suscripcion';
-      const esPlaceholder = (factura.estado || '').toLowerCase() === 'sin_factura';
-
-      // Solo considerar facturas reales para el filtro de meses.
-      if (esSuscripcion || esPlaceholder) continue;
-
       const normalized = normalizePeriodoMonth(factura.periodo || obligacion.periodo);
       if (normalized) periodos.add(normalized);
     }
@@ -142,6 +140,17 @@ const generateMonthOptionsFromFacturas = (perfil?: AdminClientePerfilData | null
         label: monthName.charAt(0).toUpperCase() + monthName.slice(1),
       };
     });
+};
+
+const periodoToOption = (periodo?: string | null) => {
+  const normalized = normalizePeriodoMonth(periodo);
+  if (!normalized) return null;
+  const d = new Date(`${normalized}T00:00:00`);
+  const monthName = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  return {
+    value: normalized,
+    label: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+  };
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -188,6 +197,9 @@ export default function ClientDetailViewAlternative({
   const [openAproximarModal, setOpenAproximarModal] = useState(false);
   const [openEditarFacturaModal, setOpenEditarFacturaModal] = useState(false);
 
+  // Crear siguiente mes
+  const [creandoSiguienteMes, setCreandoSiguienteMes] = useState(false);
+
   // Toast notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -196,7 +208,18 @@ export default function ClientDetailViewAlternative({
     setTimeout(() => setToast(null), 3000);
   };
 
-  const monthOptions = useMemo(() => generateMonthOptionsFromFacturas(perfil), [perfil]);
+  const monthOptions = useMemo(() => {
+    const generated = generateMonthOptionsFromFacturas(perfil);
+    if (generated.length > 0) return generated;
+
+    // Fallback: mostrar al menos el periodo consultado/actual para evitar "Sin registros"
+    const fallback =
+      periodoToOption(perfil?.periodo) ||
+      periodoToOption(selectedMonth) ||
+      periodoToOption(new Date().toISOString().slice(0, 10));
+
+    return fallback ? [fallback] : [];
+  }, [perfil, selectedMonth]);
 
   // ─── HANDLER: Refrescar datos de facturas ─────────────────────────────────────
   const refreshFacturas = useCallback(async () => {
@@ -548,6 +571,31 @@ export default function ClientDetailViewAlternative({
               <TrashIcon className="h-4 w-4" />
               Eliminar cliente
             </button>
+            <button
+              disabled={creandoSiguienteMes}
+              onClick={async () => {
+                if (!selectedMonth) return;
+                setCreandoSiguienteMes(true);
+                try {
+                  const res = await crearSiguienteMes(u.telefono, selectedMonth);
+                  if (res.ok) {
+                    showToast(`Siguiente mes creado: ${res.data?.nuevas_obligaciones ?? 0} obligación(es)`, 'success');
+                    const r2 = await getAdminClientePerfil(u.telefono, selectedMonth);
+                    if (r2.ok && r2.data) setPerfil(r2.data);
+                  } else {
+                    showToast('Error al crear el siguiente mes', 'error');
+                  }
+                } catch {
+                  showToast('Error al crear el siguiente mes', 'error');
+                } finally {
+                  setCreandoSiguienteMes(false);
+                }
+              }}
+              className="mt-2 bg-transparent border border-blue-700/50 text-blue-300 hover:border-blue-500 hover:text-blue-200 px-3 py-2 rounded-md text-sm text-left transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <PlusIcon className="h-4 w-4" />
+              {creandoSiguienteMes ? 'Creando...' : 'Crear siguiente mes'}
+            </button>
           </div>
         </div>
 
@@ -649,6 +697,8 @@ export default function ClientDetailViewAlternative({
               <tbody key={`tbody-${perfil?.programacion_recargas?.cantidad_recargas}-${selectedMonth}`}>
                 {filteredFacturas.length > 0 ? (
                   filteredFacturas.map((factura, idx) => {
+                    const esSuscripcion = (factura.tipo_referencia || '').toLowerCase() === 'suscripcion';
+                    const estadoSuscripcion = Number(factura.monto || 0) === 0 ? 'pagada' : 'pendiente';
                     let displayEstado = getEstadoBadgeContent(factura.estado);
                     if (factura.origen === 'auto' && factura.estado === 'extraida') {
                       displayEstado = 'Heredada (Sin validar)';
@@ -661,7 +711,12 @@ export default function ClientDetailViewAlternative({
                     );
 
                     const cantidadRecargas = Number(perfil?.programacion_recargas?.cantidad_recargas || 1);
-                    const grupoActual = Number(factura.grupo || grupo || (cantidadRecargas === 1 ? 1 : 0));
+                    const grupoActual = esSuscripcion
+                      ? 1
+                      : Number(factura.grupo || grupo || (cantidadRecargas === 1 ? 1 : 0));
+                    const estadoActual = esSuscripcion
+                      ? estadoSuscripcion
+                      : String(factura.estado || 'pendiente');
                     const isUpdatingRow = updatingFacturaId === factura.id;
 
                     const getEstadoClasses = (estado: string) => {
@@ -693,35 +748,39 @@ export default function ClientDetailViewAlternative({
                           {factura.tipo_referencia || '—'}
                         </td>
                         <td className="px-4 py-4 text-sm">
-                            {(() => {
-                              const portalUrl = factura.pagina_pago || factura.archivo_url;
-                              return portalUrl ? (
-                            <a
+                          {esSuscripcion ? (
+                            <span className="text-gray-400">N/A</span>
+                          ) : (() => {
+                            const portalUrl = factura.pagina_pago || factura.archivo_url;
+                            return portalUrl ? (
+                              <a
                                 href={portalUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                            >
-                              Link
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                              </svg>
-                            </a>
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                              >
+                                Link
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                  <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                                </svg>
+                              </a>
                             ) : (
-                            <span className="text-gray-400">\u2014</span>
+                              <span className="text-gray-400">--</span>
                             );
                           })()}
                         </td>
                         <td className="px-4 py-4 text-gray-600 text-sm">
-                          {factura.fecha_emision ? formatDate(factura.fecha_emision) : '\u2014'}
+                          {factura.fecha_emision ? formatDate(factura.fecha_emision) : '--'}
                         </td>
-                        <td className={`px-4 py-4 text-sm font-medium ${
-                          factura.fecha_vencimiento && new Date(factura.fecha_vencimiento) < new Date()
-                            ? 'text-red-500'
-                            : 'text-gray-600'
-                        }`}>
-                          {factura.fecha_vencimiento ? formatDate(factura.fecha_vencimiento) : '\u2014'}
+                        <td
+                          className={`px-4 py-4 text-sm font-medium ${
+                            factura.fecha_vencimiento && new Date(factura.fecha_vencimiento) < new Date()
+                              ? 'text-red-500'
+                              : 'text-gray-600'
+                          }`}
+                        >
+                          {factura.fecha_vencimiento ? formatDate(factura.fecha_vencimiento) : '--'}
                         </td>
                         <td className="px-4 py-4 text-gray-900 font-medium text-sm">
                           {formatCurrency(factura.monto)}
@@ -729,8 +788,9 @@ export default function ClientDetailViewAlternative({
                         <td className="px-4 py-4 text-sm">
                           <select
                             value={grupoActual > 0 ? String(grupoActual) : ''}
-                            disabled={isUpdatingRow}
+                            disabled={isUpdatingRow || esSuscripcion}
                             onChange={(e) => {
+                              if (esSuscripcion) return;
                               const value = Number(e.target.value);
                               if (value === 1 || value === 2) {
                                 void handleGrupoChange(factura, value as 1 | 2);
@@ -738,7 +798,7 @@ export default function ClientDetailViewAlternative({
                             }}
                             className="h-9 min-w-[86px] rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 disabled:opacity-60"
                           >
-                            {cantidadRecargas === 1 ? (
+                            {esSuscripcion || cantidadRecargas === 1 ? (
                               <option value="1">Grupo 1</option>
                             ) : (
                               <>
@@ -750,35 +810,53 @@ export default function ClientDetailViewAlternative({
                         </td>
                         <td className="px-4 py-4 text-sm">
                           <select
-                            value={String(factura.estado || 'pendiente')}
+                            value={estadoActual}
                             disabled={isUpdatingRow}
                             onChange={(e) => {
                               const next = e.target.value as 'pagada' | 'pendiente' | 'sin_factura' | 'aproximada';
                               void handleEstadoChange(factura, next);
                             }}
-                            className={`h-9 min-w-[132px] rounded-full border px-3 text-sm font-medium bg-white ${getEstadoClasses(String(factura.estado || 'pendiente'))} disabled:opacity-60`}
+                            className={`h-9 min-w-[132px] rounded-full border px-3 text-sm font-medium bg-white ${getEstadoClasses(estadoActual)} disabled:opacity-60`}
                           >
                             <option value="pagada">Pagada</option>
                             <option value="pendiente">Pendiente</option>
-                            <option value="sin_factura">Sin factura</option>
-                            <option value="aproximada">Aproximada</option>
+                            {!esSuscripcion && <option value="sin_factura">Sin factura</option>}
+                            {!esSuscripcion && <option value="aproximada">Aproximada</option>}
                           </select>
                         </td>
                         <td className="px-4 py-4 text-sm">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => {
+                                if (esSuscripcion) return;
+                                setSelectedFactura(factura);
+                                setOpenAproximarModal(true);
+                              }}
+                              disabled={esSuscripcion}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-purple-600 hover:bg-purple-50 hover:text-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                              title="Aproximar valor"
+                            >
+                              <ReceiptPercentIcon className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (esSuscripcion) return;
                                 setSelectedFactura(factura);
                                 setOpenEditarFacturaModal(true);
                               }}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                              disabled={esSuscripcion}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                               title="Editar"
                             >
                               <PencilSquareIcon className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={() => setFacturaToDelete(factura)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                              onClick={() => {
+                                if (esSuscripcion) return;
+                                setFacturaToDelete(factura);
+                              }}
+                              disabled={esSuscripcion}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
                               title="Eliminar"
                             >
                               <TrashIcon className="h-4 w-4" />

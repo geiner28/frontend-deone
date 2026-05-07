@@ -1,11 +1,13 @@
 'use client';
 
+import { useState, useRef, useCallback } from 'react';
 import type { FacturaEnriquecida } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
   TrashIcon,
+  ReceiptPercentIcon,
 } from '@heroicons/react/24/outline';
 
 interface TableViewProps {
@@ -33,6 +35,8 @@ interface TableViewProps {
   onGrupoChange: (factura: FacturaEnriquecida, grupo: 1 | 2) => void;
   onDelete: (factura: FacturaEnriquecida) => void;
   onEditar: () => void;
+  onAproximar: (factura: FacturaEnriquecida) => void;
+  onInlineUpdate: (factura: FacturaEnriquecida, field: string, value: string) => Promise<void>;
   updatingFacturaId: string | null;
 }
 
@@ -61,8 +65,62 @@ export default function TableView({
   onGrupoChange,
   onDelete,
   onEditar,
+  onAproximar,
+  onInlineUpdate,
   updatingFacturaId,
 }: TableViewProps) {
+  const [editingCell, setEditingCell] = useState<{ id: string; field: string; value: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = useCallback((factura: FacturaEnriquecida, field: string, value: string) => {
+    setEditingCell({ id: factura.id, field, value });
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
+  const commitEdit = useCallback(async (factura: FacturaEnriquecida) => {
+    if (!editingCell || editingCell.id !== factura.id) return;
+    const original = String((factura as unknown as Record<string, unknown>)[editingCell.field] ?? '');
+    if (editingCell.value !== original) {
+      await onInlineUpdate(factura, editingCell.field, editingCell.value);
+    }
+    setEditingCell(null);
+  }, [editingCell, onInlineUpdate]);
+
+  const renderCell = useCallback((
+    factura: FacturaEnriquecida,
+    field: string,
+    display: React.ReactNode,
+    rawValue: string,
+    inputType: 'text' | 'date' | 'number' | 'url' = 'text',
+    className = ''
+  ) => {
+    const isEditing = editingCell?.id === factura.id && editingCell?.field === field;
+    if (isEditing) {
+      return (
+        <input
+          ref={inputRef}
+          type={inputType}
+          value={editingCell.value}
+          onChange={(e) => setEditingCell(prev => prev ? { ...prev, value: e.target.value } : null)}
+          onBlur={() => commitEdit(factura)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); void commitEdit(factura); }
+            if (e.key === 'Escape') setEditingCell(null);
+          }}
+          className={`w-full min-w-[80px] border border-blue-400 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 ${className}`}
+        />
+      );
+    }
+    return (
+      <span
+        onDoubleClick={() => startEdit(factura, field, rawValue)}
+        title="Doble clic para editar"
+        className={`cursor-text select-none ${className}`}
+      >
+        {display}
+      </span>
+    );
+  }, [editingCell, commitEdit, startEdit]);
   // Si hay un usuario seleccionado, deshabilitar filtro de plan
   const planDisabled = selectedUser !== 'todos';
 
@@ -226,13 +284,7 @@ export default function TableView({
                       <span className="flex items-center gap-1">Monto <span className="text-xs">↕</span></span>
                     </th>
                     <th className="px-4 py-3 text-left font-medium">
-                      <span className="flex items-center gap-1">Grupo <span className="text-xs">↕</span></span>
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium">
-                      <span className="flex items-center gap-1">Estado pago <span className="text-xs">↕</span></span>
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium">
-                      <span className="flex items-center gap-1">Validación <span className="text-xs">↕</span></span>
+                      <span className="flex items-center gap-1">Estado <span className="text-xs">↕</span></span>
                     </th>
                     <th className="px-4 py-3 text-left font-medium">Acciones</th>
                   </tr>
@@ -241,66 +293,71 @@ export default function TableView({
                   {facturas.map((factura, idx) => (
                     <tr key={factura.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                       <td className="px-4 py-4 text-gray-900 font-medium">
-                        @{factura.etiqueta || factura.servicio}
+                        {renderCell(factura, 'etiqueta', `@${factura.etiqueta || factura.servicio}`, factura.etiqueta || factura.servicio || '')}
                       </td>
                       <td className="px-4 py-4 text-gray-600 font-mono text-xs">
-                        {factura.referencia_pago || '-'}
+                        {renderCell(factura, 'referencia_pago', factura.referencia_pago || '-', factura.referencia_pago || '')}
                       </td>
                       <td className="px-4 py-4 text-gray-600 text-xs">
-                        {factura.tipo_referencia || '-'}
+                        {renderCell(factura, 'tipo_referencia', factura.tipo_referencia || '-', factura.tipo_referencia || '')}
                       </td>
                       <td className="px-4 py-3">
                         {(() => {
                           const portal = factura.pagina_pago || factura.archivo_url;
+                          const isEditing = editingCell?.id === factura.id && editingCell?.field === 'pagina_pago';
+                          if (isEditing) {
+                            return (
+                              <input
+                                ref={inputRef}
+                                type="url"
+                                value={editingCell.value}
+                                onChange={(e) => setEditingCell(prev => prev ? { ...prev, value: e.target.value } : null)}
+                                onBlur={() => commitEdit(factura)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') { e.preventDefault(); void commitEdit(factura); }
+                                  if (e.key === 'Escape') setEditingCell(null);
+                                }}
+                                className="w-full min-w-[120px] border border-blue-400 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                              />
+                            );
+                          }
                           return portal ? (
-                          <a
-                            href={portal}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                          >
-                            Link
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M11 3a1 1 0 100 2h3.586L9.293 9.293a1 1 0 001.414 1.414L16 6.414V10a1 1 0 102 0V4a1 1 0 00-1-1h-6z" />
-                            </svg>
-                          </a>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        );
+                            <span
+                              onDoubleClick={() => startEdit(factura, 'pagina_pago', portal)}
+                              title="Doble clic para editar"
+                              className="cursor-text"
+                            >
+                              <a href={portal} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                Link
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 100 2h3.586L9.293 9.293a1 1 0 001.414 1.414L16 6.414V10a1 1 0 102 0V4a1 1 0 00-1-1h-6z" /></svg>
+                              </a>
+                            </span>
+                          ) : (
+                            <span onDoubleClick={() => startEdit(factura, 'pagina_pago', '')} title="Doble clic para editar" className="text-gray-400 cursor-text">-</span>
+                          );
                         })()}
                       </td>
                       <td className={`px-4 py-3 ${isExpiringSoon(factura.fecha_emision) ? 'text-orange-600 font-medium' : 'text-gray-600'}`}>
-                        {formatDate(factura.fecha_emision)}
+                        {renderCell(factura, 'fecha_emision', formatDate(factura.fecha_emision), factura.fecha_emision ? factura.fecha_emision.slice(0, 10) : '', 'date')}
                       </td>
                       <td className={`px-4 py-3 font-medium ${isOverdue(factura.fecha_vencimiento) ? 'text-orange-600' : isExpiringSoon(factura.fecha_vencimiento) ? 'text-orange-600' : 'text-gray-600'}`}>
-                        {formatDate(factura.fecha_vencimiento)}
+                        {renderCell(factura, 'fecha_vencimiento', formatDate(factura.fecha_vencimiento), factura.fecha_vencimiento ? factura.fecha_vencimiento.slice(0, 10) : '', 'date')}
                       </td>
                       <td className="px-4 py-3 text-gray-900">
                         {factura.usuario_nombre}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">{formatCurrency(factura.monto)}</span>
-                          {factura.estado === 'aproximada' && (
-                            <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                            </svg>
-                          )}
+                          {renderCell(factura, 'monto', <span className="font-medium text-gray-900">{formatCurrency(factura.monto)}</span>, String(factura.monto ?? ''), 'number', 'font-medium text-gray-900')}
+                          <button
+                            onClick={() => { onSelectFactura(factura); onAproximar(factura); }}
+                            disabled={updatingFacturaId === factura.id}
+                            title="Aproximar valor"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-gray-300 text-gray-500 hover:bg-purple-50 hover:text-purple-600 disabled:opacity-40"
+                          >
+                            <ReceiptPercentIcon className="h-3.5 w-3.5" />
+                          </button>
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <select
-                          value={String(factura.grupo || 1)}
-                          disabled={updatingFacturaId === factura.id}
-                          onChange={(e) => {
-                            const next = Number(e.target.value);
-                            if (next === 1 || next === 2) onGrupoChange(factura, next as 1 | 2);
-                          }}
-                          className="h-9 min-w-[86px] rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 disabled:opacity-60"
-                        >
-                          <option value="1">Grupo 1</option>
-                          <option value="2">Grupo 2</option>
-                        </select>
                       </td>
                       <td className="px-4 py-3">
                         <select
@@ -317,11 +374,6 @@ export default function TableView({
                           <option value="sin_factura">Sin factura</option>
                           <option value="aproximada">Aproximada</option>
                         </select>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getValidacionColor(String(factura.validacion_estado || 'sin_validar'))}`}>
-                          {String(factura.validacion_estado || 'sin_validar').replace(/_/g, ' ')}
-                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

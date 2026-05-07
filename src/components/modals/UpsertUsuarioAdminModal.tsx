@@ -302,7 +302,6 @@ export default function UpsertUsuarioAdminModal({
               >
                 <option value="CC">C.C — Cédula de Ciudadanía</option>
                 <option value="CE">C.E — Cédula de Extranjería</option>
-                <option value="NIT">NIT</option>
               </select>
             </div>
             <Input

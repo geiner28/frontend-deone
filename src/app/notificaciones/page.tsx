@@ -29,6 +29,9 @@ import {
   deleteNotificacion,
   updateNotificacion,
   marcarNotificacionEnviada,
+  aprobarRecarga,
+  actualizarRecarga,
+  getDisponible,
 } from '@/lib/api';
 import type { NotificacionAPI, Factura, UpdateNotificacionPayload } from '@/types';
 import { formatDate, formatCurrency, getErrorMsg } from '@/lib/utils';
@@ -54,6 +57,14 @@ interface Estadisticas {
 }
 
 const ADMIN_TIPOS = new Set(['factura_por_validar', 'recarga_por_validar', 'alerta_admin']);
+const BOT_TIPOS_PERMITIDOS = new Set([
+  'solicitud_recarga',
+  'solicitud_recarga_inicio_mes',
+  'recordatorio_recarga',
+  'obligacion_cumplida',
+  'pago_confirmado',
+  'obligaciones_pagadas_grupal',
+]);
 
 const TIPO_LABEL: Record<string, string> = {
   // ADMIN (internas)
@@ -68,14 +79,21 @@ const TIPO_LABEL: Record<string, string> = {
   recarga_aprobada: 'Recarga validada',
   obligacion_cumplida: 'Pago de factura',
   pago_confirmado: 'Pago de factura',
+  obligaciones_pagadas_grupal: 'Pagos agrupados',
 };
 
 const formatTipo = (tipo: string) =>
   TIPO_LABEL[tipo] || tipo.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
+const isTipoSolicitudRecarga = (tipo: string) =>
+  tipo === 'solicitud_recarga' || tipo === 'solicitud_recarga_inicio_mes' || tipo === 'recordatorio_recarga';
+
+const isTipoPagoObligacion = (tipo: string) =>
+  tipo === 'obligacion_cumplida' || tipo === 'pago_confirmado' || tipo === 'obligaciones_pagadas_grupal';
+
 // Categoría visual de la fila (para tabs Facturas/Recargas)
 const tipoCategoria = (tipo: string): 'factura' | 'recarga' | 'otro' => {
-  if (tipo === 'factura_por_validar' || tipo === 'obligacion_cumplida' || tipo === 'pago_confirmado') return 'factura';
+  if (tipo === 'factura_por_validar' || tipo === 'obligacion_cumplida' || tipo === 'pago_confirmado' || tipo === 'obligaciones_pagadas_grupal') return 'factura';
   if (
     tipo === 'recarga_por_validar' ||
     tipo === 'solicitud_recarga' ||
@@ -149,7 +167,7 @@ function getNombreUsuario(n: NotificacionConUsuario): string {
     if (full) return full;
   }
   const p = (n.payload || {}) as Record<string, unknown>;
-  const candidatos = [p['usuario_nombre'], p['nombre_usuario'], p['usuario_telefono']];
+  const candidatos = [p['usuario_nombre'], p['nombre_usuario'], p['usuario_telefono'], p['usuario_id']];
   for (const c of candidatos) {
     if (c != null && String(c).trim() !== '') return String(c);
   }
@@ -183,6 +201,21 @@ export default function NotificacionesPage() {
   const [showValidarModal, setShowValidarModal] = useState(false);
   const [showRecargaModal, setShowRecargaModal] = useState(false);
   const [selectedRecargaId, setSelectedRecargaId] = useState<string | null>(null);
+  const [showEditRecargaModal, setShowEditRecargaModal] = useState(false);
+  const [editRecargaNotif, setEditRecargaNotif] = useState<NotificacionConUsuario | null>(null);
+  const [showMensajeRecargaModal, setShowMensajeRecargaModal] = useState(false);
+  const [mensajeRecarga, setMensajeRecarga] = useState('');
+  const [loadingMensajeRecarga, setLoadingMensajeRecarga] = useState(false);
+  const [showMensajeBotModal, setShowMensajeBotModal] = useState(false);
+  const [mensajeBot, setMensajeBot] = useState('');
+  const [loadingMensajeBot, setLoadingMensajeBot] = useState(false);
+  const [editRecarga, setEditRecarga] = useState({
+    monto: '',
+    periodo: '',
+    comprobante_url: '',
+    referencia_tx: '',
+    observaciones_admin: '',
+  });
 
   const [notifToDelete, setNotifToDelete] = useState<NotificacionConUsuario | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -248,6 +281,11 @@ export default function NotificacionesPage() {
         const tb = new Date(b.creado_en).getTime();
         return sortDir === 'recientes' ? tb - ta : ta - tb;
       });
+
+      // En vista BOT-JAVIER solo mostramos los tipos permitidos de mensajería.
+      if (vista === 'bot') {
+        items = items.filter((n) => BOT_TIPOS_PERMITIDOS.has(n.tipo));
+      }
 
       setNotificaciones(items);
       setTotal(resList.data.total || 0);
@@ -327,6 +365,19 @@ export default function NotificacionesPage() {
     if (newEstado === n.estado) return;
     setChangingEstado(n.id);
     try {
+      if (n.tipo === 'recarga_por_validar' && newEstado === 'revisada') {
+        const p = (n.payload || {}) as Record<string, unknown>;
+        const recargaId = p.recarga_id ? String(p.recarga_id) : '';
+        if (!recargaId) throw new Error('La notificación no contiene recarga_id');
+        const aprobarRes = await aprobarRecarga(recargaId, {
+          observaciones_admin: 'Aprobada desde Notificaciones al marcar revisada',
+        });
+        if (!aprobarRes.ok) throw new Error(getErrorMsg(aprobarRes) || 'Error aprobando recarga');
+        setToast({ message: 'Recarga aprobada y saldo actualizado', type: 'success' });
+        await cargar();
+        return;
+      }
+
       const res = await updateNotificacion(n.id, { estado: newEstado as UpdateNotificacionPayload['estado'] });
       if (!res.ok) throw new Error(getErrorMsg(res) || 'Error');
       setToast({ message: `Notificación marcada como «${estadoVisual(newEstado, n.tipo).label}»`, type: 'success' });
@@ -363,6 +414,178 @@ export default function NotificacionesPage() {
       await cargar();
     } catch (err) {
       setToast({ message: getErrorMsg(err as any) || 'Error eliminando', type: 'error' });
+    }
+  };
+
+  const handleOpenEditRecarga = (n: NotificacionConUsuario) => {
+    const p = (n.payload || {}) as Record<string, unknown>;
+    setEditRecargaNotif(n);
+    setEditRecarga({
+      monto: p.monto != null ? String(p.monto) : '',
+      periodo: p.periodo != null ? String(p.periodo) : '',
+      comprobante_url: p.comprobante_url != null ? String(p.comprobante_url) : '',
+      referencia_tx: p.referencia_tx != null ? String(p.referencia_tx) : '',
+      observaciones_admin: '',
+    });
+    setShowEditRecargaModal(true);
+  };
+
+  const handleSaveEditRecarga = async () => {
+    if (!editRecargaNotif) return;
+    const p = (editRecargaNotif.payload || {}) as Record<string, unknown>;
+    const recargaId = p.recarga_id ? String(p.recarga_id) : '';
+    if (!recargaId) {
+      setToast({ message: 'No se encontró recarga_id en la notificación', type: 'error' });
+      return;
+    }
+
+    const payload = {
+      monto: editRecarga.monto ? Number(editRecarga.monto) : undefined,
+      periodo: editRecarga.periodo || undefined,
+      comprobante_url: editRecarga.comprobante_url || null,
+      referencia_tx: editRecarga.referencia_tx || null,
+      observaciones_admin: editRecarga.observaciones_admin || null,
+    };
+
+    setChangingEstado(editRecargaNotif.id);
+    try {
+      const res = await actualizarRecarga(recargaId, payload);
+      if (!res.ok) throw new Error(getErrorMsg(res) || 'No se pudo editar la recarga');
+      setToast({ message: 'Recarga actualizada', type: 'success' });
+      setShowEditRecargaModal(false);
+      setEditRecargaNotif(null);
+      await cargar();
+    } catch (err) {
+      setToast({ message: getErrorMsg(err as any) || 'Error actualizando recarga', type: 'error' });
+    } finally {
+      setChangingEstado(null);
+    }
+  };
+
+  const handleOpenMensajeRecarga = async (n: NotificacionConUsuario) => {
+    const p = (n.payload || {}) as Record<string, unknown>;
+    const telefono = String(n.usuarios?.telefono || p.usuario_telefono || '').trim();
+    const periodo = String(p.periodo || '').trim();
+    const nombreUsuario = getNombreUsuario(n) !== '—' ? getNombreUsuario(n) : 'cliente';
+
+    setShowMensajeRecargaModal(true);
+    setLoadingMensajeRecarga(true);
+    try {
+      let saldoTexto = '(saldo_usuario)';
+      if (telefono && periodo) {
+        const disp = await getDisponible(telefono, periodo);
+        if (disp.ok && disp.data && typeof disp.data.disponible === 'number') {
+          saldoTexto = formatCurrency(disp.data.disponible);
+        }
+      }
+
+      const mensaje = `Recibido, ¡${nombreUsuario}! 🙌🏼\nYa registré tu recarga. Tu saldo disponible en deOne es de ${saldoTexto}\n\nTe aviso cuando pague tus obligaciones.`;
+      setMensajeRecarga(mensaje);
+    } catch {
+      const mensaje = `Recibido, ¡${nombreUsuario}! 🙌🏼\nYa registré tu recarga. Tu saldo disponible en deOne es de (saldo_usuario)\n\nTe aviso cuando pague tus obligaciones.`;
+      setMensajeRecarga(mensaje);
+    } finally {
+      setLoadingMensajeRecarga(false);
+    }
+  };
+
+  const handleCopiarMensajeRecarga = async () => {
+    try {
+      await navigator.clipboard.writeText(mensajeRecarga);
+      setToast({ message: 'Mensaje copiado al portapapeles', type: 'success' });
+    } catch {
+      setToast({ message: 'No se pudo copiar el mensaje', type: 'error' });
+    }
+  };
+
+  const getObligacionesCercanas = (n: NotificacionConUsuario) => {
+    const p = (n.payload || {}) as Record<string, unknown>;
+    const usuarioIdBase = String(p.usuario_id || n.usuario_id || '');
+    const baseTs = new Date(n.creado_en).getTime();
+
+    const cercanas = notificaciones.filter((x) => {
+      if (!isTipoPagoObligacion(x.tipo)) return false;
+      const xp = (x.payload || {}) as Record<string, unknown>;
+      const xid = String(xp.usuario_id || x.usuario_id || '');
+      if (!usuarioIdBase || !xid || xid !== usuarioIdBase) return false;
+      const diffMs = Math.abs(new Date(x.creado_en).getTime() - baseTs);
+      return diffMs <= 30 * 60 * 1000; // ventana de 30 minutos
+    });
+
+    const dedup = new Map();
+    for (const item of cercanas) {
+      const ip = (item.payload || {}) as Record<string, unknown>;
+      const etiqueta = String(ip.etiqueta || ip.servicio || 'obligación').trim();
+      const valor = Number(ip.valor || ip.monto || ip.monto_aplicado || 0);
+      const key = `${etiqueta}|${valor}`;
+      if (!dedup.has(key)) {
+        dedup.set(key, { etiqueta, valor });
+      }
+    }
+    return Array.from(dedup.values());
+  };
+
+  const handleOpenMensajeBot = async (n: NotificacionConUsuario) => {
+    setShowMensajeBotModal(true);
+    setLoadingMensajeBot(true);
+
+    const p = (n.payload || {}) as Record<string, unknown>;
+    const telefono = String(n.usuarios?.telefono || p.usuario_telefono || '').trim();
+    const periodo = String(p.periodo || '').trim();
+    const usuario = getNombreUsuario(n) !== '—' ? getNombreUsuario(n) : 'Usuario';
+
+    try {
+      let saldoTexto = '(saldo_usuario)';
+      if (telefono && periodo) {
+        const disp = await getDisponible(telefono, periodo);
+        if (disp.ok && disp.data && typeof disp.data.disponible === 'number') {
+          saldoTexto = formatCurrency(disp.data.disponible);
+        }
+      }
+
+      if (isTipoSolicitudRecarga(n.tipo)) {
+        const valorRecarga = Number(p.valor_recarga ?? p.monto_solicitado ?? p.monto ?? 0);
+        const valorTexto = valorRecarga > 0 ? formatCurrency(valorRecarga) : '(valor_recarga)';
+        setMensajeBot(`${usuario} 👋🏼\n\nEs momento de recargar tu cuenta para cubrir tus próximas obligaciones 🙌🏼\n\nTu saldo actual en deOne es de ${saldoTexto}\n\nValor a recargar: ${valorTexto}\n\nPuedes hacer la recarga a la llave 0090944088.\n\nCuando la hagas, envíame el comprobante y yo me encargo del resto deOne 👍🏼`);
+      } else if (n.tipo === 'obligaciones_pagadas_grupal') {
+        // Payload ya viene con array obligaciones del backend
+        const oblsPayload = (p.obligaciones as Array<{ etiqueta: string; valor: number }> | undefined) || [];
+        if (oblsPayload.length >= 2) {
+          const lines = oblsPayload.map((o) => `${o.etiqueta} por ${formatCurrency(o.valor)}.`).join('\n');
+          setMensajeBot(`¡${usuario}! 🙌🏼\n\nYa hice el pago de:\n${lines}\n\nTu saldo actualizado en deOne es de ${saldoTexto}\n\nLos comprobantes ya quedaron cargados en tu enlace habitual!`);
+        } else if (oblsPayload.length === 1) {
+          const o = oblsPayload[0];
+          setMensajeBot(`¡${usuario}! 🙌🏼\nYa hice el pago de ${o.etiqueta} por ${formatCurrency(o.valor)}.\n\nTu saldo actualizado en deOne es de ${saldoTexto}\n\nEl comprobante ya quedó cargado en tu enlace habitual.`);
+        } else {
+          setMensajeBot(`¡${usuario}! 🙌🏼\nYa hice el pago de tus obligaciones.\n\nTu saldo actualizado en deOne es de ${saldoTexto}\n\nLos comprobantes ya quedaron cargados en tu enlace habitual!`);
+        }
+      } else if (isTipoPagoObligacion(n.tipo)) {
+        const oblsCercanas = getObligacionesCercanas(n);
+        if (oblsCercanas.length >= 2) {
+          const lines = oblsCercanas.slice(0, 3).map((o) => `${o.etiqueta} por ${formatCurrency(o.valor)}.`).join('\n');
+          setMensajeBot(`¡${usuario}! 🙌🏼\n\nYa hice el pago de:\n${lines}\n\nTu saldo actualizado en deOne es de ${saldoTexto}\n\nLos comprobantes ya quedaron cargados en tu enlace habitual!`);
+        } else {
+          const etiqueta = String(p.etiqueta || p.servicio || 'obligación');
+          const valor = Number(p.valor || p.monto || p.monto_aplicado || 0);
+          const valorTexto = valor > 0 ? formatCurrency(valor) : '(valor_obligacion)';
+          setMensajeBot(`¡${usuario}! 🙌🏼\nYa hice el pago de ${etiqueta} por ${valorTexto}.\n\nTu saldo actualizado en deOne es de ${saldoTexto}\n\nEl comprobante ya quedó cargado en tu enlace habitual.`);
+        }
+      } else {
+        setMensajeBot('Este tipo no tiene plantilla configurada.');
+      }
+    } catch {
+      setMensajeBot('No se pudo generar el mensaje automáticamente.');
+    } finally {
+      setLoadingMensajeBot(false);
+    }
+  };
+
+  const handleCopiarMensajeBot = async () => {
+    try {
+      await navigator.clipboard.writeText(mensajeBot);
+      setToast({ message: 'Mensaje copiado al portapapeles', type: 'success' });
+    } catch {
+      setToast({ message: 'No se pudo copiar el mensaje', type: 'error' });
     }
   };
 
@@ -554,12 +777,36 @@ export default function NotificacionesPage() {
                           <div className="inline-flex items-center gap-1">
                             {vista === 'admin' && (
                               <button
-                                onClick={() => onClickRow(n)}
+                                onClick={() => {
+                                  if (n.tipo === 'recarga_por_validar') {
+                                    handleOpenEditRecarga(n);
+                                  } else {
+                                    onClickRow(n);
+                                  }
+                                }}
                                 disabled={changingEstado === n.id}
                                 className="p-2 text-orange-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors disabled:opacity-40"
-                                title="Abrir y revisar"
+                                title={n.tipo === 'recarga_por_validar' ? 'Editar recarga' : 'Abrir y revisar'}
                               >
                                 <PencilSquareIcon className="h-4 w-4" />
+                              </button>
+                            )}
+                            {vista === 'bot' && (
+                              <button
+                                onClick={() => { void handleOpenMensajeBot(n); }}
+                                className="p-2 text-sky-500 hover:text-sky-700 hover:bg-sky-50 rounded-md transition-colors"
+                                title="Mensaje para copiar"
+                              >
+                                <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                              </button>
+                            )}
+                            {vista === 'admin' && n.tipo === 'recarga_por_validar' && n.estado === 'revisada' && (
+                              <button
+                                onClick={() => { void handleOpenMensajeRecarga(n); }}
+                                className="p-2 text-sky-500 hover:text-sky-700 hover:bg-sky-50 rounded-md transition-colors"
+                                title="Mensaje para usuario"
+                              >
+                                <ChatBubbleLeftRightIcon className="h-4 w-4" />
                               </button>
                             )}
                             <button
@@ -617,6 +864,134 @@ export default function NotificacionesPage() {
           }}
         />
       )}
+
+      <Modal
+        open={showEditRecargaModal && !!editRecargaNotif}
+        onClose={() => { setShowEditRecargaModal(false); setEditRecargaNotif(null); }}
+        title="Editar recarga"
+        maxWidth="md"
+      >
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Monto</label>
+              <input
+                type="number"
+                min="1"
+                value={editRecarga.monto}
+                onChange={(e) => setEditRecarga((prev) => ({ ...prev, monto: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Periodo</label>
+              <input
+                type="date"
+                value={editRecarga.periodo ? String(editRecarga.periodo).slice(0, 10) : ''}
+                onChange={(e) => setEditRecarga((prev) => ({ ...prev, periodo: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Referencia TX</label>
+              <input
+                type="text"
+                value={editRecarga.referencia_tx}
+                onChange={(e) => setEditRecarga((prev) => ({ ...prev, referencia_tx: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Comprobante URL</label>
+              <input
+                type="text"
+                value={editRecarga.comprobante_url}
+                onChange={(e) => setEditRecarga((prev) => ({ ...prev, comprobante_url: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Observación admin</label>
+            <textarea
+              value={editRecarga.observaciones_admin}
+              onChange={(e) => setEditRecarga((prev) => ({ ...prev, observaciones_admin: e.target.value }))}
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => { setShowEditRecargaModal(false); setEditRecargaNotif(null); }}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleSaveEditRecarga}>
+              Guardar cambios
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={showMensajeRecargaModal}
+        onClose={() => setShowMensajeRecargaModal(false)}
+        title="Mensaje para enviar"
+        maxWidth="md"
+      >
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-600">
+            Copia y pega este mensaje para enviarlo al usuario que reportó la recarga.
+          </p>
+          {loadingMensajeRecarga ? (
+            <div className="text-sm text-gray-500">Generando mensaje...</div>
+          ) : (
+            <textarea
+              value={mensajeRecarga}
+              readOnly
+              rows={6}
+              className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800"
+            />
+          )}
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setShowMensajeRecargaModal(false)}>
+              Cerrar
+            </Button>
+            <Button size="sm" onClick={handleCopiarMensajeRecarga}>
+              Copiar mensaje
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={showMensajeBotModal}
+        onClose={() => setShowMensajeBotModal(false)}
+        title="💬 Mensaje BOT-JAVIER"
+        maxWidth="md"
+      >
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-600">
+            Mensaje listo para copiar y pegar.
+          </p>
+          {loadingMensajeBot ? (
+            <div className="text-sm text-gray-500">Generando mensaje...</div>
+          ) : (
+            <textarea
+              value={mensajeBot}
+              readOnly
+              rows={10}
+              className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800"
+            />
+          )}
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setShowMensajeBotModal(false)}>
+              Cerrar
+            </Button>
+            <Button size="sm" onClick={handleCopiarMensajeBot}>
+              Copiar mensaje
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete modal */}
       <Modal

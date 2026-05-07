@@ -320,17 +320,11 @@ export default function UpsertObligacionConFacturasModal({
                   <div className="flex flex-col gap-1">
                     {labelReq('Etiqueta')}
                     <input
-                      list="etiquetas-list"
                       value={etiqueta}
                       onChange={(e) => setEtiqueta(e.target.value)}
-                      placeholder="Seleccione"
+                      placeholder="Ej: Factura Marzo"
                       className={inputCls}
                     />
-                    <datalist id="etiquetas-list">
-                      {etiquetas.map((et) => (
-                        <option key={et} value={et} />
-                      ))}
-                    </datalist>
                   </div>
                   <div className="flex flex-col gap-1">
                     {labelReq('Entidad')}

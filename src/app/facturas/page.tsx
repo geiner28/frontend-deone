@@ -136,6 +136,20 @@ export default function FacturasPage() {
     }
   }, [currentEstado, selectedFactura?.id]);
 
+  const handleInlineUpdate = useCallback(async (factura: FacturaEnriquecida, field: string, value: string) => {
+    if (!factura?.id) return;
+    setUpdatingFacturaId(factura.id);
+    const payload: Record<string, unknown> = { [field]: field === 'monto' ? Number(value) : value };
+    const res = await actualizarFactura(factura.id, payload);
+    setUpdatingFacturaId(null);
+    if (res.ok) {
+      showToast('Actualizado', 'success');
+      await loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
+    } else {
+      showToast(getErrorMsg(res, 'No se pudo actualizar'), 'error');
+    }
+  }, [currentEstado]);
+
   useEffect(() => {
     loadFacturas(currentEstado !== 'todas' ? currentEstado : undefined);
   }, [currentEstado]);
@@ -347,6 +361,8 @@ export default function FacturasPage() {
           onGrupoChange={handleGrupoChange}
           onDelete={handleDelete}
           onEditar={handleEditar}
+          onAproximar={(factura) => { setSelectedFactura(factura); setOpenAproximarModal(true); }}
+          onInlineUpdate={handleInlineUpdate}
           updatingFacturaId={updatingFacturaId}
         />
       )}

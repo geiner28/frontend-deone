@@ -409,6 +409,25 @@ export interface RechazarRecargaData {
   validada_en: string;
 }
 
+export interface UpdateRecargaPayload {
+  monto?: number;
+  periodo?: string;
+  comprobante_url?: string | null;
+  referencia_tx?: string | null;
+  observaciones_admin?: string | null;
+}
+
+export interface UpdateRecargaData {
+  id: string;
+  usuario_id: string;
+  monto: number;
+  estado: string;
+  periodo: string;
+  comprobante_url?: string | null;
+  referencia_tx?: string | null;
+  observaciones_admin?: string | null;
+}
+
 // ─── Recargas Pendientes por Teléfono ──────────────────────────────────────────
 export interface RecargaPendiente {
   id: string;

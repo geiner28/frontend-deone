@@ -35,6 +35,8 @@ import type {
   AprobarRecargaData,
   RechazarRecargaPayload,
   RechazarRecargaData,
+  UpdateRecargaPayload,
+  UpdateRecargaData,
   ObtenerRecargasPendientesData,
   DisponibleData,
   CrearPagoPayload,
@@ -91,16 +93,43 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
     authHeaders['X-bot-api-key'] = PUBLIC_API_KEY;
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders,
-      ...(options.headers || {}),
-    },
-  });
-  const json = await res.json();
-  return json as ApiResponse<T>;
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+        ...(options.headers || {}),
+      },
+    });
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return {
+        ok: false,
+        data: null,
+        error: {
+          code: 'INVALID_RESPONSE',
+          message: `Respuesta no JSON (${res.status}) al llamar ${safePath}`,
+          details: null,
+        },
+      } as ApiResponse<T>;
+    }
+
+    const json = await res.json();
+    return json as ApiResponse<T>;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error de red desconocido';
+    return {
+      ok: false,
+      data: null,
+      error: {
+        code: 'NETWORK_ERROR',
+        message: `No fue posible conectar con el backend (${safePath}). ${message}`,
+        details: { url },
+      },
+    } as ApiResponse<T>;
+  }
 }
 
 // ─── 1. Health ────────────────────────────────────────────────────────────────
@@ -293,6 +322,13 @@ export const rechazarRecarga = (recargaId: string, payload: RechazarRecargaPaylo
     body: JSON.stringify(payload),
   });
 
+// PUT /api/recargas/:id
+export const actualizarRecarga = (recargaId: string, payload: UpdateRecargaPayload) =>
+  request<UpdateRecargaData>(`/recargas/${recargaId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+
 // GET /api/recargas/pendientes?telefono=XXXX
 export const obtenerRecargasPendientes = (telefono: string) =>
   request<ObtenerRecargasPendientesData>(`/recargas/pendientes?telefono=${encodeURIComponent(telefono)}`, {
@@ -447,6 +483,13 @@ export const getAdminClientePerfil = (telefono: string, periodo?: string) => {
   const path = query ? `/admin/clientes/${encodeURIComponent(telefono)}?${query}` : `/admin/clientes/${encodeURIComponent(telefono)}`;
   return request<AdminClientePerfilData>(path);
 };
+
+// POST /api/admin/clientes/:telefono/crear-siguiente-mes
+export const crearSiguienteMes = (telefono: string, periodo: string) =>
+  request<{ ok: boolean; nuevas_obligaciones: number; ids: string[] }>(
+    `/admin/clientes/${encodeURIComponent(telefono)}/crear-siguiente-mes`,
+    { method: 'POST', body: JSON.stringify({ periodo }) }
+  );
 
 // PUT /api/admin/users/:id — Actualizar datos de usuario (nombre, apellido, telefono, correo, etc.)
 export const updateAdminUser = (userId: string, payload: Record<string, unknown>) =>
