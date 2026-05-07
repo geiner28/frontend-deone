@@ -8,13 +8,23 @@ const API_KEY =
   process.env.DEONE_API_KEY ||
   process.env.ADMIN_API_KEY ||
   process.env.BOT_API_KEY ||
+  process.env.NEXT_PUBLIC_DEONE_API_KEY ||
   '';
 
 // params may be either a plain object or a Promise that resolves to the object
 async function proxyRequest(req: Request | any, params: any) {
   if (!API_KEY) {
     return NextResponse.json(
-      { ok: false, data: null, error: { code: 'SERVER_CONFIG', message: 'DEONE_API_KEY no configurada en el servidor', details: null } },
+      {
+        ok: false,
+        data: null,
+        error: {
+          code: 'SERVER_CONFIG',
+          message:
+            'API key no configurada. Defina DEONE_API_KEY o ADMIN_API_KEY o BOT_API_KEY (fallback: NEXT_PUBLIC_DEONE_API_KEY).',
+          details: null,
+        },
+      },
       { status: 500 }
     );
   }
