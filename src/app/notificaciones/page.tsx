@@ -155,7 +155,7 @@ function getNumeroRef(n: NotificacionAPI): string {
 
 function getMonto(n: NotificacionAPI): number | null {
   const p = (n.payload || {}) as Record<string, unknown>;
-  const v = p['monto'] ?? p['monto_total'] ?? p['valor'];
+  const v = p['monto'] ?? p['monto_total'] ?? p['valor'] ?? p['valor_a_recargar'] ?? p['valor_recarga'];
   if (v == null) return null;
   const num = Number(v);
   return Number.isFinite(num) ? num : null;
@@ -471,8 +471,9 @@ export default function NotificacionesPage() {
     setShowMensajeRecargaModal(true);
     setLoadingMensajeRecarga(true);
     try {
-      let saldoTexto = '(saldo_usuario)';
-      if (telefono && periodo) {
+      const saldoPayload = Number(p.saldo_actual ?? p.saldo_usuario ?? NaN);
+      let saldoTexto = Number.isFinite(saldoPayload) ? formatCurrency(saldoPayload) : formatCurrency(0);
+      if (!Number.isFinite(saldoPayload) && telefono && periodo) {
         const disp = await getDisponible(telefono, periodo);
         if (disp.ok && disp.data && typeof disp.data.disponible === 'number') {
           saldoTexto = formatCurrency(disp.data.disponible);
@@ -482,7 +483,8 @@ export default function NotificacionesPage() {
       const mensaje = `Recibido, ¡${nombreUsuario}! 🙌🏼\nYa registré tu recarga. Tu saldo disponible en deOne es de ${saldoTexto}\n\nTe aviso cuando pague tus obligaciones.`;
       setMensajeRecarga(mensaje);
     } catch {
-      const mensaje = `Recibido, ¡${nombreUsuario}! 🙌🏼\nYa registré tu recarga. Tu saldo disponible en deOne es de (saldo_usuario)\n\nTe aviso cuando pague tus obligaciones.`;
+      const saldoPayload = Number(p.saldo_actual ?? p.saldo_usuario ?? 0);
+      const mensaje = `Recibido, ¡${nombreUsuario}! 🙌🏼\nYa registré tu recarga. Tu saldo disponible en deOne es de ${formatCurrency(saldoPayload)}\n\nTe aviso cuando pague tus obligaciones.`;
       setMensajeRecarga(mensaje);
     } finally {
       setLoadingMensajeRecarga(false);
@@ -535,8 +537,9 @@ export default function NotificacionesPage() {
     const usuario = getNombreUsuario(n) !== '—' ? getNombreUsuario(n) : 'Usuario';
 
     try {
-      let saldoTexto = '(saldo_usuario)';
-      if (telefono && periodo) {
+      const saldoPayload = Number(p.saldo_actual ?? p.saldo_usuario ?? NaN);
+      let saldoTexto = Number.isFinite(saldoPayload) ? formatCurrency(saldoPayload) : formatCurrency(0);
+      if (!Number.isFinite(saldoPayload) && telefono && periodo) {
         const disp = await getDisponible(telefono, periodo);
         if (disp.ok && disp.data && typeof disp.data.disponible === 'number') {
           saldoTexto = formatCurrency(disp.data.disponible);
@@ -544,8 +547,8 @@ export default function NotificacionesPage() {
       }
 
       if (isTipoSolicitudRecarga(n.tipo)) {
-        const valorRecarga = Number(p.valor_recarga ?? p.monto_solicitado ?? p.monto ?? 0);
-        const valorTexto = valorRecarga > 0 ? formatCurrency(valorRecarga) : '(valor_recarga)';
+        const valorRecarga = Number(p.valor_a_recargar ?? p.valor_recarga ?? p.monto_solicitado ?? p.monto ?? p.monto_faltante ?? 0);
+        const valorTexto = formatCurrency(valorRecarga);
         setMensajeBot(`${usuario} 👋🏼\n\nEs momento de recargar tu cuenta para cubrir tus próximas obligaciones 🙌🏼\n\nTu saldo actual en deOne es de ${saldoTexto}\n\nValor a recargar: ${valorTexto}\n\nPuedes hacer la recarga a la llave 0090944088.\n\nCuando la hagas, envíame el comprobante y yo me encargo del resto deOne 👍🏼`);
       } else if (n.tipo === 'obligaciones_pagadas_grupal') {
         // Payload ya viene con array obligaciones del backend
@@ -567,7 +570,7 @@ export default function NotificacionesPage() {
         } else {
           const etiqueta = String(p.etiqueta || p.servicio || 'obligación');
           const valor = Number(p.valor || p.monto || p.monto_aplicado || 0);
-          const valorTexto = valor > 0 ? formatCurrency(valor) : '(valor_obligacion)';
+          const valorTexto = formatCurrency(valor);
           setMensajeBot(`¡${usuario}! 🙌🏼\nYa hice el pago de ${etiqueta} por ${valorTexto}.\n\nTu saldo actualizado en deOne es de ${saldoTexto}\n\nEl comprobante ya quedó cargado en tu enlace habitual.`);
         }
       } else {
@@ -688,6 +691,7 @@ export default function NotificacionesPage() {
                   <Th label="Número de ref" />
                   <Th label="Fecha" />
                   <Th label="Monto" align="right" />
+                  <Th label="Facturas" />
                   <Th label="Estado" />
                   <Th label="" align="right" />
                 </tr>
@@ -695,13 +699,13 @@ export default function NotificacionesPage() {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-16">
+                    <td colSpan={8} className="py-16">
                       <FullPageSpinner />
                     </td>
                   </tr>
                 ) : notificaciones.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-16">
+                    <td colSpan={8} className="py-16">
                       <EmptyState
                         icon={<BellIcon className="h-12 w-12" />}
                         title="Sin notificaciones"
@@ -730,6 +734,24 @@ export default function NotificacionesPage() {
                         <td className="px-4 py-4 text-gray-600">{formatDate(n.creado_en)}</td>
                         <td className="px-4 py-4 text-gray-800 text-right">
                           {monto != null ? formatCurrency(monto) : '—'}
+                        </td>
+                        <td className="px-4 py-4 text-gray-600">
+                          {(() => {
+                            if (!isTipoPagoObligacion(n.tipo)) return '—';
+                            const p = (n.payload || {}) as Record<string, unknown>;
+                            const usuarioIdBase = String(p.usuario_id || n.usuario_id || '');
+                            const baseTs = new Date(n.creado_en).getTime();
+                            const cercanas = notificaciones.filter((x) => {
+                              if (!isTipoPagoObligacion(x.tipo)) return false;
+                              const xp = (x.payload || {}) as Record<string, unknown>;
+                              const xid = String(xp.usuario_id || x.usuario_id || '');
+                              if (!usuarioIdBase || !xid || xid !== usuarioIdBase) return false;
+                              const diffMs = Math.abs(new Date(x.creado_en).getTime() - baseTs);
+                              return diffMs <= 30 * 60 * 1000;
+                            });
+                            const count = cercanas.length;
+                            return count === 1 ? '1 factura' : `${count} facturas`;
+                          })()}
                         </td>
                         {/* ── ESTADO ── */}
                         <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>

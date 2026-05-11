@@ -74,7 +74,6 @@ export default function UpdatePlanModal({ open, onClose, telefono, currentPlan, 
               value={selectedPlan}
               onChange={(e) => setSelectedPlan(e.target.value as Plan)}
             >
-              <option value="control">Control</option>
               <option value="tranquilidad">Tranquilidad</option>
               <option value="respaldo">Respaldo</option>
             </select>

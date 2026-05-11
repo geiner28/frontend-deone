@@ -32,7 +32,6 @@ import {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getPlanVariant = (plan: string): string => {
   switch (plan) {
-    case 'control': return 'inline-flex items-center px-2.5 py-0.5 rounded-full font-medium border text-xs text-blue-700 bg-blue-100 border-blue-400 hover:bg-blue-200';
     case 'tranquilidad': return 'inline-flex items-center px-2.5 py-0.5 rounded-full font-medium border text-xs text-red-700 bg-red-100 border-red-400 hover:bg-red-200';
     case 'respaldo': return 'inline-flex items-center px-2.5 py-0.5 rounded-full font-medium border text-xs text-green-700 bg-green-100 border-green-400 hover:bg-green-200';
     default: return 'inline-flex items-center px-2.5 py-0.5 rounded-full font-medium border text-xs text-gray-600 bg-gray-100 border-gray-300 hover:bg-gray-200';
@@ -41,7 +40,6 @@ const getPlanVariant = (plan: string): string => {
 
 const getPlanNameColor = (plan: string): string => {
   switch (plan) {
-    case 'control': return 'text-blue-600';
     case 'tranquilidad': return 'text-orange-500';
     case 'respaldo': return 'text-cyan-500';
     default: return 'text-gray-600';
@@ -112,7 +110,7 @@ const [listLoading, setListLoading] = useState(true);
   const handleBulkDelete = async () => {
     const idsToDelete = [...selectedIds];
     setBulkDeleting(true);
-    const results = await Promise.all(idsToDelete.map((id) => deleteUsuario({ id }, { force: true })));
+    const results = await Promise.all(idsToDelete.map((id) => deleteUsuario({ id })));
     setBulkDeleting(false);
     const failed = results.filter((r) => !r.ok);
     if (failed.length > 0) {
@@ -466,9 +464,9 @@ const [listLoading, setListLoading] = useState(true);
                   {selectedIds.size > 1 ? 'estos' : 'este'}{' '}
                   <strong>{selectedIds.size} usuario{selectedIds.size > 1 ? 's' : ''}</strong>?
                 </p>
-                <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-                  Se realizará un <strong>soft delete</strong>. El usuario quedará inactivo pero su historial se conserva.
-                </div>
+                <p className="text-xs text-gray-500">
+                  Esta acción es permanente.
+                </p>
                 <div className="flex justify-end gap-3 pt-2">
                   <button
                     disabled={bulkDeleting}

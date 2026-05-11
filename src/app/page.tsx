@@ -212,7 +212,6 @@ export default function DashboardPage() {
             <div className="flex-1 min-h-0">
               <PlansCard
                 plans={[
-                  { label: 'Control', users: distribucionPlanes.control, percentage: 0, color: '#FF8D2D' },
                   { label: 'Tranquilidad', users: distribucionPlanes.tranquilidad, percentage: 0, color: '#52596B' },
                   { label: 'Respaldo', users: distribucionPlanes.respaldo, percentage: 0, color: '#C9C9C9' },
                 ]}

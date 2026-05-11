@@ -47,7 +47,6 @@ export default function UsuariosPage() {
 
   // Eliminar usuario
   const [openDelete, setOpenDelete] = useState(false);
-  const [deleteHard, setDeleteHard] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
@@ -100,12 +99,11 @@ export default function UsuariosPage() {
   const handleDelete = async () => {
     if (!usuario) return;
     setDeleting(true);
-    const res = await deleteUsuario({ id: usuario.id }, { hard: deleteHard });
+    const res = await deleteUsuario({ id: usuario.id });
     setDeleting(false);
     if (res.ok) {
-      showToast(`Usuario ${deleteHard ? 'eliminado permanentemente' : 'desactivado'}`, 'success');
+      showToast('Usuario eliminado permanentemente', 'success');
       setOpenDelete(false);
-      setDeleteHard(false);
       setUsuario(null);
       setSearched(false);
       setSearchTel('');
@@ -253,14 +251,14 @@ export default function UsuariosPage() {
         open={openPlan}
         onClose={() => setOpenPlan(false)}
         telefono={planUpdateTelefono}
-        currentPlan={(usuario && usuario.telefono === planUpdateTelefono ? usuario.plan : 'control') as Plan}
+        currentPlan={(usuario && usuario.telefono === planUpdateTelefono ? usuario.plan : 'tranquilidad') as Plan}
         onSuccess={handleUpdatePlan}
       />
 
       {/* Modal: Eliminar usuario */}
       <Modal
         open={openDelete}
-        onClose={() => { if (!deleting) { setOpenDelete(false); setDeleteHard(false); } }}
+        onClose={() => { if (!deleting) { setOpenDelete(false); } }}
         title="Eliminar usuario"
       >
         <div className="space-y-4">
@@ -269,21 +267,11 @@ export default function UsuariosPage() {
               ¿Seguro que deseas eliminar a <strong>{usuario.nombre} {usuario.apellido}</strong> ({usuario.telefono})?
             </p>
           )}
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-            Por defecto se realiza un <strong>soft delete</strong> (el usuario se desactiva y conserva su historial).
-            Activa &ldquo;borrado físico&rdquo; solo si necesitas eliminarlo permanentemente.
-          </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={deleteHard}
-              onChange={(e) => setDeleteHard(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
-            />
-            Borrado físico (irreversible)
-          </label>
+          <p className="text-xs text-gray-500">
+            Esta acción es permanente.
+          </p>
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" disabled={deleting} onClick={() => { setOpenDelete(false); setDeleteHard(false); }}>
+            <Button variant="secondary" disabled={deleting} onClick={() => { setOpenDelete(false); }}>
               Cancelar
             </Button>
             <Button variant="danger" loading={deleting} onClick={handleDelete}>

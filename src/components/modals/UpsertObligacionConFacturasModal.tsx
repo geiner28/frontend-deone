@@ -339,17 +339,12 @@ export default function UpsertObligacionConFacturasModal({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
                     {labelOpt('Tipo de referencia')}
-                    <select
+                    <input
                       value={tipoReferencia}
                       onChange={(e) => setTipoReferencia(e.target.value)}
+                      placeholder="Ej: Código interno"
                       className={inputCls}
-                    >
-                      <option value="">Seleccione</option>
-                      <option value="numero_cuenta">Número de cuenta</option>
-                      <option value="cedula">Cédula</option>
-                      <option value="codigo_barras">Código de barras</option>
-                      <option value="referencia">Referencia</option>
-                    </select>
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     {labelReq('Número de referencia')}

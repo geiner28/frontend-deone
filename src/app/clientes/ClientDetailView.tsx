@@ -44,7 +44,6 @@ type Tab = 'obligaciones' | 'recargas' | 'pagos' | 'notificaciones';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getPlanVariant = (plan: string): string => {
   switch (plan) {
-    case 'control': return 'inline-flex items-center px-2.5 py-0.5 rounded-full font-medium border text-xs text-blue-700 bg-blue-100 border-blue-400 hover:bg-blue-200';
     case 'tranquilidad': return 'inline-flex items-center px-2.5 py-0.5 rounded-full font-medium border text-xs text-red-700 bg-red-100 border-red-400 hover:bg-red-200';
     case 'respaldo': return 'inline-flex items-center px-2.5 py-0.5 rounded-full font-medium border text-xs text-green-700 bg-green-100 border-green-400 hover:bg-green-200';
     default: return 'inline-flex items-center px-2.5 py-0.5 rounded-full font-medium border text-xs text-gray-600 bg-gray-100 border-gray-300 hover:bg-gray-200';
@@ -196,8 +195,8 @@ export default function ClientDetailView({
           <p className="text-sm text-gray-600">
             Plan actual de <strong>{u.nombre} {u.apellido}</strong>: <strong className="capitalize">{u.plan}</strong>
           </p>
-          <div className="grid grid-cols-3 gap-3">
-            {(['control', 'tranquilidad', 'respaldo'] as Plan[]).map((p) => (
+          <div className="grid grid-cols-2 gap-3">
+            {(['tranquilidad', 'respaldo'] as Plan[]).map((p) => (
               <button
                 key={p}
                 onClick={() => setNewPlan(p)}

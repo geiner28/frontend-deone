@@ -13,6 +13,7 @@ import {
   TrashIcon,
   PencilSquareIcon,
   ReceiptPercentIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline';
 import Badge from '@/components/ui/Badge';
 import UpdatePlanModal from '@/components/modals/UpdatePlanModal';
@@ -24,7 +25,7 @@ import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import EditarFacturaModal from '@/components/modals/EditarFacturaModal';
 import type { AdminClientePerfilData, Factura, Plan, ProgramacionRecargas } from '@/types';
 import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
-import { getAdminClientePerfil, actualizarFactura, deleteUsuario, deleteObligacion, deleteFactura, crearSiguienteMes } from '@/lib/api';
+import { getAdminClientePerfil, actualizarFactura, deleteUsuario, deleteObligacion, deleteFactura, crearSiguienteMes, crearPago, confirmarPago } from '@/lib/api';
 import Toast from '@/components/ui/Toast';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -33,7 +34,6 @@ type FacturaFilterTab = 'todas' | 'pagadas' | 'pendientes' | 'sin-validar';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getPlanColor = (plan: string): string => {
   switch (plan) {
-    case 'control': return '#3b82f6';
     case 'tranquilidad': return '#f59e0b';
     case 'respaldo': return '#10b981';
     default: return '#6b7280';
@@ -181,7 +181,6 @@ export default function ClientDetailViewAlternative({
 
   // ─── DELETE STATES ────────────────────────────────────────────────────────────
   const [openDeleteUserModal, setOpenDeleteUserModal] = useState(false);
-  const [deleteUserHard, setDeleteUserHard] = useState(false);
   const [deletingUser, setDeletingUser] = useState(false);
   const [openDeleteObligacionModal, setOpenDeleteObligacionModal] = useState(false);
   const [deleteObligacionForce, setDeleteObligacionForce] = useState<Record<string, boolean>>({});
@@ -196,6 +195,7 @@ export default function ClientDetailViewAlternative({
   // Modal visibility states for factura actions
   const [openAproximarModal, setOpenAproximarModal] = useState(false);
   const [openEditarFacturaModal, setOpenEditarFacturaModal] = useState(false);
+  const [payingFacturaId, setPayingFacturaId] = useState<string | null>(null);
 
   // Crear siguiente mes
   const [creandoSiguienteMes, setCreandoSiguienteMes] = useState(false);
@@ -244,6 +244,35 @@ export default function ClientDetailViewAlternative({
   const handleAproximarSuccess = useCallback(async () => {
     await refreshFacturas();
   }, [refreshFacturas]);
+
+  // ─── HANDLER: Pagar factura directo (sin pedir datos extra) ───────────────
+  const pagarFacturaDirecto = useCallback(async (factura: Factura) => {
+    if (!factura?.id || !perfil?.usuario?.telefono) return;
+
+    setPayingFacturaId(factura.id);
+
+    const crearRes = await crearPago({
+      telefono: perfil.usuario.telefono,
+      factura_id: factura.id,
+    });
+
+    if (!crearRes.ok || !crearRes.data) {
+      setPayingFacturaId(null);
+      showToast(getErrorMsg(crearRes, 'No se pudo crear el pago'), 'error');
+      return;
+    }
+
+    const confRes = await confirmarPago(crearRes.data.pago_id, {});
+    setPayingFacturaId(null);
+
+    if (!confRes.ok) {
+      showToast(getErrorMsg(confRes, 'No se pudo confirmar el pago'), 'error');
+      return;
+    }
+
+    showToast('Pago confirmado', 'success');
+    await refreshFacturas();
+  }, [perfil?.usuario?.telefono, refreshFacturas]);
 
   // ─── HANDLER: Cambiar estado inline ────────────────────────────────────────
   const handleEstadoChange = useCallback(async (factura: Factura, newEstado: 'pagada' | 'pendiente' | 'sin_factura' | 'aproximada') => {
@@ -296,17 +325,16 @@ export default function ClientDetailViewAlternative({
   const handleDeleteUsuario = useCallback(async () => {
     if (!perfil) return;
     setDeletingUser(true);
-    const res = await deleteUsuario({ id: perfil.usuario.id }, { hard: deleteUserHard });
+    const res = await deleteUsuario({ id: perfil.usuario.id });
     setDeletingUser(false);
     if (res.ok) {
-      showToast(`Cliente ${deleteUserHard ? 'eliminado permanentemente' : 'desactivado'}`, 'success');
+      showToast('Cliente eliminado permanentemente', 'success');
       setOpenDeleteUserModal(false);
-      setDeleteUserHard(false);
       onBack();
     } else {
       showToast(getErrorMsg(res, 'No se pudo eliminar el cliente'), 'error');
     }
-  }, [perfil, deleteUserHard, onBack]);
+  }, [perfil, onBack]);
 
   // ─── HANDLER: Eliminar Obligación ──────────────────────────────────────────
   const handleDeleteObligacion = useCallback(async (obligacionId: string) => {
@@ -698,7 +726,6 @@ export default function ClientDetailViewAlternative({
                 {filteredFacturas.length > 0 ? (
                   filteredFacturas.map((factura, idx) => {
                     const esSuscripcion = (factura.tipo_referencia || '').toLowerCase() === 'suscripcion';
-                    const estadoSuscripcion = Number(factura.monto || 0) === 0 ? 'pagada' : 'pendiente';
                     let displayEstado = getEstadoBadgeContent(factura.estado);
                     if (factura.origen === 'auto' && factura.estado === 'extraida') {
                       displayEstado = 'Heredada (Sin validar)';
@@ -714,10 +741,9 @@ export default function ClientDetailViewAlternative({
                     const grupoActual = esSuscripcion
                       ? 1
                       : Number(factura.grupo || grupo || (cantidadRecargas === 1 ? 1 : 0));
-                    const estadoActual = esSuscripcion
-                      ? estadoSuscripcion
-                      : String(factura.estado || 'pendiente');
+                    const estadoActual = String(factura.estado || 'pendiente');
                     const isUpdatingRow = updatingFacturaId === factura.id;
+                    const canPay = estadoActual !== 'pagada' && factura.validacion_estado === 'validada';
 
                     const getEstadoClasses = (estado: string) => {
                       switch (estado) {
@@ -811,9 +837,13 @@ export default function ClientDetailViewAlternative({
                         <td className="px-4 py-4 text-sm">
                           <select
                             value={estadoActual}
-                            disabled={isUpdatingRow}
+                            disabled={isUpdatingRow || payingFacturaId === factura.id}
                             onChange={(e) => {
                               const next = e.target.value as 'pagada' | 'pendiente' | 'sin_factura' | 'aproximada';
+                              if (esSuscripcion && next === 'pagada') {
+                                void pagarFacturaDirecto(factura);
+                                return;
+                              }
                               void handleEstadoChange(factura, next);
                             }}
                             className={`h-9 min-w-[132px] rounded-full border px-3 text-sm font-medium bg-white ${getEstadoClasses(estadoActual)} disabled:opacity-60`}
@@ -826,6 +856,16 @@ export default function ClientDetailViewAlternative({
                         </td>
                         <td className="px-4 py-4 text-sm">
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                void pagarFacturaDirecto(factura);
+                              }}
+                              disabled={!canPay || payingFacturaId === factura.id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={canPay ? 'Pagar factura' : 'Solo se puede pagar factura validada y pendiente'}
+                            >
+                              <BanknotesIcon className="h-4 w-4" />
+                            </button>
                             <button
                               onClick={() => {
                                 if (esSuscripcion) return;
@@ -980,31 +1020,19 @@ export default function ClientDetailViewAlternative({
 
         {/* ─ DELETE USER MODAL ──────────────────────────────────────────────── */}
         {openDeleteUserModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!deletingUser) { setOpenDeleteUserModal(false); setDeleteUserHard(false); } }}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!deletingUser) { setOpenDeleteUserModal(false); } }}>
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-lg font-semibold text-gray-900">Eliminar cliente</h3>
               <p className="text-sm text-gray-700">
                 ¿Seguro que deseas eliminar a <strong>{u.nombre} {u.apellido}</strong> ({u.telefono})?
               </p>
-              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-                Por defecto se realiza un <strong>soft delete</strong> (el cliente se desactiva y conserva su historial).
-                Activa &ldquo;borrado físico&rdquo; solo si necesitas eliminarlo permanentemente.
-                <br />
-                <strong>Cascada automática:</strong> se eliminarán también sus obligaciones, facturas, recargas y pagos.
-              </div>
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={deleteUserHard}
-                  onChange={(e) => setDeleteUserHard(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                Borrado físico (irreversible)
-              </label>
+              <p className="text-xs text-gray-500">
+                Esta acción es permanente.
+              </p>
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   disabled={deletingUser}
-                  onClick={() => { setOpenDeleteUserModal(false); setDeleteUserHard(false); }}
+                  onClick={() => { setOpenDeleteUserModal(false); }}
                   className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancelar

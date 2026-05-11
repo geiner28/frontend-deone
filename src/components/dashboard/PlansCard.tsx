@@ -13,8 +13,8 @@ interface PlansCardProps {
 
 export function PlansCard({ 
   plans = [
-    { label: 'Control', users: 145, percentage: 45, color: '#FF8D2D' },
-    { label: 'Tranquilidad', users: 98, percentage: 31, color: '#52596B' },
+    { label: 'Tranquilidad', users: 145, percentage: 60, color: '#52596B' },
+    { label: 'Respaldo', users: 98, percentage: 40, color: '#C9C9C9' },
   ] 
 }: PlansCardProps) {
   const totalUsers = plans.reduce((sum, plan) => sum + plan.users, 0);

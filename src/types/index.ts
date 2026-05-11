@@ -17,7 +17,7 @@ export interface HealthData {
 }
 
 // ─── Usuario ──────────────────────────────────────────────────────────────────
-export type Plan = 'control' | 'tranquilidad' | 'respaldo';
+export type Plan = 'tranquilidad' | 'respaldo';
 
 export interface AjustesUsuario {
   id: string;
@@ -565,7 +565,6 @@ export interface DistribucionFacturas {
 }
 
 export interface DistribucionPlanes {
-  control: number;
   tranquilidad: number;
   respaldo: number;
 }

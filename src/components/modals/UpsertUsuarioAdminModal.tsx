@@ -50,7 +50,7 @@ export default function UpsertUsuarioAdminModal({
     correo: '',
     ciudad: '',
     direccion: '',
-    plan: 'control' as Plan,
+    plan: 'tranquilidad' as Plan,
   });
 
   // Sugerencias de ciudades para autocomplete (catálogo básico Colombia)
@@ -75,14 +75,14 @@ export default function UpsertUsuarioAdminModal({
         correo: initialData.correo,
         ciudad: initialData.ciudad || '',
         direccion: initialData.direccion || '',
-        plan: 'control',
+        plan: 'tranquilidad',
       });
       setExistingUser({
         nombre: initialData.nombre,
         apellido: initialData.apellido,
         correo: initialData.correo,
         direccion: initialData.direccion,
-        plan: 'control',
+        plan: 'tranquilidad',
       });
       setUserCheckComplete(true);
     }
@@ -136,7 +136,7 @@ export default function UpsertUsuarioAdminModal({
   }, [form.telefono, open, mode]);
 
   const handleClose = () => {
-    setForm({ telefono: '', nombre: '', apellido: '', tipo_identificacion: 'CC', numero_identificacion: '', correo: '', ciudad: '', direccion: '', plan: 'control' });
+    setForm({ telefono: '', nombre: '', apellido: '', tipo_identificacion: 'CC', numero_identificacion: '', correo: '', ciudad: '', direccion: '', plan: 'tranquilidad' });
     setExistingUser(null);
     setShowConfirmation(false);
     setToast(null);
@@ -378,7 +378,6 @@ export default function UpsertUsuarioAdminModal({
                 value={form.plan}
                 onChange={(e) => setForm(f => ({ ...f, plan: e.target.value as Plan }))}
               >
-                <option value="control">Control</option>
                 <option value="tranquilidad">Tranquilidad</option>
                 <option value="respaldo">Respaldo</option>
               </select>

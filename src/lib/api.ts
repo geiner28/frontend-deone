@@ -165,30 +165,15 @@ export const listUsuarios = (params?: { page?: number; limit?: number; search?: 
 };
 
 // DELETE /api/users/:id  ó  /api/users?telefono=XXX
-// Por defecto soft delete CON cascada (force=true) para que el panel admin
-// pueda eliminar clientes con obligaciones/pagos sin pasos previos.
-// { hard: true } → borrado físico irreversible.
-// { force: false } → respeta restricciones del backend (no recomendado en este dashboard).
-export const deleteUsuario = (
-  identifier: { id?: string; telefono?: string },
-  options?: { hard?: boolean; force?: boolean }
-) => {
-  const force = options?.force !== false; // default true
-  const hard = !!options?.hard;
-  const sp = new URLSearchParams();
-  if (hard) sp.set('hard', 'true');
-  if (force) sp.set('force', 'true');
+// Borrado definitivo (hard delete) con eliminación de todo lo relacionado.
+export const deleteUsuario = (identifier: { id?: string; telefono?: string }) => {
   if (identifier.id) {
-    const qs = sp.toString();
-    const suffix = qs ? `?${qs}` : '';
-    return request<DeleteUsuarioData>(`/users/${encodeURIComponent(identifier.id)}${suffix}`, {
+    return request<DeleteUsuarioData>(`/users/${encodeURIComponent(identifier.id)}`, {
       method: 'DELETE',
     });
   }
   if (identifier.telefono) {
     const sp2 = new URLSearchParams({ telefono: identifier.telefono });
-    if (hard) sp2.set('hard', 'true');
-    if (force) sp2.set('force', 'true');
     return request<DeleteUsuarioData>(`/users?${sp2.toString()}`, { method: 'DELETE' });
   }
   return Promise.resolve({
@@ -438,7 +423,7 @@ export const batchMarcarEnviadas = (payload: BatchEnviadasPayload) =>
   });
 
 // ─── 10. Admin Dashboard (4 endpoints) ───────────────────────────────────────
-// GET /api/admin/dashboard?year=2026&month=2&plan=control
+// GET /api/admin/dashboard?year=2026&month=2&plan=tranquilidad
 export const getAdminDashboard = (params?: {
   year?: number;
   month?: number;
