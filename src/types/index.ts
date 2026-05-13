@@ -457,7 +457,8 @@ export interface ObtenerRecargasPendientesData {
 // ─── Disponible ───────────────────────────────────────────────────────────────
 export interface DisponibleData {
   usuario_id: string;
-  periodo: string;
+  periodo?: string | null;
+  alcance?: 'global' | 'periodo';
   total_recargas: number;
   total_pagos: number;
   disponible: number;

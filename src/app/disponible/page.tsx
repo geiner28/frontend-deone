@@ -21,9 +21,9 @@ export default function DisponiblePage() {
   const showToast = (message: string, type: ToastType) => setToast({ message, type });
 
   const handleConsultar = async () => {
-    if (!telefono.trim() || !periodo) return;
+    if (!telefono.trim()) return;
     setLoading(true);
-    const res = await getDisponible(telefono.trim(), periodo);
+    const res = await getDisponible(telefono.trim(), periodo || undefined);
     setLoading(false);
     if (res.ok && res.data) {
       setData(res.data);
@@ -43,7 +43,7 @@ export default function DisponiblePage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <Card>
-        <CardHeader title="Consultar saldo disponible" subtitle="Calcula el saldo disponible para un usuario en un periodo específico" />
+        <CardHeader title="Consultar saldo disponible" subtitle="Calcula el saldo global acumulado de un usuario" />
         <div className="flex flex-wrap gap-3">
           <Input
             placeholder="Teléfono del usuario"
@@ -96,9 +96,9 @@ export default function DisponiblePage() {
           {/* Detail card */}
           <Card className="relative overflow-hidden">
             <div className={`absolute top-0 left-0 h-1 w-full bg-gradient-to-r ${data.disponible >= 0 ? 'from-emerald-500 to-green-500' : 'from-red-500 to-rose-500'}`} />
-            <CardHeader title="📊 Detalle del periodo" />
+            <CardHeader title="📊 Detalle del saldo global" />
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-5">
-              <InfoItem label="Periodo" value={formatDate(data.periodo)} />
+              <InfoItem label="Alcance" value={data.alcance === 'global' ? 'Global' : formatDate(data.periodo || '')} />
               <InfoItem label="Usuario ID" value={<span className="font-mono text-xs break-all">{data.usuario_id.slice(0, 16)}…</span>} />
               <InfoItem label="Disponible" value={<span className={data.disponible >= 0 ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>{formatCurrency(data.disponible)}</span>} />
             </div>

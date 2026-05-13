@@ -321,11 +321,10 @@ export const obtenerRecargasPendientes = (telefono: string) =>
   });
 
 // ─── 6. Disponible (1 endpoint) ──────────────────────────────────────────────
-// GET /api/disponible?telefono=&periodo=
-export const getDisponible = (telefono: string, periodo: string) =>
-  request<DisponibleData>(
-    `/disponible?telefono=${encodeURIComponent(telefono)}&periodo=${encodeURIComponent(periodo)}`
-  );
+// GET /api/disponible?telefono=&periodo= (periodo opcional, el saldo es global)
+export const getDisponible = (telefono: string, periodo?: string) => {
+  return request<DisponibleData>(`/disponible?telefono=${encodeURIComponent(telefono)}${periodo ? `&periodo=${encodeURIComponent(periodo)}` : ''}`);
+};
 
 // ─── 7. Pagos (3 endpoints) ──────────────────────────────────────────────────
 // POST /api/pagos/crear

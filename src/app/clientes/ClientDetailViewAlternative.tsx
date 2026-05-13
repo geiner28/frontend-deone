@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   ChevronLeftIcon,
   PencilIcon,
@@ -15,7 +15,6 @@ import {
   ReceiptPercentIcon,
   BanknotesIcon,
 } from '@heroicons/react/24/outline';
-import Badge from '@/components/ui/Badge';
 import UpdatePlanModal from '@/components/modals/UpdatePlanModal';
 import EditarFechasRecargasModal from '@/components/modals/EditarFechasRecargasModal';
 import UpsertUsuarioAdminModal from '@/components/modals/UpsertUsuarioAdminModal';
@@ -23,7 +22,7 @@ import UpsertObligacionConFacturasModal from '@/components/modals/UpsertObligaci
 import ReportarRecargaModal from '@/components/modals/ReportarRecargaModal';
 import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import EditarFacturaModal from '@/components/modals/EditarFacturaModal';
-import type { AdminClientePerfilData, Factura, Plan, ProgramacionRecargas } from '@/types';
+import type { AdminClientePerfilData, ActualizarFacturaPayload, Factura } from '@/types';
 import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
 import { getAdminClientePerfil, actualizarFactura, deleteUsuario, deleteObligacion, deleteFactura, crearSiguienteMes, crearPago, confirmarPago } from '@/lib/api';
 import Toast from '@/components/ui/Toast';
@@ -40,6 +39,16 @@ const getPlanColor = (plan: string): string => {
   }
 };
 
+type InlineFacturaField =
+  | 'etiqueta'
+  | 'referencia_pago'
+  | 'tipo_referencia'
+  | 'pagina_pago'
+  | 'archivo_url'
+  | 'fecha_emision'
+  | 'fecha_vencimiento'
+  | 'monto';
+
 const getFacturaCountByTab = (facturas: Factura[], tab: FacturaFilterTab): number => {
   if (tab === 'todas') return facturas.length;
   if (tab === 'pagadas') return facturas.filter(f => f.estado === 'pagada').length;
@@ -49,6 +58,11 @@ const getFacturaCountByTab = (facturas: Factura[], tab: FacturaFilterTab): numbe
   if (tab === 'sin-validar') return facturas.filter(f => f.validacion_estado === 'sin_validar').length;
   return 0;
 };
+
+type CuotasCalculadasLike = {
+  cuota1?: { facturas?: Array<{ id: string }> };
+  cuota2?: { facturas?: Array<{ id: string }> };
+} | null | undefined;
 
 const filterFacturasByTab = (facturas: Factura[], tab: FacturaFilterTab): Factura[] => {
   if (tab === 'todas') return facturas;
@@ -65,7 +79,7 @@ const filterFacturasByTab = (facturas: Factura[], tab: FacturaFilterTab): Factur
  */
 const calcularGrupoFactura = (
   factura: Factura,
-  cuotasCalculadas: any,
+  cuotasCalculadas: CuotasCalculadasLike,
   cantidadRecargas: number | undefined | null
 ): number | null => {
   // Normalizar cantidad
@@ -80,8 +94,8 @@ const calcularGrupoFactura = (
   if (cantidad === 2) {
     // Primero intentar usar cuotasCalculadas
     if (cuotasCalculadas) {
-      const idsGrupo1 = new Set((cuotasCalculadas?.cuota1?.facturas || []).map((f: any) => f.id));
-      const idsGrupo2 = new Set((cuotasCalculadas?.cuota2?.facturas || []).map((f: any) => f.id));
+      const idsGrupo1 = new Set((cuotasCalculadas.cuota1?.facturas || []).map((f) => f.id));
+      const idsGrupo2 = new Set((cuotasCalculadas.cuota2?.facturas || []).map((f) => f.id));
       
       if (idsGrupo1.has(factura.id)) return 1;
       if (idsGrupo2.has(factura.id)) return 2;
@@ -94,19 +108,6 @@ const calcularGrupoFactura = (
   }
 
   return null;
-};
-
-const getEstadoBadgeContent = (estado: string) => {
-  const estadoLower = (estado || '').toLowerCase();
-  if (estadoLower === 'pagada') return 'Pagado';
-  if (estadoLower === 'pendiente') return 'Pendiente';
-  if (estadoLower === 'aproximada') return 'Aproximada';
-  if (estadoLower === 'sin_factura') return 'Sin factura';
-  // Compatibilidad con datos legados
-  if (estadoLower === 'extraida') return 'Sin Validar';
-  if (estadoLower === 'validada') return 'Validada';
-  if (estadoLower === 'rechazada') return 'Rechazada';
-  return estado;
 };
 
 // Generar meses disponibles a partir de cualquier periodo presente en obligaciones/facturas.
@@ -191,6 +192,8 @@ export default function ClientDetailViewAlternative({
   // ─── FACTURA ACTION STATES ────────────────────────────────────────────────────
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null);
   const [updatingFacturaId, setUpdatingFacturaId] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<{ id: string; field: InlineFacturaField; value: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Modal visibility states for factura actions
   const [openAproximarModal, setOpenAproximarModal] = useState(false);
@@ -321,6 +324,87 @@ export default function ClientDetailViewAlternative({
     }
   }, [refreshFacturas]);
 
+  const startEdit = useCallback((factura: Factura, field: InlineFacturaField, value: string) => {
+    setEditingCell({ id: factura.id, field, value });
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
+  const commitEdit = useCallback(async (factura: Factura) => {
+    if (!editingCell || editingCell.id !== factura.id) return;
+
+    const original =
+      editingCell.field === 'monto'
+        ? String(factura.monto ?? '')
+        : String((factura as unknown as Record<string, unknown>)[editingCell.field] ?? '');
+
+    if (editingCell.value !== original) {
+      if (editingCell.field === 'monto' && editingCell.value.trim() === '') {
+        setEditingCell(null);
+        return;
+      }
+
+      const payload: ActualizarFacturaPayload = {
+        [editingCell.field]: editingCell.field === 'monto'
+          ? Number(editingCell.value)
+          : editingCell.value,
+      } as ActualizarFacturaPayload;
+
+      setUpdatingFacturaId(factura.id);
+      const res = await actualizarFactura(factura.id, payload);
+      setUpdatingFacturaId(null);
+
+      if (res.ok) {
+        showToast('Factura actualizada', 'success');
+        await refreshFacturas();
+      } else {
+        showToast(getErrorMsg(res, 'No se pudo actualizar la factura'), 'error');
+      }
+    }
+
+    setEditingCell(null);
+  }, [editingCell, refreshFacturas]);
+
+  const renderInlineCell = useCallback((
+    factura: Factura,
+    field: InlineFacturaField,
+    display: React.ReactNode,
+    rawValue: string,
+    inputType: 'text' | 'date' | 'number' | 'url' = 'text',
+    className = '',
+  ) => {
+    const isEditing = editingCell?.id === factura.id && editingCell?.field === field;
+
+    if (isEditing) {
+      return (
+        <input
+          ref={inputRef}
+          type={inputType}
+          value={editingCell.value}
+          onChange={(e) => setEditingCell((prev) => (prev ? { ...prev, value: e.target.value } : null))}
+          onBlur={() => void commitEdit(factura)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void commitEdit(factura);
+            }
+            if (e.key === 'Escape') setEditingCell(null);
+          }}
+          className={`w-full min-w-[90px] rounded border border-blue-400 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 ${className}`}
+        />
+      );
+    }
+
+    return (
+      <span
+        onDoubleClick={() => startEdit(factura, field, rawValue)}
+        title="Doble clic para editar"
+        className={`cursor-text select-none ${className}`}
+      >
+        {display}
+      </span>
+    );
+  }, [commitEdit, editingCell, startEdit]);
+
   // ─── HANDLER: Eliminar Usuario ─────────────────────────────────────────────
   const handleDeleteUsuario = useCallback(async () => {
     if (!perfil) return;
@@ -408,25 +492,25 @@ export default function ClientDetailViewAlternative({
     }
   }, [monthOptions, selectedMonth, handleMonthChange]);
 
-  if (!perfil) return null;
-
-  const u = perfil.usuario;
-  const r = perfil.resumen;
-
   // Obtener todas las facturas del mes actual
   const allFacturasMes = useMemo(() => {
     const facturas: Factura[] = [];
-    const obligation = perfil.obligaciones_mes || [];
+    const obligation = perfil?.obligaciones_mes || [];
     obligation.forEach(ob => {
       if (ob.facturas) {
         facturas.push(...ob.facturas);
       }
     });
     return facturas;
-  }, [perfil.obligaciones_mes]);
+  }, [perfil?.obligaciones_mes]);
 
   const filteredFacturas = filterFacturasByTab(allFacturasMes, activeTab);
 
+
+  if (!perfil) return null;
+
+  const u = perfil.usuario;
+  const r = perfil.resumen;
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="p-8 space-y-6">
@@ -726,10 +810,6 @@ export default function ClientDetailViewAlternative({
                 {filteredFacturas.length > 0 ? (
                   filteredFacturas.map((factura, idx) => {
                     const esSuscripcion = (factura.tipo_referencia || '').toLowerCase() === 'suscripcion';
-                    let displayEstado = getEstadoBadgeContent(factura.estado);
-                    if (factura.origen === 'auto' && factura.estado === 'extraida') {
-                      displayEstado = 'Heredada (Sin validar)';
-                    }
 
                     const grupo = calcularGrupoFactura(
                       factura,
@@ -765,39 +845,76 @@ export default function ClientDetailViewAlternative({
                         className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
                       >
                         <td className="px-4 py-4 text-gray-900 font-medium text-sm">
-                          {factura.etiqueta || '@\u2014'}
+                          {renderInlineCell(
+                            factura,
+                            'etiqueta',
+                            factura.etiqueta || '@\u2014',
+                            factura.etiqueta || '',
+                          )}
                         </td>
                         <td className="px-4 py-4 text-gray-600 font-mono text-xs">
-                          {factura.referencia_pago || '\u2014'}
+                          {renderInlineCell(
+                            factura,
+                            'referencia_pago',
+                            factura.referencia_pago || '\u2014',
+                            factura.referencia_pago || '',
+                          )}
                         </td>
                         <td className="px-4 py-4 text-gray-600 text-xs">
-                          {factura.tipo_referencia || '—'}
+                          {renderInlineCell(
+                            factura,
+                            'tipo_referencia',
+                            factura.tipo_referencia || '—',
+                            factura.tipo_referencia || '',
+                          )}
                         </td>
                         <td className="px-4 py-4 text-sm">
                           {esSuscripcion ? (
                             <span className="text-gray-400">N/A</span>
                           ) : (() => {
                             const portalUrl = factura.pagina_pago || factura.archivo_url;
+                            const portalField: InlineFacturaField = factura.pagina_pago ? 'pagina_pago' : 'archivo_url';
                             return portalUrl ? (
-                              <a
-                                href={portalUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                              >
-                                Link
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                                  <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                                </svg>
-                              </a>
+                              renderInlineCell(
+                                factura,
+                                portalField,
+                                <a
+                                  href={portalUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Link
+                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                                  </svg>
+                                </a>,
+                                portalUrl,
+                                'url',
+                                'text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1'
+                              )
                             ) : (
-                              <span className="text-gray-400">--</span>
+                              renderInlineCell(
+                                factura,
+                                portalField,
+                                <span className="text-gray-400">--</span>,
+                                '',
+                                'url',
+                                'text-gray-400'
+                              )
                             );
                           })()}
                         </td>
                         <td className="px-4 py-4 text-gray-600 text-sm">
-                          {factura.fecha_emision ? formatDate(factura.fecha_emision) : '--'}
+                          {renderInlineCell(
+                            factura,
+                            'fecha_emision',
+                            factura.fecha_emision ? formatDate(factura.fecha_emision) : '--',
+                            factura.fecha_emision ? factura.fecha_emision.slice(0, 10) : '',
+                            'date',
+                          )}
                         </td>
                         <td
                           className={`px-4 py-4 text-sm font-medium ${
@@ -806,10 +923,23 @@ export default function ClientDetailViewAlternative({
                               : 'text-gray-600'
                           }`}
                         >
-                          {factura.fecha_vencimiento ? formatDate(factura.fecha_vencimiento) : '--'}
+                          {renderInlineCell(
+                            factura,
+                            'fecha_vencimiento',
+                            factura.fecha_vencimiento ? formatDate(factura.fecha_vencimiento) : '--',
+                            factura.fecha_vencimiento ? factura.fecha_vencimiento.slice(0, 10) : '',
+                            'date',
+                          )}
                         </td>
                         <td className="px-4 py-4 text-gray-900 font-medium text-sm">
-                          {formatCurrency(factura.monto)}
+                          {renderInlineCell(
+                            factura,
+                            'monto',
+                            formatCurrency(factura.monto),
+                            String(factura.monto ?? ''),
+                            'number',
+                            'font-medium text-gray-900'
+                          )}
                         </td>
                         <td className="px-4 py-4 text-sm">
                           <select
