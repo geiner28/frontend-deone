@@ -336,6 +336,7 @@ const [listLoading, setListLoading] = useState(true);
                     const pagadas = ultima.facturas_pagadas || 0;
                     const pendientes = Math.max(0, totalF - pagadas);
                     const sinFactura = Math.max(0, totalF - pagadas - pendientes);
+                    const saldoReal = Number(c.saldo ?? 0);
                     const isSelected = selectedIds.has(c.id);
                     return (
                     <tr
@@ -362,7 +363,7 @@ const [listLoading, setListLoading] = useState(true);
                       <td className="p-4 text-center text-emerald-600 font-medium">{pagadas}</td>
                       <td className="p-4 text-center text-amber-600 font-medium">{pendientes}</td>
                       <td className="p-4 text-center text-gray-500 font-medium">{sinFactura}</td>
-                      <td className="p-4 text-right font-bold text-emerald-600">{formatCurrency(c.saldo || 0)}</td>
+                      <td className={`p-4 text-right font-bold ${saldoReal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatCurrency(saldoReal)}</td>
                       <td className="p-4">
                         <span className={getPlanVariant(c.plan)} style={{fontSize: '0.75rem', fontWeight: 500}}>
                           {c.plan}
@@ -388,6 +389,7 @@ const [listLoading, setListLoading] = useState(true);
               {clientes.map((c: any) => {
                 const ultima = c.ultima_obligacion?.[0] || {};
                 const totalFacturas = ultima.total_facturas || 0;
+                const saldoReal = Number(c.saldo ?? 0);
                 return (
                   <div
                     key={c.id}
@@ -407,8 +409,8 @@ const [listLoading, setListLoading] = useState(true);
 
                           {/* Balance Section */}
                           <div className="flex items-baseline gap-1.5">
-                            <span className={`font-extrabold text-gray-900 ${getDynamicBalanceSize(formatCurrency(c.saldo || 0))}`}>
-                              {formatCurrency(c.saldo || 0)}
+                            <span className={`font-extrabold ${saldoReal < 0 ? 'text-red-600' : 'text-gray-900'} ${getDynamicBalanceSize(formatCurrency(saldoReal))}`}>
+                              {formatCurrency(saldoReal)}
                             </span>
                             <span className="text-xs font-light text-gray-400">Saldo</span>
                           </div>

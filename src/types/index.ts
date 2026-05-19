@@ -111,7 +111,7 @@ export interface UpsertUsuarioAdminData {
 // Estados visibles al usuario:
 export type FacturaEstado = 'pendiente' | 'pagada' | 'sin_factura' | 'aproximada';
 // Estados internos (admin) de validación:
-export type FacturaValidacionEstado = 'sin_validar' | 'validada' | 'rechazada';
+export type FacturaValidacionEstado = 'sin_revisar' | 'revisada';
 
 export interface Factura {
   id: string;
@@ -497,6 +497,8 @@ export interface DescartarRevisionPayload {
 export interface NotificacionAPI {
   id: string;
   creado_en: string;
+  enviada_en?: string | null;
+  entregada_en?: string | null;
   usuario_id: string;
   tipo: string;
   canal: string;

@@ -4,7 +4,7 @@
 export const EXTERNAL_API_BASE_URL =
   process.env.DEONE_API_BASE_URL ||
   process.env.NEXT_PUBLIC_DEONE_API_BASE_URL ||
-  'https://prueba-supabase.onrender.com/api';
+  'http://localhost:3000/api';
 // ══════════════════════════════════════════════════════════════════════════════
 
 // NOTE: No exponer la API key al cliente. Configure `DEONE_API_KEY` en el entorno del servidor (.env.local)

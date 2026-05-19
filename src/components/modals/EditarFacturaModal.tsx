@@ -20,7 +20,7 @@ interface EditarFacturaModalProps {
 }
 
 const ESTADOS: FacturaEstado[] = ['pendiente', 'pagada', 'sin_factura', 'aproximada'];
-const VALIDACIONES: FacturaValidacionEstado[] = ['sin_validar', 'validada', 'rechazada'];
+const VALIDACIONES: FacturaValidacionEstado[] = ['sin_revisar', 'revisada'];
 
 export default function EditarFacturaModal({
   open,
@@ -44,7 +44,7 @@ export default function EditarFacturaModal({
     pagina_pago: '',
     grupo: 1 as 1 | 2,
     estado: 'pendiente' as FacturaEstado,
-    validacion_estado: 'sin_validar' as FacturaValidacionEstado,
+    validacion_estado: 'sin_revisar' as FacturaValidacionEstado,
     observaciones_admin: '',
     motivo_rechazo: '',
   });
@@ -66,9 +66,9 @@ export default function EditarFacturaModal({
       estado: ((['pendiente', 'pagada', 'sin_factura', 'aproximada'].includes(String(factura.estado))
         ? factura.estado
         : 'pendiente') as FacturaEstado),
-      validacion_estado: ((['sin_validar', 'validada', 'rechazada'].includes(String(factura.validacion_estado))
+      validacion_estado: ((['sin_revisar', 'revisada'].includes(String(factura.validacion_estado))
         ? factura.validacion_estado
-        : 'sin_validar') as FacturaValidacionEstado),
+        : 'sin_revisar') as FacturaValidacionEstado),
       observaciones_admin: factura.observaciones_admin || '',
       motivo_rechazo: factura.motivo_rechazo || '',
     });
@@ -219,13 +219,11 @@ export default function EditarFacturaModal({
           value={form.observaciones_admin}
           onChange={(e) => setForm((f) => ({ ...f, observaciones_admin: e.target.value }))}
         />
-        {form.validacion_estado === 'rechazada' && (
-          <Input
-            label="Motivo de rechazo"
-            value={form.motivo_rechazo}
-            onChange={(e) => setForm((f) => ({ ...f, motivo_rechazo: e.target.value }))}
-          />
-        )}
+        <Input
+          label="Motivo de rechazo"
+          value={form.motivo_rechazo}
+          onChange={(e) => setForm((f) => ({ ...f, motivo_rechazo: e.target.value }))}
+        />
 
         <div className="grid grid-cols-2 gap-3 pt-4">
           <Button variant="secondary" onClick={onClose} className="w-full" disabled={loading}>

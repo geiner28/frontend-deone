@@ -84,13 +84,13 @@ export default function FacturasPage() {
     }
 
     setUpdatingFacturaId(factura.id);
-    const payload: { estado: 'pagada' | 'pendiente' | 'sin_factura'; validacion_estado?: 'validada' } = {
+    const payload: { estado: 'pagada' | 'pendiente' | 'sin_factura'; validacion_estado?: 'revisada' } = {
       estado: newEstado,
     };
 
     // Al marcar pagada desde la lista no se exige referencia ni comprobante.
     if (newEstado === 'pagada') {
-      payload.validacion_estado = 'validada';
+      payload.validacion_estado = 'revisada';
     }
 
     const res = await actualizarFactura(factura.id, payload);

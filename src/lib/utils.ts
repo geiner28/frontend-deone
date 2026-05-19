@@ -1,5 +1,18 @@
 import type { ApiResponse } from '@/types';
 
+function parseDateInput(dateStr: string): Date | null {
+  if (!dateStr) return null;
+
+  // Preserve date-only strings as local calendar dates to avoid timezone shifts.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  const parsed = new Date(dateStr);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -10,11 +23,22 @@ export function formatCurrency(amount: number): string {
 
 export function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('es-CO', {
+  const parsed = parseDateInput(dateStr);
+  if (!parsed) return '—';
+  return parsed.toLocaleDateString('es-CO', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   });
+}
+
+export function isDateBeforeToday(dateStr: string): boolean {
+  const parsed = parseDateInput(dateStr);
+  if (!parsed) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsed.setHours(0, 0, 0, 0);
+  return parsed < today;
 }
 
 export function formatPeriodo(periodoStr: string): string {

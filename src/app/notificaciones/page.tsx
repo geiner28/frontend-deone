@@ -32,9 +32,10 @@ import {
   aprobarRecarga,
   actualizarRecarga,
   getDisponible,
+  getFactura,
 } from '@/lib/api';
 import type { NotificacionAPI, Factura, UpdateNotificacionPayload } from '@/types';
-import { formatDate, formatCurrency, getErrorMsg } from '@/lib/utils';
+import { formatDate, formatDateTime, formatCurrency, getErrorMsg } from '@/lib/utils';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Tipos & helpers visuales
@@ -318,21 +319,41 @@ export default function NotificacionesPage() {
   // ────────────────────────────────────────
   // Acciones
   // ────────────────────────────────────────
-  const onClickRow = (n: NotificacionConUsuario) => {
+  const onClickRow = async (n: NotificacionConUsuario) => {
     if (vista !== 'admin') return; // En vista BOT no hay acciones
     const p = (n.payload || {}) as Record<string, unknown>;
     if (n.tipo === 'factura_por_validar' && p.factura_id) {
-      // Construir un Factura mínimo para los modales
+      // Intentar obtener datos frescos de la factura desde la API
+      try {
+        const res = await getFactura(String(p.factura_id));
+        if (res.ok && res.data) {
+          setSelectedFactura(res.data);
+          setShowValidarModal(true);
+          return;
+        }
+      } catch {
+        // fallback al payload si el fetch falla
+      }
+      // Fallback: usar datos del payload de la notificación
       const facturaStub: Factura = {
         id: String(p.factura_id),
         usuario_id: String(p.usuario_id || n.usuario_id),
         servicio: String(p.servicio || ''),
-        etiqueta: String(p.etiqueta || ''),
-        periodo: String(p.periodo || ''),
+        etiqueta: p.etiqueta ? String(p.etiqueta) : undefined,
+        periodo: p.periodo ? String(p.periodo) : undefined,
         monto: Number(p.monto || 0),
-        validacion_estado: String(p.validacion_estado || 'sin_validar'),
+        validacion_estado: String(p.validacion_estado || 'sin_revisar'),
         estado: 'pendiente',
         creado_en: String(p.creada_en || n.creado_en),
+        fecha_emision: p.fecha_emision ? String(p.fecha_emision) : undefined,
+        fecha_vencimiento: p.fecha_vencimiento ? String(p.fecha_vencimiento) : undefined,
+        fecha_recordatorio: p.fecha_recordatorio ? String(p.fecha_recordatorio) : undefined,
+        referencia_pago: p.referencia_pago ? String(p.referencia_pago) : undefined,
+        tipo_referencia: p.tipo_referencia ? String(p.tipo_referencia) : undefined,
+        pagina_pago: p.pagina_pago ? String(p.pagina_pago) : undefined,
+        archivo_url: p.archivo_url ? String(p.archivo_url) : undefined,
+        motivo_rechazo: p.motivo_rechazo ? String(p.motivo_rechazo) : undefined,
+        grupo: p.grupo ? Number(p.grupo) as 1 | 2 : undefined,
       } as unknown as Factura;
       setSelectedFactura(facturaStub);
       setShowValidarModal(true);
@@ -689,7 +710,9 @@ export default function NotificacionesPage() {
                   <Th label="Tipo" />
                   <Th label="Usuario" />
                   <Th label="Número de ref" />
-                  <Th label="Fecha" />
+                  <Th label="Creada" />
+                  <Th label="Enviada" />
+                  <Th label="Entregada" />
                   <Th label="Monto" align="right" />
                   <Th label="Facturas" />
                   <Th label="Estado" />
@@ -699,13 +722,13 @@ export default function NotificacionesPage() {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="py-16">
+                    <td colSpan={10} className="py-16">
                       <FullPageSpinner />
                     </td>
                   </tr>
                 ) : notificaciones.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16">
+                    <td colSpan={10} className="py-16">
                       <EmptyState
                         icon={<BellIcon className="h-12 w-12" />}
                         title="Sin notificaciones"
@@ -731,7 +754,9 @@ export default function NotificacionesPage() {
                         <td className="px-4 py-4 text-gray-800">{formatTipo(n.tipo)}</td>
                         <td className="px-4 py-4 text-gray-800">{getNombreUsuario(n)}</td>
                         <td className="px-4 py-4 text-gray-600">{ref}</td>
-                        <td className="px-4 py-4 text-gray-600">{formatDate(n.creado_en)}</td>
+                        <td className="px-4 py-4 text-gray-600">{formatDateTime(n.creado_en)}</td>
+                        <td className="px-4 py-4 text-gray-600">{n.enviada_en ? formatDateTime(n.enviada_en) : '—'}</td>
+                        <td className="px-4 py-4 text-gray-600">{n.entregada_en ? formatDateTime(n.entregada_en) : '—'}</td>
                         <td className="px-4 py-4 text-gray-800 text-right">
                           {monto != null ? formatCurrency(monto) : '—'}
                         </td>

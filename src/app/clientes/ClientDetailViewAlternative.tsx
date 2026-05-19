@@ -23,7 +23,7 @@ import ReportarRecargaModal from '@/components/modals/ReportarRecargaModal';
 import AproximarValorModal from '@/components/modals/AproximarValorModal';
 import EditarFacturaModal from '@/components/modals/EditarFacturaModal';
 import type { AdminClientePerfilData, ActualizarFacturaPayload, Factura } from '@/types';
-import { formatCurrency, formatDate, getErrorMsg } from '@/lib/utils';
+import { formatCurrency, formatDate, getErrorMsg, isDateBeforeToday } from '@/lib/utils';
 import { getAdminClientePerfil, actualizarFactura, deleteUsuario, deleteObligacion, deleteFactura, crearSiguienteMes, crearPago, confirmarPago } from '@/lib/api';
 import Toast from '@/components/ui/Toast';
 
@@ -288,13 +288,13 @@ export default function ClientDetailViewAlternative({
     }
 
     setUpdatingFacturaId(factura.id);
-    const payload: { estado: 'pagada' | 'pendiente' | 'sin_factura'; validacion_estado?: 'validada' } = {
+    const payload: { estado: 'pagada' | 'pendiente' | 'sin_factura'; validacion_estado?: 'revisada' } = {
       estado: newEstado,
     };
 
     // Al marcar pagada desde la lista no pedimos referencias/comprobante.
     if (newEstado === 'pagada') {
-      payload.validacion_estado = 'validada';
+      payload.validacion_estado = 'revisada';
     }
 
     const res = await actualizarFactura(factura.id, payload);
@@ -823,7 +823,8 @@ export default function ClientDetailViewAlternative({
                       : Number(factura.grupo || grupo || (cantidadRecargas === 1 ? 1 : 0));
                     const estadoActual = String(factura.estado || 'pendiente');
                     const isUpdatingRow = updatingFacturaId === factura.id;
-                    const canPay = estadoActual !== 'pagada' && factura.validacion_estado === 'validada';
+                    const saldoGlobal = perfil?.resumen.saldo_disponible || 0;
+                    const canPay = estadoActual !== 'pagada' && factura.validacion_estado === 'revisada' && saldoGlobal >= Number(factura.monto || 0);
 
                     const getEstadoClasses = (estado: string) => {
                       switch (estado) {
@@ -918,7 +919,7 @@ export default function ClientDetailViewAlternative({
                         </td>
                         <td
                           className={`px-4 py-4 text-sm font-medium ${
-                            factura.fecha_vencimiento && new Date(factura.fecha_vencimiento) < new Date()
+                            factura.fecha_vencimiento && isDateBeforeToday(factura.fecha_vencimiento)
                               ? 'text-red-500'
                               : 'text-gray-600'
                           }`}
@@ -992,7 +993,7 @@ export default function ClientDetailViewAlternative({
                               }}
                               disabled={!canPay || payingFacturaId === factura.id}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                              title={canPay ? 'Pagar factura' : 'Solo se puede pagar factura validada y pendiente'}
+                              title={canPay ? 'Pagar factura' : 'Solo se puede pagar una factura revisada y con saldo suficiente'}
                             >
                               <BanknotesIcon className="h-4 w-4" />
                             </button>

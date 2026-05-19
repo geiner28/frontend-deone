@@ -39,8 +39,6 @@ const ValidarFacturaModal = ({
     fecha_emision: '',
     fecha_vencimiento: '',
     fecha_recordatorio: '',
-    origen: '',
-    extraccion_estado: '',
     pagina_pago: '',
     grupo: 1 as 1 | 2,
     observaciones_admin: '',
@@ -76,8 +74,6 @@ const ValidarFacturaModal = ({
         fecha_emision: factura.fecha_emision ?? '',
         fecha_vencimiento: factura.fecha_vencimiento ?? '',
         fecha_recordatorio: factura.fecha_recordatorio ?? '',
-        origen: factura.origen ?? '',
-        extraccion_estado: factura.extraccion_estado ?? '',
         pagina_pago: factura.pagina_pago ?? factura.archivo_url ?? '',
         grupo: (factura.grupo === 2 && puedeUsarGrupo2 ? 2 : 1) as 1 | 2,
         observaciones_admin: '',
@@ -387,11 +383,6 @@ const ValidarFacturaModal = ({
                   <p className="text-xs text-gray-500">Con una sola fecha de recarga solo aplica Grupo 1.</p>
                 )}
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Input label="Origen" value={form.origen} disabled />
-              <Input label="Estado extracción" value={form.extraccion_estado} disabled />
             </div>
 
             <Input

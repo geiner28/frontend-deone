@@ -242,6 +242,10 @@ export const capturaFactura = (payload: CapturaFacturaPayload) =>
 export const getEtiquetasDistinct = () =>
   request<{ total: number; etiquetas: string[] }>('/facturas/etiquetas-distinct');
 
+// GET /api/facturas/:id — Detalle de una factura por ID (admin)
+export const getFactura = (facturaId: string) =>
+  request<Factura>(`/facturas/${encodeURIComponent(facturaId)}`);
+
 // GET /api/facturas/obligacion/:obligacion_id
 export const getFacturasByObligacion = (obligacionId: string) =>
   request<Factura[]>(`/facturas/obligacion/${obligacionId}`);
