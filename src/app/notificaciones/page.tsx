@@ -568,9 +568,30 @@ export default function NotificacionesPage() {
       }
 
       if (isTipoSolicitudRecarga(n.tipo)) {
+        const mensajePayload = typeof p.mensaje === 'string' ? p.mensaje.trim() : '';
+        if (mensajePayload) {
+          setMensajeBot(mensajePayload);
+          return;
+        }
+
         const valorRecarga = Number(p.valor_a_recargar ?? p.valor_recarga ?? p.monto_solicitado ?? p.monto ?? p.monto_faltante ?? 0);
         const valorTexto = formatCurrency(valorRecarga);
-        setMensajeBot(`${usuario} 👋🏼\n\nEs momento de recargar tu cuenta para cubrir tus próximas obligaciones 🙌🏼\n\nTu saldo actual en deOne es de ${saldoTexto}\n\nValor a recargar: ${valorTexto}\n\nPuedes hacer la recarga a la llave 0090944088.\n\nCuando la hagas, envíame el comprobante y yo me encargo del resto deOne 👍🏼`);
+
+        const oblsPayloadRaw = Array.isArray(p.obligaciones) ? p.obligaciones : [];
+        const oblsPayload = oblsPayloadRaw
+          .map((o) => {
+            const item = (o || {}) as Record<string, unknown>;
+            const etiqueta = String(item.etiqueta || item.servicio || item.nombre || '').trim();
+            const monto = Number(item.monto ?? item.valor ?? 0);
+            return { etiqueta, monto };
+          })
+          .filter((o) => o.etiqueta && Number.isFinite(o.monto) && o.monto > 0);
+
+        const bloqueObligaciones = oblsPayload.length
+          ? `\n${oblsPayload.map((o) => `• ${o.etiqueta} — ${formatCurrency(o.monto)}`).join('\n')}\n`
+          : '\n';
+
+        setMensajeBot(`${usuario} 👋🏼\n\nEs momento de recargar tu cuenta para cubrir tus próximas obligaciones 🙌🏼\n${bloqueObligaciones}\nTu saldo actual en deOne es de ${saldoTexto}\n\nValor a recargar: ${valorTexto}\n\nPuedes hacer la recarga a la llave 0090944088.\n\nCuando la hagas, envíame el comprobante y yo me encargo del resto deOne 👍🏼`);
       } else if (n.tipo === 'obligaciones_pagadas_grupal') {
         // Payload ya viene con array obligaciones del backend
         const oblsPayload = (p.obligaciones as Array<{ etiqueta: string; valor: number }> | undefined) || [];
