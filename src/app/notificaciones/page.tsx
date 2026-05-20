@@ -568,15 +568,6 @@ export default function NotificacionesPage() {
       }
 
       if (isTipoSolicitudRecarga(n.tipo)) {
-        const mensajePayload = typeof p.mensaje === 'string' ? p.mensaje.trim() : '';
-        if (mensajePayload) {
-          setMensajeBot(mensajePayload);
-          return;
-        }
-
-        const valorRecarga = Number(p.valor_a_recargar ?? p.valor_recarga ?? p.monto_solicitado ?? p.monto ?? p.monto_faltante ?? 0);
-        const valorTexto = formatCurrency(valorRecarga);
-
         const oblsPayloadRaw = Array.isArray(p.obligaciones) ? p.obligaciones : [];
         const oblsPayload = oblsPayloadRaw
           .map((o) => {
@@ -586,6 +577,16 @@ export default function NotificacionesPage() {
             return { etiqueta, monto };
           })
           .filter((o) => o.etiqueta && Number.isFinite(o.monto) && o.monto > 0);
+
+        const mensajePayload = typeof p.mensaje === 'string' ? p.mensaje.trim() : '';
+        const mensajeTieneLista = /(^|\n)\s*[•\-]\s+/m.test(mensajePayload);
+        if (mensajePayload && (oblsPayload.length === 0 || mensajeTieneLista)) {
+          setMensajeBot(mensajePayload);
+          return;
+        }
+
+        const valorRecarga = Number(p.valor_a_recargar ?? p.valor_recarga ?? p.monto_solicitado ?? p.monto ?? p.monto_faltante ?? 0);
+        const valorTexto = formatCurrency(valorRecarga);
 
         const bloqueObligaciones = oblsPayload.length
           ? `\n${oblsPayload.map((o) => `• ${o.etiqueta} — ${formatCurrency(o.monto)}`).join('\n')}\n`
